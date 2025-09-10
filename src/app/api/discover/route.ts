@@ -115,32 +115,28 @@ export const GET = async (req: Request) => {
         })
         .sort(() => Math.random() - 0.5);
 
-      // Fetch OG images for articles without thumbnails
-      const articlesWithoutThumbnails = data.filter(item => !item.thumbnail);
-      console.log(`[discover] Found ${articlesWithoutThumbnails.length} articles without thumbnails out of ${data.length} total`);
-      if (articlesWithoutThumbnails.length > 0) {
-        try {
-          console.log(`[discover] Fetching OG images for ${articlesWithoutThumbnails.length} articles:`, articlesWithoutThumbnails.map(item => item.url));
-          const ogImages = await fetchMultipleOGImages(
-            articlesWithoutThumbnails.map(item => item.url),
-            1 // Single request at a time to be very respectful
-          );
+      // Always try to fetch OG images for all articles (not just those without thumbnails)
+      console.log(`[discover] Fetching OG images for all ${data.length} articles`);
+      try {
+        const ogImages = await fetchMultipleOGImages(
+          data.map(item => item.url),
+          1 // Single request at a time to be very respectful
+        );
 
-          console.log(`[discover] OG image results:`, ogImages);
+        console.log(`[discover] OG image results:`, ogImages);
 
-          // Update articles with OG images
-          let updatedCount = 0;
-          data.forEach(item => {
-            if (!item.thumbnail && ogImages[item.url]) {
-              item.thumbnail = ogImages[item.url];
-              updatedCount++;
-            }
-          });
-          console.log(`[discover] Updated ${updatedCount} articles with OG images`);
-        } catch (error) {
-          console.warn('[discover] Failed to fetch OG images:', error);
-          // Continue without OG images if fetching fails
-        }
+        // Update articles with OG images (or keep existing thumbnails)
+        let updatedCount = 0;
+        data.forEach(item => {
+          if (ogImages[item.url] && !item.thumbnail) {
+            item.thumbnail = ogImages[item.url];
+            updatedCount++;
+          }
+        });
+        console.log(`[discover] Updated ${updatedCount} articles with OG images`);
+      } catch (error) {
+        console.warn('[discover] Failed to fetch OG images:', error);
+        // Continue without OG images if fetching fails
       }
     } else {
       const randomLink = selectedTopic.links[Math.floor(Math.random() * selectedTopic.links.length)];
@@ -149,22 +145,22 @@ export const GET = async (req: Request) => {
         data = (await rateLimitedSearchSerper(`${randomQuery} site:${randomLink}`)).results;
 
         // Fetch OG images for preview mode as well
-        const articlesWithoutThumbnails = data.filter(item => !item.thumbnail);
-        if (articlesWithoutThumbnails.length > 0) {
-          try {
-            const ogImages = await fetchMultipleOGImages(
-              articlesWithoutThumbnails.map(item => item.url),
-              1 // Single request for preview mode to be very respectful
-            );
+        console.log(`[discover] Fetching OG images for preview mode (${data.length} articles)`);
+        try {
+          const ogImages = await fetchMultipleOGImages(
+            data.map(item => item.url),
+            1 // Single request for preview mode to be very respectful
+          );
 
-            data.forEach(item => {
-              if (!item.thumbnail && ogImages[item.url]) {
-                item.thumbnail = ogImages[item.url];
-              }
-            });
-          } catch (error) {
-            console.warn('[discover] Failed to fetch OG images for preview:', error);
-          }
+          console.log(`[discover] Preview OG image results:`, ogImages);
+
+          data.forEach(item => {
+            if (ogImages[item.url] && !item.thumbnail) {
+              item.thumbnail = ogImages[item.url];
+            }
+          });
+        } catch (error) {
+          console.warn('[discover] Failed to fetch OG images for preview:', error);
         }
       } catch (err) {
         console.warn(`[discover] Failed to fetch preview data:`, err);
