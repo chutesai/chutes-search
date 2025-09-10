@@ -30,12 +30,15 @@ export const searchSerper = async (
       .map((s: any) => s?.query)
       .filter(Boolean);
 
-    let results = organic.map((r: any) => ({
-      title: r.title,
-      url: r.link,
-      content: r.snippet,
-      thumbnail: r.imageUrl,
-    }));
+    let results = organic.map((r: any) => {
+      console.log(`[serper] Processing article: ${r.title}, imageUrl: ${r.imageUrl}, imageUrl2: ${r['imageUrl']}`);
+      return {
+        title: r.title,
+        url: r.link,
+        content: r.snippet,
+        thumbnail: r.imageUrl || r['imageUrl'],
+      };
+    });
 
     if ((!results || results.length === 0) && res.data?.knowledgeGraph) {
       const kg = res.data.knowledgeGraph;
