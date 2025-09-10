@@ -24,16 +24,35 @@ export const searchSerper = async (
   try {
     const res = await axios.post(url, { q: query }, { headers, timeout: 15000 });
 
-  const organic: SerperSearchResult[] = res.data?.organic || [];
-  const suggestions: string[] = (res.data?.relatedSearches || [])
-    .map((s: any) => s?.query)
-    .filter(Boolean);
+    const organic: SerperSearchResult[] = res.data?.organic || [];
+    const suggestions: string[] = (res.data?.relatedSearches || [])
+      .map((s: any) => s?.query)
+      .filter(Boolean);
 
-    const results = organic.map((r) => ({
+    let results = organic.map((r) => ({
       title: r.title,
       url: r.link,
       content: r.snippet,
     }));
+
+    if ((!results || results.length === 0) && res.data?.knowledgeGraph) {
+      const kg = res.data.knowledgeGraph;
+      if (kg.title && (kg.description || kg.descriptionLink)) {
+        results.push({
+          title: kg.title,
+          url: kg.descriptionLink || 'https://google.com/search?q=' + encodeURIComponent(query),
+          content: kg.description,
+        });
+      }
+    }
+
+    if ((!results || results.length === 0) && Array.isArray(res.data?.topStories)) {
+      for (const s of res.data.topStories) {
+        if (s.title && s.link) {
+          results.push({ title: s.title, url: s.link, content: s.source || s.date });
+        }
+      }
+    }
 
     return { results, suggestions };
   } catch (err: any) {
