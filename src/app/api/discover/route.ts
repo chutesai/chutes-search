@@ -122,7 +122,7 @@ export const GET = async (req: Request) => {
           console.log(`[discover] Fetching OG images for ${articlesWithoutThumbnails.length} articles`);
           const ogImages = await fetchMultipleOGImages(
             articlesWithoutThumbnails.map(item => item.url),
-            2 // Lower concurrency to be respectful
+            1 // Single request at a time to be very respectful
           );
 
           // Update articles with OG images
@@ -148,7 +148,7 @@ export const GET = async (req: Request) => {
           try {
             const ogImages = await fetchMultipleOGImages(
               articlesWithoutThumbnails.map(item => item.url),
-              1 // Single request for preview mode
+              1 // Single request for preview mode to be very respectful
             );
 
             data.forEach(item => {

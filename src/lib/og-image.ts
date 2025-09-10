@@ -8,14 +8,32 @@ export interface OGData {
   siteName?: string;
 }
 
+// Track rate limit errors to avoid overwhelming servers
+let rateLimitCount = 0;
+const MAX_RATE_LIMITS = 3;
+const RESET_RATE_LIMIT_INTERVAL = 60000; // 1 minute
+
+// Reset rate limit counter periodically
+setInterval(() => {
+  rateLimitCount = 0;
+}, RESET_RATE_LIMIT_INTERVAL);
+
 export const fetchOGData = async (url: string): Promise<OGData | null> => {
   try {
+    // Skip if we've hit too many rate limits recently
+    if (rateLimitCount >= MAX_RATE_LIMITS) {
+      console.warn(`[og-image] Skipping OG fetch for ${url} due to recent rate limits`);
+      return null;
+    }
+
     // First try to get a quick response by setting a short timeout
     const response = await axios.get(url, {
-      timeout: 5000,
+      timeout: 3000, // Reduced timeout
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; ChutesSearch/1.0)',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       },
+      maxRedirects: 3,
     });
 
     const html = response.data;
@@ -42,11 +60,23 @@ export const fetchOGData = async (url: string): Promise<OGData | null> => {
             ogData.description = content;
             break;
           case 'og:image':
-            // Prefer secure URLs
-            if (content.startsWith('http://')) {
-              ogData.image = content.replace('http://', 'https://');
-            } else {
-              ogData.image = content;
+            // Prefer secure URLs and validate
+            if (content && content.length > 10) {
+              if (content.startsWith('http://')) {
+                ogData.image = content.replace('http://', 'https://');
+              } else if (content.startsWith('//')) {
+                ogData.image = 'https:' + content;
+              } else if (!content.startsWith('http')) {
+                // Relative URL, try to construct full URL
+                try {
+                  const urlObj = new URL(url);
+                  ogData.image = urlObj.origin + (content.startsWith('/') ? '' : '/') + content;
+                } catch {
+                  ogData.image = content;
+                }
+              } else {
+                ogData.image = content;
+              }
             }
             break;
           case 'og:url':
@@ -60,8 +90,14 @@ export const fetchOGData = async (url: string): Promise<OGData | null> => {
     }
 
     return ogData.image ? ogData : null;
-  } catch (error) {
-    console.warn(`[og-image] Failed to fetch OG data for ${url}:`, error.message);
+  } catch (error: any) {
+    // Track rate limit errors
+    if (error?.response?.status === 429 || error?.response?.status === 503) {
+      rateLimitCount++;
+      console.warn(`[og-image] Rate limit hit for ${url}, count: ${rateLimitCount}`);
+    } else {
+      console.warn(`[og-image] Failed to fetch OG data for ${url}:`, error.message);
+    }
     return null;
   }
 };
@@ -79,11 +115,11 @@ export const fetchOGImage = async (url: string): Promise<string | null> => {
 // Batch fetch OG images with rate limiting
 export const fetchMultipleOGImages = async (
   urls: string[],
-  concurrency: number = 3
+  concurrency: number = 2 // Reduced concurrency
 ): Promise<Record<string, string | null>> => {
   const results: Record<string, string | null> = {};
 
-  // Process in batches to avoid overwhelming servers
+  // Process in smaller batches to avoid overwhelming servers
   for (let i = 0; i < urls.length; i += concurrency) {
     const batch = urls.slice(i, i + concurrency);
     const batchPromises = batch.map(async (url) => {
@@ -96,9 +132,9 @@ export const fetchMultipleOGImages = async (
       results[url] = image;
     });
 
-    // Small delay between batches
+    // Longer delay between batches to be more respectful
     if (i + concurrency < urls.length) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
   }
 
