@@ -1,8 +1,5 @@
-import ChatWindow from '@/components/ChatWindow';
-import { ChatProvider } from '@/lib/hooks/useChat';
+import HomeContent from '@/app/components/HomeContent';
 import { Metadata } from 'next';
-import { Suspense } from 'react';
-import Header from '@/app/components/Header';
 
 export const metadata: Metadata = {
   title: 'Chat - Chutes Search',
@@ -10,24 +7,7 @@ export const metadata: Metadata = {
 };
 
 const Home = () => {
-  return (
-    <div>
-      <Suspense>
-        <ChatProvider>
-          <HomeContent />
-        </ChatProvider>
-      </Suspense>
-    </div>
-  );
-};
-
-const HomeContent = () => {
-  return (
-    <>
-      <Header />
-      <ChatWindow />
-    </>
-  );
+  return <HomeContent />;
 };
 
 export default Home;
