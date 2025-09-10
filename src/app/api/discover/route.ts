@@ -81,7 +81,7 @@ export const GET = async (req: Request) => {
 
     const selectedTopic = websitesForTopic[topic];
 
-    let data = [];
+    let data: { title: string; url: string; content?: string }[] = [];
 
     if (mode === 'normal') {
       const seenUrls = new Set();
