@@ -115,6 +115,25 @@ export const GET = async (req: Request) => {
         })
         .sort(() => Math.random() - 0.5);
 
+      // If no results from Serper, add mock data for testing
+      if (data.length === 0) {
+        console.log(`[discover] No results from Serper, adding mock data`);
+        data = [
+          {
+            title: 'Mock Article 1',
+            url: 'https://example.com/article1',
+            content: 'This is a mock article for testing thumbnails',
+            thumbnail: 'https://via.placeholder.com/150x100?text=Mock1'
+          },
+          {
+            title: 'Mock Article 2',
+            url: 'https://example.com/article2',
+            content: 'This is another mock article for testing thumbnails',
+            thumbnail: 'https://via.placeholder.com/150x100?text=Mock2'
+          }
+        ];
+      }
+
       // TEMPORARY: Force assign thumbnails for all articles
       console.log(`[discover] TEMP: Force-assigning thumbnails to ${data.length} articles`);
       data.forEach((item, index) => {
