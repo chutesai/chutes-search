@@ -1,8 +1,12 @@
 import { searchSerper } from '@/lib/serper';
 
-// Simple rate limiting to prevent hitting API limits
+// Rate limiting and error handling for Serper API
 let lastRequestTime = 0;
-const MIN_REQUEST_INTERVAL = 1000; // 1 second between requests
+const MIN_REQUEST_INTERVAL = 2000; // 2 seconds between requests to be more conservative
+
+// Simple in-memory cache to avoid duplicate requests
+const cache = new Map<string, { data: any[]; timestamp: number }>();
+const CACHE_DURATION = 300000; // 5 minutes
 
 const rateLimitedSearchSerper = async (query: string) => {
   const now = Date.now();
@@ -13,29 +17,39 @@ const rateLimitedSearchSerper = async (query: string) => {
   }
 
   lastRequestTime = Date.now();
-  return await searchSerper(query);
+
+  try {
+    const result = await searchSerper(query);
+    return result;
+  } catch (err: any) {
+    if (err?.response?.status === 429) {
+      console.warn(`[discover] Rate limit hit for query: ${query}, returning empty results`);
+      return { results: [], suggestions: [] };
+    }
+    throw err;
+  }
 };
 
 const websitesForTopic = {
   tech: {
-    query: ['technology news', 'latest tech'],
-    links: ['techcrunch.com', 'wired.com'],
+    query: ['technology news'],
+    links: ['techcrunch.com'],
   },
   finance: {
-    query: ['finance news', 'stock market'],
-    links: ['bloomberg.com', 'cnbc.com'],
+    query: ['finance news'],
+    links: ['bloomberg.com'],
   },
   art: {
-    query: ['art news', 'culture'],
-    links: ['artnews.com', 'hyperallergic.com'],
+    query: ['art news'],
+    links: ['artnews.com'],
   },
   sports: {
-    query: ['sports news', 'latest sports'],
-    links: ['espn.com', 'bbc.com/sport'],
+    query: ['sports news'],
+    links: ['espn.com'],
   },
   entertainment: {
-    query: ['entertainment news', 'movies'],
-    links: ['hollywoodreporter.com', 'variety.com'],
+    query: ['entertainment news'],
+    links: ['hollywoodreporter.com'],
   },
 };
 
@@ -49,24 +63,45 @@ export const GET = async (req: Request) => {
       (params.get('mode') as 'normal' | 'preview') || 'normal';
     const topic: Topic = (params.get('topic') as Topic) || 'tech';
 
+    const cacheKey = `${topic}-${mode}`;
+    const cached = cache.get(cacheKey);
+    const now = Date.now();
+
+    // Return cached data if it's still fresh
+    if (cached && (now - cached.timestamp) < CACHE_DURATION) {
+      return Response.json(
+        {
+          blogs: cached.data,
+        },
+        {
+          status: 200,
+        },
+      );
+    }
+
     const selectedTopic = websitesForTopic[topic];
 
     let data = [];
 
     if (mode === 'normal') {
       const seenUrls = new Set();
+      const allRequests = selectedTopic.links.flatMap((link) =>
+        selectedTopic.query.map((query) => ({ link, query }))
+      );
 
-      data = (
-        await Promise.all(
-          selectedTopic.links.flatMap((link) =>
-            selectedTopic.query.map(async (query) => {
-              const result = await rateLimitedSearchSerper(`${query} site:${link}`);
-              return result.results;
-            }),
-          ),
-        )
-      )
-        .flat()
+      // Process requests sequentially to avoid rate limits
+      const allResults = [];
+      for (const { link, query } of allRequests) {
+        try {
+          const result = await rateLimitedSearchSerper(`${query} site:${link}`);
+          allResults.push(...result.results);
+        } catch (err) {
+          console.warn(`[discover] Failed to fetch ${query} site:${link}:`, err);
+          // Continue with other requests even if one fails
+        }
+      }
+
+      data = allResults
         .filter((item) => {
           const url = item.url?.toLowerCase().trim();
           if (seenUrls.has(url)) return false;
@@ -77,8 +112,16 @@ export const GET = async (req: Request) => {
     } else {
       const randomLink = selectedTopic.links[Math.floor(Math.random() * selectedTopic.links.length)];
       const randomQuery = selectedTopic.query[Math.floor(Math.random() * selectedTopic.query.length)];
-      data = (await rateLimitedSearchSerper(`${randomQuery} site:${randomLink}`)).results;
+      try {
+        data = (await rateLimitedSearchSerper(`${randomQuery} site:${randomLink}`)).results;
+      } catch (err) {
+        console.warn(`[discover] Failed to fetch preview data:`, err);
+        data = []; // Return empty array on error
+      }
     }
+
+    // Cache the results
+    cache.set(cacheKey, { data, timestamp: now });
 
     return Response.json(
       {
