@@ -24,6 +24,13 @@ export const searchSearxng = async (
   opts?: SearxngSearchOptions,
 ) => {
   const searxngURL = getSearxngApiEndpoint();
+  // Gracefully handle missing/invalid SEARXNG endpoint (optional feature)
+  if (!searxngURL || !/^https?:\/\//.test(searxngURL)) {
+    return { results: [], suggestions: [] } as {
+      results: SearxngSearchResult[];
+      suggestions: string[];
+    };
+  }
 
   const url = new URL(`${searxngURL}/search?format=json`);
   url.searchParams.append('q', query);
