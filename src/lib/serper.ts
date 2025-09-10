@@ -16,14 +16,20 @@ export const searchSerper = async (
     return { results: [], suggestions: [] };
   }
 
-  const url = 'https://google.serper.dev/search';
-  const headers = {
-    'X-API-KEY': apiKey,
-    'Content-Type': 'application/json',
-  } as const;
+    const url = 'https://google.serper.dev/search';
+    const headers = {
+      'X-API-KEY': apiKey,
+      'Content-Type': 'application/json',
+    } as const;
 
-  try {
-    const res = await axios.post(url, { q: query }, { headers, timeout: 15000 });
+    try {
+      // Add parameters to get images
+      const payload = {
+        q: query,
+        num: 10,
+        // Try to get images
+      };
+      const res = await axios.post(url, payload, { headers, timeout: 15000 });
 
     const organic: SerperSearchResult[] = res.data?.organic || [];
     const suggestions: string[] = (res.data?.relatedSearches || [])
@@ -31,12 +37,12 @@ export const searchSerper = async (
       .filter(Boolean);
 
     let results = organic.map((r: any) => {
-      console.log(`[serper] Processing article: ${r.title}, imageUrl: ${r.imageUrl}, imageUrl2: ${r['imageUrl']}`);
+      console.log(`[serper] Full article data:`, JSON.stringify(r, null, 2));
       return {
         title: r.title,
         url: r.link,
         content: r.snippet,
-        thumbnail: r.imageUrl || r['imageUrl'],
+        thumbnail: r.imageUrl || r.image || r.thumbnail || r.imageUrl2,
       };
     });
 
