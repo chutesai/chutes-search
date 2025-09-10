@@ -149,21 +149,24 @@ export const GET = async (req: Request) => {
         'hollywoodreporter.com': 'https://www.hollywoodreporter.com/favicon.ico',
       };
 
+      // Force-assign thumbnails for testing
       data.forEach(item => {
-        if (!item.thumbnail) {
-          try {
-            const url = new URL(item.url);
-            const domain = url.hostname.replace('www.', '');
-            console.log(`[discover] Checking thumbnail for ${item.url} -> domain: ${domain}`);
-            if (siteThumbnails[domain]) {
-              item.thumbnail = siteThumbnails[domain];
-              console.log(`[discover] Assigned thumbnail: ${item.thumbnail}`);
-            } else {
-              console.log(`[discover] No thumbnail found for domain: ${domain}`);
-            }
-          } catch (error) {
-            console.log(`[discover] Error parsing URL ${item.url}:`, error);
+        try {
+          const url = new URL(item.url);
+          const domain = url.hostname.replace('www.', '');
+          console.log(`[discover] Processing ${item.url} -> domain: ${domain}`);
+
+          if (siteThumbnails[domain]) {
+            item.thumbnail = siteThumbnails[domain];
+            console.log(`[discover] Assigned thumbnail: ${item.thumbnail}`);
+          } else {
+            // Assign a default placeholder for testing
+            item.thumbnail = 'https://via.placeholder.com/150x100?text=' + encodeURIComponent(domain);
+            console.log(`[discover] Assigned placeholder thumbnail: ${item.thumbnail}`);
           }
+        } catch (error) {
+          console.log(`[discover] Error parsing URL ${item.url}:`, error);
+          item.thumbnail = 'https://via.placeholder.com/150x100?text=Error';
         }
       });
     } else {
@@ -223,7 +226,7 @@ export const GET = async (req: Request) => {
     // Cache the results
     cache.set(cacheKey, { data, timestamp: now });
 
-    console.log(`[discover] Final response with ${data.length} blogs:`, data.map(item => ({ title: item.title, thumbnail: item.thumbnail })));
+    console.log(`[discover] Final response with ${data.length} blogs:`, data.map(item => ({ title: item.title, url: item.url, thumbnail: item.thumbnail })));
 
     return Response.json(
       {
