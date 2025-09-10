@@ -19,6 +19,7 @@ export const metadata: Metadata = {
     'Chutes Search is an AI-powered search engine using Chutes LLMs with web browsing.',
   icons: {
     icon: [
+      { url: '/favicon.ico', sizes: 'any', type: 'image/x-icon' },
       { url: '/chutes-logo.svg', type: 'image/svg+xml' },
       { url: '/chutes-logo.png', sizes: 'any', type: 'image/png' },
     ],
