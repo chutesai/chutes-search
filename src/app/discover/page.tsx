@@ -8,9 +8,9 @@ import { cn } from '@/lib/utils';
 
 interface Discover {
   title: string;
-  content: string;
+  content?: string;
   url: string;
-  thumbnail: string;
+  thumbnail?: string;
 }
 
 const topics: { key: string; display: string }[] = [
@@ -33,6 +33,10 @@ const topics: { key: string; display: string }[] = [
   {
     display: 'Entertainment',
     key: 'entertainment',
+  },
+  {
+    display: 'AI',
+    key: 'ai',
   },
 ];
 
@@ -57,7 +61,8 @@ const Page = () => {
         throw new Error(data.message);
       }
 
-      data.blogs = data.blogs.filter((blog: Discover) => blog.thumbnail);
+      // Filter out blogs without required fields, but don't require thumbnail
+      data.blogs = data.blogs.filter((blog: Discover) => blog.title && blog.url);
 
       setDiscover(data.blogs);
     } catch (err: any) {
@@ -129,21 +134,48 @@ const Page = () => {
                   className="max-w-sm rounded-lg overflow-hidden bg-light-secondary dark:bg-dark-secondary hover:-translate-y-[1px] transition duration-200"
                   target="_blank"
                 >
-                  <img
-                    className="object-cover w-full aspect-video"
-                    src={
-                      new URL(item.thumbnail).origin +
-                      new URL(item.thumbnail).pathname +
-                      `?id=${new URL(item.thumbnail).searchParams.get('id')}`
-                    }
-                    alt={item.title}
-                  />
+                  {item.thumbnail ? (
+                    <img
+                      className="object-cover w-full aspect-video"
+                      src={
+                        new URL(item.thumbnail).origin +
+                        new URL(item.thumbnail).pathname +
+                        `?id=${new URL(item.thumbnail).searchParams.get('id')}`
+                      }
+                      alt={item.title}
+                      onError={(e) => {
+                        // Hide image if it fails to load
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <div className="w-full aspect-video bg-light-tertiary dark:bg-dark-tertiary flex items-center justify-center">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="48"
+                        height="48"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="text-black/30 dark:text-white/30"
+                      >
+                        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+                        <polyline points="14,2 14,8 20,8" />
+                        <line x1="16" y1="13" x2="8" y2="13" />
+                        <line x1="16" y1="17" x2="8" y2="17" />
+                        <line x1="10" y1="9" x2="8" y2="9" />
+                      </svg>
+                    </div>
+                  )}
                   <div className="px-6 py-4">
                     <div className="font-bold text-lg mb-2">
                       {item.title.slice(0, 100)}...
                     </div>
                     <p className="text-black-70 dark:text-white/70 text-sm">
-                      {item.content.slice(0, 100)}...
+                      {item.content?.slice(0, 100) || 'No description available'}...
                     </p>
                   </div>
                 </Link>
