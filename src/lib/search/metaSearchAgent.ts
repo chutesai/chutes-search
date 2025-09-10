@@ -219,7 +219,6 @@ class MetaSearchAgent implements MetaSearchAgentType {
                 metadata: {
                   title: result.title,
                   url: result.url,
-                  ...(result.img_src && { img_src: result.img_src }),
                 },
               }),
           );
