@@ -4,11 +4,12 @@ type SerperSearchResult = {
   title: string;
   link: string;
   snippet?: string;
+  imageUrl?: string;
 };
 
 export const searchSerper = async (
   query: string,
-): Promise<{ results: { title: string; url: string; content?: string }[]; suggestions: string[] }> => {
+): Promise<{ results: { title: string; url: string; content?: string; thumbnail?: string }[]; suggestions: string[] }> => {
   const apiKey = process.env.SERPER_API_KEY;
   if (!apiKey) {
     console.warn('[serper] SERPER_API_KEY not set; returning empty results');
@@ -29,10 +30,11 @@ export const searchSerper = async (
       .map((s: any) => s?.query)
       .filter(Boolean);
 
-    let results = organic.map((r) => ({
+    let results = organic.map((r: any) => ({
       title: r.title,
       url: r.link,
       content: r.snippet,
+      thumbnail: r.imageUrl,
     }));
 
     if ((!results || results.length === 0) && res.data?.knowledgeGraph) {

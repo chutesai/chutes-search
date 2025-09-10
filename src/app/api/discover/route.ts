@@ -1,4 +1,5 @@
 import { searchSerper } from '@/lib/serper';
+import { fetchMultipleOGImages } from '@/lib/og-image';
 
 // Rate limiting and error handling for Serper API
 let lastRequestTime = 0;
@@ -85,7 +86,7 @@ export const GET = async (req: Request) => {
 
     const selectedTopic = websitesForTopic[topic];
 
-    let data: { title: string; url: string; content?: string }[] = [];
+    let data: { title: string; url: string; content?: string; thumbnail?: string }[] = [];
 
     if (mode === 'normal') {
       const seenUrls = new Set();
@@ -113,11 +114,52 @@ export const GET = async (req: Request) => {
           return true;
         })
         .sort(() => Math.random() - 0.5);
+
+      // Fetch OG images for articles without thumbnails
+      const articlesWithoutThumbnails = data.filter(item => !item.thumbnail);
+      if (articlesWithoutThumbnails.length > 0) {
+        try {
+          console.log(`[discover] Fetching OG images for ${articlesWithoutThumbnails.length} articles`);
+          const ogImages = await fetchMultipleOGImages(
+            articlesWithoutThumbnails.map(item => item.url),
+            2 // Lower concurrency to be respectful
+          );
+
+          // Update articles with OG images
+          data.forEach(item => {
+            if (!item.thumbnail && ogImages[item.url]) {
+              item.thumbnail = ogImages[item.url];
+            }
+          });
+        } catch (error) {
+          console.warn('[discover] Failed to fetch OG images:', error);
+          // Continue without OG images if fetching fails
+        }
+      }
     } else {
       const randomLink = selectedTopic.links[Math.floor(Math.random() * selectedTopic.links.length)];
       const randomQuery = selectedTopic.query[Math.floor(Math.random() * selectedTopic.query.length)];
       try {
         data = (await rateLimitedSearchSerper(`${randomQuery} site:${randomLink}`)).results;
+
+        // Fetch OG images for preview mode as well
+        const articlesWithoutThumbnails = data.filter(item => !item.thumbnail);
+        if (articlesWithoutThumbnails.length > 0) {
+          try {
+            const ogImages = await fetchMultipleOGImages(
+              articlesWithoutThumbnails.map(item => item.url),
+              1 // Single request for preview mode
+            );
+
+            data.forEach(item => {
+              if (!item.thumbnail && ogImages[item.url]) {
+                item.thumbnail = ogImages[item.url];
+              }
+            });
+          } catch (error) {
+            console.warn('[discover] Failed to fetch OG images for preview:', error);
+          }
+        }
       } catch (err) {
         console.warn(`[discover] Failed to fetch preview data:`, err);
         data = []; // Return empty array on error
