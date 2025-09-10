@@ -17,6 +17,14 @@ export const metadata: Metadata = {
   title: 'Chutes Search - Chat with the internet',
   description:
     'Chutes Search is an AI-powered search engine using Chutes LLMs with web browsing.',
+  icons: {
+    icon: [
+      { url: '/chutes-logo.svg', type: 'image/svg+xml' },
+      { url: '/chutes-logo.png', sizes: 'any', type: 'image/png' },
+    ],
+    shortcut: '/chutes-logo.svg',
+    apple: '/chutes-logo.png',
+  },
 };
 
 export default function RootLayout({
