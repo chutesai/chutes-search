@@ -154,11 +154,15 @@ export const GET = async (req: Request) => {
           try {
             const url = new URL(item.url);
             const domain = url.hostname.replace('www.', '');
+            console.log(`[discover] Checking thumbnail for ${item.url} -> domain: ${domain}`);
             if (siteThumbnails[domain]) {
               item.thumbnail = siteThumbnails[domain];
+              console.log(`[discover] Assigned thumbnail: ${item.thumbnail}`);
+            } else {
+              console.log(`[discover] No thumbnail found for domain: ${domain}`);
             }
           } catch (error) {
-            // Invalid URL, skip
+            console.log(`[discover] Error parsing URL ${item.url}:`, error);
           }
         }
       });
