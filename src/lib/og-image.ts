@@ -10,7 +10,7 @@ export interface OGData {
 
 // Track rate limit errors to avoid overwhelming servers
 let rateLimitCount = 0;
-const MAX_RATE_LIMITS = 3;
+const MAX_RATE_LIMITS = 5; // Increased for testing
 const RESET_RATE_LIMIT_INTERVAL = 60000; // 1 minute
 
 // Reset rate limit counter periodically
@@ -21,11 +21,10 @@ setInterval(() => {
 export const fetchOGData = async (url: string): Promise<OGData | null> => {
   try {
     // Skip if we've hit too many rate limits recently
-    // Temporarily disabled for testing
-    // if (rateLimitCount >= MAX_RATE_LIMITS) {
-    //   console.warn(`[og-image] Skipping OG fetch for ${url} due to recent rate limits`);
-    //   return null;
-    // }
+    if (rateLimitCount >= MAX_RATE_LIMITS) {
+      console.warn(`[og-image] Skipping OG fetch for ${url} due to recent rate limits (${rateLimitCount}/${MAX_RATE_LIMITS})`);
+      return null;
+    }
 
     // First try to get a quick response by setting a short timeout
     const response = await axios.get(url, {
@@ -91,16 +90,20 @@ export const fetchOGData = async (url: string): Promise<OGData | null> => {
     }
 
     return ogData.image ? ogData : null;
-  } catch (error: any) {
-    // Track rate limit errors
-    if (error?.response?.status === 429 || error?.response?.status === 503) {
-      rateLimitCount++;
-      console.warn(`[og-image] Rate limit hit for ${url}, count: ${rateLimitCount}`);
-    } else {
-      console.warn(`[og-image] Failed to fetch OG data for ${url}:`, error.message);
+    } catch (error: any) {
+      // Track rate limit errors
+      if (error?.response?.status === 429 || error?.response?.status === 503) {
+        rateLimitCount++;
+        console.warn(`[og-image] Rate limit hit for ${url}, count: ${rateLimitCount}/${MAX_RATE_LIMITS}, status: ${error?.response?.status}`);
+      } else if (error?.response?.status) {
+        console.warn(`[og-image] HTTP error for ${url}: ${error?.response?.status} - ${error?.response?.statusText}`);
+      } else if (error?.code === 'ECONNABORTED') {
+        console.warn(`[og-image] Timeout for ${url}`);
+      } else {
+        console.warn(`[og-image] Failed to fetch OG data for ${url}:`, error.message || error);
+      }
+      return null;
     }
-    return null;
-  }
 };
 
 export const fetchOGImage = async (url: string): Promise<string | null> => {
