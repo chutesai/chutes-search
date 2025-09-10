@@ -51,6 +51,10 @@ const websitesForTopic = {
     query: ['entertainment news'],
     links: ['hollywoodreporter.com'],
   },
+  ai: {
+    query: ['artificial intelligence news', 'AI developments'],
+    links: ['techcrunch.com', 'venturebeat.com'],
+  },
 };
 
 type Topic = keyof typeof websitesForTopic;
@@ -61,7 +65,7 @@ export const GET = async (req: Request) => {
 
     const mode: 'normal' | 'preview' =
       (params.get('mode') as 'normal' | 'preview') || 'normal';
-    const topic: Topic = (params.get('topic') as Topic) || 'tech';
+    const topic = (params.get('topic') as Topic) || 'tech';
 
     const cacheKey = `${topic}-${mode}`;
     const cached = cache.get(cacheKey);
