@@ -138,6 +138,30 @@ export const GET = async (req: Request) => {
         console.warn('[discover] Failed to fetch OG images:', error);
         // Continue without OG images if fetching fails
       }
+
+      // Fallback: Add generic thumbnails for popular sites
+      const siteThumbnails: Record<string, string> = {
+        'techcrunch.com': 'https://techcrunch.com/favicon.ico',
+        'venturebeat.com': 'https://venturebeat.com/favicon.ico',
+        'bloomberg.com': 'https://bloomberg.com/favicon.ico',
+        'artnews.com': 'https://www.artnews.com/favicon.ico',
+        'espn.com': 'https://www.espn.com/favicon.ico',
+        'hollywoodreporter.com': 'https://www.hollywoodreporter.com/favicon.ico',
+      };
+
+      data.forEach(item => {
+        if (!item.thumbnail) {
+          try {
+            const url = new URL(item.url);
+            const domain = url.hostname.replace('www.', '');
+            if (siteThumbnails[domain]) {
+              item.thumbnail = siteThumbnails[domain];
+            }
+          } catch (error) {
+            // Invalid URL, skip
+          }
+        }
+      });
     } else {
       const randomLink = selectedTopic.links[Math.floor(Math.random() * selectedTopic.links.length)];
       const randomQuery = selectedTopic.query[Math.floor(Math.random() * selectedTopic.query.length)];
@@ -159,6 +183,30 @@ export const GET = async (req: Request) => {
               item.thumbnail = ogImages[item.url];
             }
           });
+
+          // Fallback: Add generic thumbnails for popular sites in preview mode
+          const siteThumbnails: Record<string, string> = {
+            'techcrunch.com': 'https://techcrunch.com/favicon.ico',
+            'venturebeat.com': 'https://venturebeat.com/favicon.ico',
+            'bloomberg.com': 'https://bloomberg.com/favicon.ico',
+            'artnews.com': 'https://www.artnews.com/favicon.ico',
+            'espn.com': 'https://www.espn.com/favicon.ico',
+            'hollywoodreporter.com': 'https://www.hollywoodreporter.com/favicon.ico',
+          };
+
+          data.forEach(item => {
+            if (!item.thumbnail) {
+              try {
+                const url = new URL(item.url);
+                const domain = url.hostname.replace('www.', '');
+                if (siteThumbnails[domain]) {
+                  item.thumbnail = siteThumbnails[domain];
+                }
+              } catch (error) {
+                // Invalid URL, skip
+              }
+            }
+          });
         } catch (error) {
           console.warn('[discover] Failed to fetch OG images for preview:', error);
         }
@@ -170,6 +218,8 @@ export const GET = async (req: Request) => {
 
     // Cache the results
     cache.set(cacheKey, { data, timestamp: now });
+
+    console.log(`[discover] Final response with ${data.length} blogs:`, data.map(item => ({ title: item.title, thumbnail: item.thumbnail })));
 
     return Response.json(
       {
