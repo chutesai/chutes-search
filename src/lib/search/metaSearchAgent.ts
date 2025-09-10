@@ -17,7 +17,7 @@ import LineListOutputParser from '../outputParsers/listLineOutputParser';
 import LineOutputParser from '../outputParsers/lineOutputParser';
 import { getDocumentsFromLinks } from '../utils/documents';
 import { Document } from 'langchain/document';
-import { searchSearxng } from '../searxng';
+// import { searchSearxng } from '../searxng';
 import { searchSerper } from '../serper';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -206,15 +206,9 @@ class MetaSearchAgent implements MetaSearchAgentType {
         } else {
           question = question.replace(/<think>.*?<\/think>/g, '');
 
-          let res = await searchSearxng(question, {
-            language: 'en',
-            engines: this.config.activeEngines,
-          });
-          if ((!res.results || res.results.length === 0) && process.env.SERPER_API_KEY) {
-            res = await searchSerper(question);
-          }
+          const res = await searchSerper(question);
 
-          const documents = res.results.map(
+          const documents = (res.results || []).map(
             (result) =>
               new Document({
                 pageContent:
