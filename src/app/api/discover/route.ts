@@ -115,6 +115,15 @@ export const GET = async (req: Request) => {
         })
         .sort(() => Math.random() - 0.5);
 
+      // TEMPORARY: Force assign thumbnails for all articles
+      console.log(`[discover] TEMP: Force-assigning thumbnails to ${data.length} articles`);
+      data.forEach((item, index) => {
+        if (!item.thumbnail) {
+          item.thumbnail = `https://via.placeholder.com/150x100?text=${index}`;
+          console.log(`[discover] TEMP: Assigned thumbnail to ${item.title}: ${item.thumbnail}`);
+        }
+      });
+
       // Always try to fetch OG images for all articles (not just those without thumbnails)
       console.log(`[discover] Fetching OG images for all ${data.length} articles`);
       try {
