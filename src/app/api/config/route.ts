@@ -64,6 +64,11 @@ export const GET = async (req: Request) => {
     config['customOpenaiApiUrl'] = getCustomOpenaiApiUrl();
     config['customOpenaiApiKey'] = getCustomOpenaiApiKey();
     config['customOpenaiModelName'] = getCustomOpenaiModelName();
+    config['chutes'] = {
+      apiUrl: getCustomOpenaiApiUrl(),
+      apiKeyPresent: !!getCustomOpenaiApiKey(),
+      modelName: getCustomOpenaiModelName(),
+    };
 
     return Response.json({ ...config }, { status: 200 });
   } catch (err) {

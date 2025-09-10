@@ -6,6 +6,7 @@ import {
   getAvailableEmbeddingModelProviders,
 } from '@/lib/providers';
 import db from '@/lib/db';
+import { cookies } from 'next/headers';
 import { chats, messages as messagesSchema } from '@/lib/db/schema';
 import { and, eq, gt } from 'drizzle-orm';
 import { getFileDetails } from '@/lib/utils/files';
@@ -130,6 +131,12 @@ const handleHistorySave = async (
   focusMode: string,
   files: string[],
 ) => {
+  const cookieStore = await cookies();
+  const sessionId =
+    cookieStore.get('sessionId')?.value || crypto.randomBytes(8).toString('hex');
+  if (!cookieStore.get('sessionId')?.value) {
+    cookieStore.set('sessionId', sessionId, { sameSite: 'lax', httpOnly: false });
+  }
   const chat = await db.query.chats.findFirst({
     where: eq(chats.id, message.chatId),
   });
@@ -144,6 +151,7 @@ const handleHistorySave = async (
         title: message.content,
         createdAt: new Date().toString(),
         focusMode: focusMode,
+        sessionId: sessionId,
         files: fileData,
       })
       .execute();

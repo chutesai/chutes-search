@@ -58,7 +58,7 @@ export const PROVIDER_METADATA = {
   lmstudio: LMStudioInfo,
   custom_openai: {
     key: 'custom_openai',
-    displayName: 'Custom OpenAI',
+    displayName: 'Chutes (OpenAI-compatible)',
   },
 };
 

@@ -94,13 +94,13 @@ export const getDeepseekApiKey = () => loadConfig().MODELS.DEEPSEEK.API_KEY;
 export const getAimlApiKey = () => loadConfig().MODELS.AIMLAPI.API_KEY;
 
 export const getCustomOpenaiApiKey = () =>
-  loadConfig().MODELS.CUSTOM_OPENAI.API_KEY;
+  (process.env.CHUTES_API_KEY || loadConfig().MODELS.CUSTOM_OPENAI.API_KEY);
 
 export const getCustomOpenaiApiUrl = () =>
-  loadConfig().MODELS.CUSTOM_OPENAI.API_URL;
+  (process.env.CHUTES_API_URL || loadConfig().MODELS.CUSTOM_OPENAI.API_URL || 'https://llm.chutes.ai/v1');
 
 export const getCustomOpenaiModelName = () =>
-  loadConfig().MODELS.CUSTOM_OPENAI.MODEL_NAME;
+  (process.env.CHUTES_MODEL_NAME || loadConfig().MODELS.CUSTOM_OPENAI.MODEL_NAME || 'deepseek-ai/DeepSeek-V3.1');
 
 export const getLMStudioApiEndpoint = () =>
   loadConfig().MODELS.LM_STUDIO.API_URL;
