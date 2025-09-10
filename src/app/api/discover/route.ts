@@ -1,25 +1,41 @@
-import { searchSearxng } from '@/lib/searxng';
+import { searchSerper } from '@/lib/serper';
+
+// Simple rate limiting to prevent hitting API limits
+let lastRequestTime = 0;
+const MIN_REQUEST_INTERVAL = 1000; // 1 second between requests
+
+const rateLimitedSearchSerper = async (query: string) => {
+  const now = Date.now();
+  const timeSinceLastRequest = now - lastRequestTime;
+
+  if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
+    await new Promise(resolve => setTimeout(resolve, MIN_REQUEST_INTERVAL - timeSinceLastRequest));
+  }
+
+  lastRequestTime = Date.now();
+  return await searchSerper(query);
+};
 
 const websitesForTopic = {
   tech: {
-    query: ['technology news', 'latest tech', 'AI', 'science and innovation'],
-    links: ['techcrunch.com', 'wired.com', 'theverge.com'],
+    query: ['technology news', 'latest tech'],
+    links: ['techcrunch.com', 'wired.com'],
   },
   finance: {
-    query: ['finance news', 'economy', 'stock market', 'investing'],
-    links: ['bloomberg.com', 'cnbc.com', 'marketwatch.com'],
+    query: ['finance news', 'stock market'],
+    links: ['bloomberg.com', 'cnbc.com'],
   },
   art: {
-    query: ['art news', 'culture', 'modern art', 'cultural events'],
-    links: ['artnews.com', 'hyperallergic.com', 'theartnewspaper.com'],
+    query: ['art news', 'culture'],
+    links: ['artnews.com', 'hyperallergic.com'],
   },
   sports: {
-    query: ['sports news', 'latest sports', 'cricket football tennis'],
-    links: ['espn.com', 'bbc.com/sport', 'skysports.com'],
+    query: ['sports news', 'latest sports'],
+    links: ['espn.com', 'bbc.com/sport'],
   },
   entertainment: {
-    query: ['entertainment news', 'movies', 'TV shows', 'celebrities'],
-    links: ['hollywoodreporter.com', 'variety.com', 'deadline.com'],
+    query: ['entertainment news', 'movies'],
+    links: ['hollywoodreporter.com', 'variety.com'],
   },
 };
 
@@ -44,13 +60,8 @@ export const GET = async (req: Request) => {
         await Promise.all(
           selectedTopic.links.flatMap((link) =>
             selectedTopic.query.map(async (query) => {
-              return (
-                await searchSearxng(`site:${link} ${query}`, {
-                  engines: ['bing news'],
-                  pageno: 1,
-                  language: 'en',
-                })
-              ).results;
+              const result = await rateLimitedSearchSerper(`${query} site:${link}`);
+              return result.results;
             }),
           ),
         )
@@ -64,16 +75,9 @@ export const GET = async (req: Request) => {
         })
         .sort(() => Math.random() - 0.5);
     } else {
-      data = (
-        await searchSearxng(
-          `site:${selectedTopic.links[Math.floor(Math.random() * selectedTopic.links.length)]} ${selectedTopic.query[Math.floor(Math.random() * selectedTopic.query.length)]}`,
-          {
-            engines: ['bing news'],
-            pageno: 1,
-            language: 'en',
-          },
-        )
-      ).results;
+      const randomLink = selectedTopic.links[Math.floor(Math.random() * selectedTopic.links.length)];
+      const randomQuery = selectedTopic.query[Math.floor(Math.random() * selectedTopic.query.length)];
+      data = (await rateLimitedSearchSerper(`${randomQuery} site:${randomLink}`)).results;
     }
 
     return Response.json(
