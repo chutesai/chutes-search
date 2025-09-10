@@ -114,7 +114,27 @@ export const getGeminiApiKey = () =>
   process.env.GEMINI_API_KEY || loadConfig().MODELS.GEMINI.API_KEY;
 
 export const getSearxngApiEndpoint = () =>
-  process.env.SEARXNG_API_URL || loadConfig().API_ENDPOINTS.SEARXNG;
+  (() => {
+    const urlsFromEnv = (process.env.SEARXNG_API_URLS || '')
+      .split(',')
+      .map((u) => u.trim())
+      .filter((u) => /^https?:\/\//.test(u));
+    const single = process.env.SEARXNG_API_URL || loadConfig().API_ENDPOINTS.SEARXNG || '';
+    const all = [...urlsFromEnv, ...(single ? [single] : [])];
+    if (all.length === 0) return '';
+    const idx = Math.floor(Math.random() * all.length);
+    return all[idx];
+  })();
+
+export const getSearxngApiEndpoints = () => {
+  const urlsFromEnv = (process.env.SEARXNG_API_URLS || '')
+    .split(',')
+    .map((u) => u.trim())
+    .filter((u) => /^https?:\/\//.test(u));
+  const single = process.env.SEARXNG_API_URL || loadConfig().API_ENDPOINTS.SEARXNG || '';
+  const all = [...urlsFromEnv, ...(single ? [single] : [])];
+  return all;
+};
 
 export const getOllamaApiEndpoint = () =>
   process.env.OLLAMA_API_URL || loadConfig().MODELS.OLLAMA.API_URL;

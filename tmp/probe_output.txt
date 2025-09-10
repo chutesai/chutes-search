@@ -1,0 +1,77 @@
+{"url": "https://searx.stream", "ok": false, "ms": 83, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://search.rhscz.eu", "ok": false, "ms": 80, "error": "HTTP Error 429: TOO MANY REQUESTS"}
+{"url": "https://search.hbubli.cc", "ok": false, "ms": 80, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://priv.au", "ok": false, "ms": 70, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://northboot.xyz", "ok": false, "ms": 69, "error": "HTTP Error 403: Forbidden"}
+{"url": "https://searx.rhscz.eu", "ok": false, "ms": 63, "error": "HTTP Error 429: TOO MANY REQUESTS"}
+{"url": "https://s.mble.dk", "ok": false, "ms": 68, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://search.inetol.net", "ok": false, "ms": 187, "count": 0}
+{"url": "https://find.xenorio.xyz", "ok": false, "ms": 126, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://searx.oloke.xyz", "ok": false, "ms": 88, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://search.ipv6s.net", "ok": false, "ms": 63, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://search.buddyverse.net", "ok": false, "ms": 54, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://www.gruble.de", "ok": false, "ms": 78, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://searxng.hweeren.com", "ok": false, "ms": 592, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://search.catboy.house", "ok": false, "ms": 103, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://searx.tuxcloud.net", "ok": false, "ms": 89, "error": "HTTP Error 429: TOO MANY REQUESTS"}
+{"url": "https://search.rowie.at", "ok": false, "ms": 84, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://search.indst.eu", "ok": false, "ms": 139, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://searx.dresden.network", "ok": false, "ms": 48, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://opnxng.com", "ok": false, "ms": 523, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://copp.gg", "ok": false, "ms": 374, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://searxng.site", "ok": false, "ms": 58, "error": "HTTP Error 429: TOO MANY REQUESTS"}
+{"url": "https://search.system51.co.uk", "ok": false, "ms": 61, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://search.ethibox.fr", "ok": false, "ms": 89, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://searx.foobar.vip", "ok": false, "ms": 58, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://search.leptons.xyz", "ok": false, "ms": 100, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://search.mdosch.de", "ok": false, "ms": 54, "error": "HTTP Error 429: TOO MANY REQUESTS"}
+{"url": "https://search.perditum.com", "ok": false, "ms": 154, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://search.ononoki.org", "ok": false, "ms": 384, "error": "HTTP Error 429: TOO MANY REQUESTS"}
+{"url": "https://search.ipsys.bf", "ok": false, "ms": 417, "error": "HTTP Error 429: TOO MANY REQUESTS"}
+{"url": "https://searxng.deliberate.world", "ok": false, "ms": 198, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://search.internetsucks.net", "ok": false, "ms": 107, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://kantan.cat", "ok": false, "ms": 154, "error": "HTTP Error 429: TOO MANY REQUESTS"}
+{"url": "https://searxng.shreven.org", "ok": false, "ms": 553, "error": "HTTP Error 429: TOO MANY REQUESTS"}
+{"url": "https://search.bladerunn.in", "ok": false, "ms": 152, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://searx.namejeff.xyz", "ok": false, "ms": 87, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://search.charliewhiskey.net", "ok": false, "ms": 87, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://searx.sev.monster", "ok": false, "ms": 393, "error": "HTTP Error 403: Forbidden"}
+{"url": "https://searx.ro", "ok": false, "ms": 65, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://searxng.website", "ok": false, "ms": 74, "error": "HTTP Error 429: TOO MANY REQUESTS"}
+{"url": "https://searx.party", "ok": false, "ms": 312, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://searx.zhenyapav.com", "ok": false, "ms": 98, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://darmarit.org/searx", "ok": false, "ms": 105, "error": "HTTP Error 429: TOO MANY REQUESTS"}
+{"url": "https://search.canine.tools", "ok": true, "ms": 1162, "count": 17}
+{"url": "https://search.privacyredirect.com", "ok": false, "ms": 511, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://searx.lunar.icu", "ok": false, "ms": 314, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://baresearch.org", "ok": false, "ms": 535, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://search.sapti.me", "ok": false, "ms": 57, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://nyc1.sx.ggtyler.dev", "ok": false, "ms": 468, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://searxng.biz", "ok": false, "ms": 68, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://searx.juancord.xyz", "ok": false, "ms": 758, "error": "HTTP Error 429: TOO MANY REQUESTS"}
+{"url": "https://search.ashisgreat.xyz", "ok": false, "ms": 124, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://searxng.f24o.zip", "ok": false, "ms": 87, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://search.im-in.space", "ok": false, "ms": 1658, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://metacat.online", "ok": false, "ms": 60, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://search.undertale.uk", "ok": false, "ms": 176, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://fairsuch.net", "ok": false, "ms": 388, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://searx.perennialte.ch", "ok": false, "ms": 801, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://paulgo.io", "ok": false, "ms": 8103, "error": "The read operation timed out"}
+{"url": "https://search.url4irl.com", "ok": false, "ms": 83, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://search.nerdvpn.de", "ok": false, "ms": 160, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://etsi.me", "ok": false, "ms": 500, "error": "HTTP Error 429: TOO MANY REQUESTS"}
+{"url": "https://search.2b9t.xyz", "ok": false, "ms": 732, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://search.oh64.moe", "ok": false, "ms": 151, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://seek.fyi", "ok": false, "ms": 358, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://searx.tiekoetter.com", "ok": false, "ms": 375, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://ooglester.com", "ok": false, "ms": 6225, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://sx.catgirl.cloud", "ok": false, "ms": 87, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://searx.foss.family", "ok": false, "ms": 156, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://searx.mxchange.org", "ok": false, "ms": 6913, "error": "HTTP Error 429: TOO MANY REQUESTS"}
+{"url": "https://search.einfachzocken.eu", "ok": false, "ms": 1069, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://searx.mbuf.net", "ok": false, "ms": 142, "error": "HTTP Error 429: TOO MANY REQUESTS"}
+{"url": "https://searx.ox2.fr", "ok": false, "ms": 137, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://searx.ankha.ac", "ok": false, "ms": 649, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://searx.ppeb.me", "ok": false, "ms": 453, "error": "HTTP Error 429: Too Many Requests"}
+{"url": "https://search.yatac.net", "ok": false, "ms": 335, "error": "<urlopen error [Errno -2] Name or service not known>"}
+https://search.canine.tools/

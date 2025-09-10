@@ -559,85 +559,7 @@ const Page = () => {
             </SettingsSection>
 
             <SettingsSection title="Model Settings">
-              {config.chatModelProviders && (
-                <div className="flex flex-col space-y-4">
-                  <div className="flex flex-col space-y-1">
-                    <p className="text-black/70 dark:text-white/70 text-sm">
-                      Chat Model Provider
-                    </p>
-                    <Select
-                      value={selectedChatModelProvider ?? undefined}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        setSelectedChatModelProvider(value);
-                        saveConfig('chatModelProvider', value);
-                        const firstModel =
-                          config.chatModelProviders[value]?.[0]?.name;
-                        if (firstModel) {
-                          setSelectedChatModel(firstModel);
-                          saveConfig('chatModel', firstModel);
-                        }
-                      }}
-                      options={Object.keys(config.chatModelProviders).map(
-                        (provider) => ({
-                          value: provider,
-                          label:
-                            (PROVIDER_METADATA as any)[provider]?.displayName ||
-                            provider.charAt(0).toUpperCase() +
-                              provider.slice(1),
-                        }),
-                      )}
-                    />
-                  </div>
-
-                  {selectedChatModelProvider &&
-                    selectedChatModelProvider != 'custom_openai' && (
-                      <div className="flex flex-col space-y-1">
-                        <p className="text-black/70 dark:text-white/70 text-sm">
-                          Chat Model
-                        </p>
-                        <Select
-                          value={selectedChatModel ?? undefined}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            setSelectedChatModel(value);
-                            saveConfig('chatModel', value);
-                          }}
-                          options={(() => {
-                            const chatModelProvider =
-                              config.chatModelProviders[
-                                selectedChatModelProvider
-                              ];
-                            return chatModelProvider
-                              ? chatModelProvider.length > 0
-                                ? chatModelProvider.map((model) => ({
-                                    value: model.name,
-                                    label: model.displayName,
-                                  }))
-                                : [
-                                    {
-                                      value: '',
-                                      label: 'No models available',
-                                      disabled: true,
-                                    },
-                                  ]
-                              : [
-                                  {
-                                    value: '',
-                                    label:
-                                      'Invalid provider, please check backend logs',
-                                    disabled: true,
-                                  },
-                                ];
-                          })()}
-                        />
-                      </div>
-                    )}
-                </div>
-              )}
-
-              {selectedChatModelProvider &&
-                selectedChatModelProvider === 'custom_openai' && (
+              {selectedChatModelProvider && (
                   <div className="flex flex-col space-y-4">
                     <div className="flex flex-col space-y-1">
                       <p className="text-black/70 dark:text-white/70 text-sm">
@@ -660,12 +582,10 @@ const Page = () => {
                       />
                     </div>
                     <div className="flex flex-col space-y-1">
-                      <p className="text-black/70 dark:text-white/70 text-sm">
-                        Custom OpenAI API Key
-                      </p>
+                      <p className="text-black/70 dark:text-white/70 text-sm">Chutes API Key</p>
                       <Input
-                        type="text"
-                        placeholder="Custom OpenAI API Key"
+                        type="password"
+                        placeholder="Chutes API Key"
                         value={config.customOpenaiApiKey}
                         isSaving={savingStates['customOpenaiApiKey']}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
@@ -676,26 +596,6 @@ const Page = () => {
                         }}
                         onSave={(value) =>
                           saveConfig('customOpenaiApiKey', value)
-                        }
-                      />
-                    </div>
-                    <div className="flex flex-col space-y-1">
-                      <p className="text-black/70 dark:text-white/70 text-sm">
-                        Custom OpenAI Base URL
-                      </p>
-                      <Input
-                        type="text"
-                        placeholder="Custom OpenAI Base URL"
-                        value={config.customOpenaiApiUrl}
-                        isSaving={savingStates['customOpenaiApiUrl']}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                          setConfig((prev) => ({
-                            ...prev!,
-                            customOpenaiApiUrl: e.target.value,
-                          }));
-                        }}
-                        onSave={(value) =>
-                          saveConfig('customOpenaiApiUrl', value)
                         }
                       />
                     </div>
@@ -779,6 +679,7 @@ const Page = () => {
               )}
             </SettingsSection>
 
+            {false && (
             <SettingsSection title="API Keys">
               <div className="flex flex-col space-y-4">
                 <div className="flex flex-col space-y-1">
@@ -953,6 +854,7 @@ const Page = () => {
                 </div>
               </div>
             </SettingsSection>
+            )}
           </div>
         )
       )}
