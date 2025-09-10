@@ -72,17 +72,17 @@ export const GET = async (req: Request) => {
     const cached = cache.get(cacheKey);
     const now = Date.now();
 
-    // Return cached data if it's still fresh
-    if (cached && (now - cached.timestamp) < CACHE_DURATION) {
-      return Response.json(
-        {
-          blogs: cached.data,
-        },
-        {
-          status: 200,
-        },
-      );
-    }
+    // TEMPORARILY DISABLE CACHE for testing
+    // if (cached && (now - cached.timestamp) < CACHE_DURATION) {
+    //   return Response.json(
+    //     {
+    //       blogs: cached.data,
+    //     },
+    //     {
+    //       status: 200,
+    //     },
+    //   );
+    // }
 
     const selectedTopic = websitesForTopic[topic];
 
