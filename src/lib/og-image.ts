@@ -21,10 +21,11 @@ setInterval(() => {
 export const fetchOGData = async (url: string): Promise<OGData | null> => {
   try {
     // Skip if we've hit too many rate limits recently
-    if (rateLimitCount >= MAX_RATE_LIMITS) {
-      console.warn(`[og-image] Skipping OG fetch for ${url} due to recent rate limits`);
-      return null;
-    }
+    // Temporarily disabled for testing
+    // if (rateLimitCount >= MAX_RATE_LIMITS) {
+    //   console.warn(`[og-image] Skipping OG fetch for ${url} due to recent rate limits`);
+    //   return null;
+    // }
 
     // First try to get a quick response by setting a short timeout
     const response = await axios.get(url, {
@@ -104,8 +105,15 @@ export const fetchOGData = async (url: string): Promise<OGData | null> => {
 
 export const fetchOGImage = async (url: string): Promise<string | null> => {
   try {
+    console.log(`[og-image] Attempting to fetch OG image for: ${url}`);
     const ogData = await fetchOGData(url);
-    return ogData?.image || null;
+    if (ogData?.image) {
+      console.log(`[og-image] Successfully found OG image for ${url}: ${ogData.image}`);
+      return ogData.image;
+    } else {
+      console.log(`[og-image] No OG image found for ${url}`);
+      return null;
+    }
   } catch (error) {
     console.warn(`[og-image] Failed to fetch OG image for ${url}:`, error.message);
     return null;
