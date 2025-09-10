@@ -57,16 +57,43 @@ type RecursivePartial<T> = {
   [P in keyof T]?: RecursivePartial<T[P]>;
 };
 
+const defaultConfig: Config = {
+  GENERAL: {
+    SIMILARITY_MEASURE: 'cosine',
+    KEEP_ALIVE: '5m',
+  },
+  MODELS: {
+    OPENAI: { API_KEY: '' },
+    GROQ: { API_KEY: '' },
+    ANTHROPIC: { API_KEY: '' },
+    GEMINI: { API_KEY: '' },
+    OLLAMA: { API_URL: '', API_KEY: '' },
+    DEEPSEEK: { API_KEY: '' },
+    AIMLAPI: { API_KEY: '' },
+    LM_STUDIO: { API_URL: '' },
+    CUSTOM_OPENAI: { API_URL: '', API_KEY: '', MODEL_NAME: '' },
+  },
+  API_ENDPOINTS: {
+    SEARXNG: '',
+  },
+};
+
 const loadConfig = () => {
   // Server-side only
   if (typeof window === 'undefined') {
-    return toml.parse(
-      fs.readFileSync(path.join(process.cwd(), `${configFileName}`), 'utf-8'),
-    ) as any as Config;
+    try {
+      const filePath = path.join(process.cwd(), `${configFileName}`);
+      if (fs && fs.existsSync && fs.existsSync(filePath)) {
+        return toml.parse(fs.readFileSync(filePath, 'utf-8')) as any as Config;
+      }
+    } catch (e) {
+      // Fallback to defaults if parsing/reading fails
+    }
+    return defaultConfig as any as Config;
   }
 
   // Client-side fallback - settings will be loaded via API
-  return {} as Config;
+  return defaultConfig as any as Config;
 };
 
 export const getSimilarityMeasure = () =>
@@ -74,24 +101,32 @@ export const getSimilarityMeasure = () =>
 
 export const getKeepAlive = () => loadConfig().GENERAL.KEEP_ALIVE;
 
-export const getOpenaiApiKey = () => loadConfig().MODELS.OPENAI.API_KEY;
+export const getOpenaiApiKey = () =>
+  process.env.OPENAI_API_KEY || loadConfig().MODELS.OPENAI.API_KEY;
 
-export const getGroqApiKey = () => loadConfig().MODELS.GROQ.API_KEY;
+export const getGroqApiKey = () =>
+  process.env.GROQ_API_KEY || loadConfig().MODELS.GROQ.API_KEY;
 
-export const getAnthropicApiKey = () => loadConfig().MODELS.ANTHROPIC.API_KEY;
+export const getAnthropicApiKey = () =>
+  process.env.ANTHROPIC_API_KEY || loadConfig().MODELS.ANTHROPIC.API_KEY;
 
-export const getGeminiApiKey = () => loadConfig().MODELS.GEMINI.API_KEY;
+export const getGeminiApiKey = () =>
+  process.env.GEMINI_API_KEY || loadConfig().MODELS.GEMINI.API_KEY;
 
 export const getSearxngApiEndpoint = () =>
   process.env.SEARXNG_API_URL || loadConfig().API_ENDPOINTS.SEARXNG;
 
-export const getOllamaApiEndpoint = () => loadConfig().MODELS.OLLAMA.API_URL;
+export const getOllamaApiEndpoint = () =>
+  process.env.OLLAMA_API_URL || loadConfig().MODELS.OLLAMA.API_URL;
 
-export const getOllamaApiKey = () => loadConfig().MODELS.OLLAMA.API_KEY;
+export const getOllamaApiKey = () =>
+  process.env.OLLAMA_API_KEY || loadConfig().MODELS.OLLAMA.API_KEY;
 
-export const getDeepseekApiKey = () => loadConfig().MODELS.DEEPSEEK.API_KEY;
+export const getDeepseekApiKey = () =>
+  process.env.DEEPSEEK_API_KEY || loadConfig().MODELS.DEEPSEEK.API_KEY;
 
-export const getAimlApiKey = () => loadConfig().MODELS.AIMLAPI.API_KEY;
+export const getAimlApiKey = () =>
+  process.env.AIMLAPI_API_KEY || loadConfig().MODELS.AIMLAPI.API_KEY;
 
 export const getCustomOpenaiApiKey = () =>
   (process.env.CHUTES_API_KEY || loadConfig().MODELS.CUSTOM_OPENAI.API_KEY);
@@ -103,7 +138,7 @@ export const getCustomOpenaiModelName = () =>
   (process.env.CHUTES_MODEL_NAME || loadConfig().MODELS.CUSTOM_OPENAI.MODEL_NAME || 'deepseek-ai/DeepSeek-V3.1');
 
 export const getLMStudioApiEndpoint = () =>
-  loadConfig().MODELS.LM_STUDIO.API_URL;
+  process.env.LM_STUDIO_API_URL || loadConfig().MODELS.LM_STUDIO.API_URL;
 
 const mergeConfigs = (current: any, update: any): any => {
   if (update === null || update === undefined) {
