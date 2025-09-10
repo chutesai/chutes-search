@@ -117,20 +117,26 @@ export const GET = async (req: Request) => {
 
       // Fetch OG images for articles without thumbnails
       const articlesWithoutThumbnails = data.filter(item => !item.thumbnail);
+      console.log(`[discover] Found ${articlesWithoutThumbnails.length} articles without thumbnails out of ${data.length} total`);
       if (articlesWithoutThumbnails.length > 0) {
         try {
-          console.log(`[discover] Fetching OG images for ${articlesWithoutThumbnails.length} articles`);
+          console.log(`[discover] Fetching OG images for ${articlesWithoutThumbnails.length} articles:`, articlesWithoutThumbnails.map(item => item.url));
           const ogImages = await fetchMultipleOGImages(
             articlesWithoutThumbnails.map(item => item.url),
             1 // Single request at a time to be very respectful
           );
 
+          console.log(`[discover] OG image results:`, ogImages);
+
           // Update articles with OG images
+          let updatedCount = 0;
           data.forEach(item => {
             if (!item.thumbnail && ogImages[item.url]) {
               item.thumbnail = ogImages[item.url];
+              updatedCount++;
             }
           });
+          console.log(`[discover] Updated ${updatedCount} articles with OG images`);
         } catch (error) {
           console.warn('[discover] Failed to fetch OG images:', error);
           // Continue without OG images if fetching fails
