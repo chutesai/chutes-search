@@ -689,7 +689,7 @@ const Page = () => {
                   <Input
                     type="text"
                     placeholder="OpenAI API Key"
-                    value={config.openaiApiKey}
+                    value={config?.openaiApiKey ?? ''}
                     isSaving={savingStates['openaiApiKey']}
                     onChange={(e) => {
                       setConfig((prev) => ({
@@ -708,7 +708,7 @@ const Page = () => {
                   <Input
                     type="text"
                     placeholder="Ollama API URL"
-                    value={config.ollamaApiUrl}
+                    value={config?.ollamaApiUrl ?? ''}
                     isSaving={savingStates['ollamaApiUrl']}
                     onChange={(e) => {
                       setConfig((prev) => ({
@@ -727,7 +727,7 @@ const Page = () => {
                   <Input
                     type="text"
                     placeholder="Ollama API Key"
-                    value={config.ollamaApiKey}
+                    value={config?.ollamaApiKey ?? ''}
                     isSaving={savingStates['ollamaApiKey']}
                     onChange={(e) => {
                       setConfig((prev) => ({
@@ -746,7 +746,7 @@ const Page = () => {
                   <Input
                     type="text"
                     placeholder="GROQ API Key"
-                    value={config.groqApiKey}
+                    value={config?.groqApiKey ?? ''}
                     isSaving={savingStates['groqApiKey']}
                     onChange={(e) => {
                       setConfig((prev) => ({
@@ -765,7 +765,7 @@ const Page = () => {
                   <Input
                     type="text"
                     placeholder="Anthropic API key"
-                    value={config.anthropicApiKey}
+                    value={config?.anthropicApiKey ?? ''}
                     isSaving={savingStates['anthropicApiKey']}
                     onChange={(e) => {
                       setConfig((prev) => ({
@@ -784,7 +784,7 @@ const Page = () => {
                   <Input
                     type="text"
                     placeholder="Gemini API key"
-                    value={config.geminiApiKey}
+                    value={config?.geminiApiKey ?? ''}
                     isSaving={savingStates['geminiApiKey']}
                     onChange={(e) => {
                       setConfig((prev) => ({
@@ -803,7 +803,7 @@ const Page = () => {
                   <Input
                     type="text"
                     placeholder="Deepseek API Key"
-                    value={config.deepseekApiKey}
+                    value={config?.deepseekApiKey ?? ''}
                     isSaving={savingStates['deepseekApiKey']}
                     onChange={(e) => {
                       setConfig((prev) => ({
@@ -822,7 +822,7 @@ const Page = () => {
                   <Input
                     type="text"
                     placeholder="AI/ML API Key"
-                    value={config.aimlApiKey}
+                    value={config?.aimlApiKey ?? ''}
                     isSaving={savingStates['aimlApiKey']}
                     onChange={(e) => {
                       setConfig((prev) => ({
@@ -841,7 +841,7 @@ const Page = () => {
                   <Input
                     type="text"
                     placeholder="LM Studio API URL"
-                    value={config.lmStudioApiUrl}
+                    value={config?.lmStudioApiUrl ?? ''}
                     isSaving={savingStates['lmStudioApiUrl']}
                     onChange={(e) => {
                       setConfig((prev) => ({
