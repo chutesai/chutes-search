@@ -18,13 +18,9 @@ export const metadata: Metadata = {
   description:
     'Chutes Search is an AI-powered search engine using Chutes LLMs with web browsing.',
   icons: {
-    icon: [
-      { url: '/favicon.ico', sizes: 'any', type: 'image/x-icon' },
-      { url: '/chutes-logo.svg', type: 'image/svg+xml' },
-      { url: '/chutes-logo.png', sizes: 'any', type: 'image/png' },
-    ],
-    shortcut: '/chutes-logo.svg',
-    apple: '/chutes-logo.png',
+    icon: 'https://chutes.ai/favicon.png',
+    shortcut: 'https://chutes.ai/favicon.png',
+    apple: 'https://chutes.ai/favicon.png',
   },
 };
 
@@ -35,6 +31,11 @@ export default function RootLayout({
 }>) {
   return (
     <html className="h-full" lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="icon" href="https://chutes.ai/favicon.png" type="image/png" />
+        <link rel="shortcut icon" href="https://chutes.ai/favicon.png" type="image/png" />
+        <link rel="apple-touch-icon" href="https://chutes.ai/favicon.png" />
+      </head>
       <body className={cn('h-full', montserrat.className)}>
         <ThemeProvider>
           <Sidebar>{children}</Sidebar>
