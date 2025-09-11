@@ -49,8 +49,8 @@ export const POST = async (req: Request) => {
     }
 
     body.history = body.history || [];
-    // Default to 'quality' (renamed from previous 'balanced')
-    body.optimizationMode = body.optimizationMode || 'quality';
+    // Keep default to the previously working 'balanced' key
+    body.optimizationMode = body.optimizationMode || 'balanced';
     body.stream = body.stream || false;
 
     const history: BaseMessage[] = body.history.map((msg) => {

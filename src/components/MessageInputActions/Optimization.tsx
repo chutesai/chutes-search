@@ -18,7 +18,7 @@ const OptimizationModes = [
     model: 'openai/gpt-oss-20b',
   },
   {
-    key: 'quality',
+    key: 'balanced', // keep identifier as 'balanced' but label it as Quality
     title: 'Quality',
     description: 'Find the right balance between speed and accuracy',
     icon: <Sliders size={20} className="text-[#4CAF50]" />,
