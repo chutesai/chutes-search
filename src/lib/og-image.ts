@@ -118,7 +118,7 @@ export const fetchOGImage = async (url: string): Promise<string | null> => {
       return null;
     }
   } catch (error) {
-    console.warn(`[og-image] Failed to fetch OG image for ${url}:`, error.message);
+    console.warn(`[og-image] Failed to fetch OG image for ${url}:`, error instanceof Error ? error.message : String(error));
     return null;
   }
 };
