@@ -27,7 +27,7 @@ interface embeddingModel {
 }
 
 interface ChatRequestBody {
-  optimizationMode: 'speed' | 'balanced';
+  optimizationMode: 'speed' | 'balanced' | 'quality';
   focusMode: string;
   chatModel?: chatModel;
   embeddingModel?: embeddingModel;
@@ -74,7 +74,7 @@ export const POST = async (req: Request) => {
       const optimizationModels: Record<string, { provider: string; model: string }> = {
         'speed': { provider: 'openai', model: 'gpt-oss-20b' },
         'balanced': { provider: 'moonshotai', model: 'Kimi-K2-Instruct-0905' },
-        'quality': { provider: 'deepseek', model: 'DeepSeek-V3.1' }
+        'quality': { provider: 'deepseek', model: 'DeepSeek-R1-0528' }
       };
 
       const optimizedModel = optimizationModels[body.optimizationMode];

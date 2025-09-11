@@ -34,7 +34,7 @@ const OptimizationModes = [
         className="text-[#2196F3] dark:text-[#BBDEFB] fill-[#BBDEFB] dark:fill-[#2196F3]"
       />
     ),
-    model: 'deepseek-ai/DeepSeek-V3.1',
+    model: 'deepseek-ai/DeepSeek-R1-0528',
   },
 ];
 
