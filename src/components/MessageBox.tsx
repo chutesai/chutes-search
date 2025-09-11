@@ -7,8 +7,6 @@ import { cn } from '@/lib/utils';
 import {
   BookCopy,
   Disc3,
-  Volume2,
-  StopCircle,
   Layers3,
   Plus,
 } from 'lucide-react';
@@ -18,9 +16,9 @@ import Rewrite from './MessageActions/Rewrite';
 import MessageSources from './MessageSources';
 import SearchImages from './SearchImages';
 import SearchVideos from './SearchVideos';
-import { useSpeech } from 'react-text-to-speech';
 import ThinkBox from './ThinkBox';
 import { useChat } from '@/lib/hooks/useChat';
+import { TTSPlayer } from './TTSPlayer';
 
 const ThinkTagProcessor = ({
   children,
@@ -48,7 +46,6 @@ const MessageBox = ({
   const { loading, messages: history, sendMessage, rewrite } = useChat();
 
   const [parsedMessage, setParsedMessage] = useState(message.content);
-  const [speechMessage, setSpeechMessage] = useState(message.content);
   const [thinkingEnded, setThinkingEnded] = useState(false);
 
   useEffect(() => {
@@ -105,23 +102,11 @@ const MessageBox = ({
           },
         ),
       );
-      setSpeechMessage(message.content.replace(regex, ''));
-      return;
-    } else if (
-      message.role === 'assistant' &&
-      message?.sources &&
-      message.sources.length === 0
-    ) {
-      setParsedMessage(processedMessage.replace(regex, ''));
-      setSpeechMessage(message.content.replace(regex, ''));
       return;
     }
 
-    setSpeechMessage(message.content.replace(regex, ''));
     setParsedMessage(processedMessage);
   }, [message.content, message.sources, message.role]);
-
-  const { speechStatus, start, stop } = useSpeech({ text: speechMessage });
 
   const markdownOverrides: MarkdownToJSX.Options = {
     overrides: {
@@ -200,22 +185,7 @@ const MessageBox = ({
                   </div>
                   <div className="flex flex-row items-center space-x-1">
                     <Copy initialMessage={message.content} message={message} />
-                    <button
-                      onClick={() => {
-                        if (speechStatus === 'started') {
-                          stop();
-                        } else {
-                          start();
-                        }
-                      }}
-                      className="p-2 text-black/70 dark:text-white/70 rounded-xl hover:bg-light-secondary dark:hover:bg-dark-secondary transition duration-200 hover:text-black dark:hover:text-white"
-                    >
-                      {speechStatus === 'started' ? (
-                        <StopCircle size={18} />
-                      ) : (
-                        <Volume2 size={18} />
-                      )}
-                    </button>
+                    <TTSPlayer text={parsedMessage} />
                   </div>
                 </div>
               )}
