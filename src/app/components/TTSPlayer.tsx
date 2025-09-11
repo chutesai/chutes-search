@@ -27,7 +27,8 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
   const externalAudioRef = useRef<HTMLAudioElement | null>(null);
 
   type PlaybackMode = 1 | 2 | 3 | 4 | 5;
-  const [playbackMode, setPlaybackMode] = useState<PlaybackMode>(1);
+  const [playbackMode] = useState<PlaybackMode>(1); // hide selector, default to Mode 1
+  const [showPlayModal, setShowPlayModal] = useState(false);
 
   const startPlaying = () => {
     isPlayingRef.current = true;
@@ -301,7 +302,8 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
               setAudioUrls([...urls]);
               setAudioDataUrls([...dataUrls]);
               setIsLoading(false); // Allow user to stop while more chunks are loading
-              playAudioChunks();
+              // Present a modal to get explicit user gesture for autoplay-restricted browsers
+              setShowPlayModal(true);
 
               // Continue loading remaining chunks in background
               continue;
@@ -631,18 +633,6 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
 
   return (
     <div className={`inline-flex items-center ${className}`}>
-      <select
-        value={playbackMode}
-        onChange={(e) => { const m = Number(e.target.value) as PlaybackMode; console.log('[TTS] changed playback mode to', m); setPlaybackMode(m); }}
-        className="mr-2 text-xs border rounded px-1 py-0.5 dark:bg-gray-800 dark:border-gray-700"
-        title="TTS Playback Mode"
-      >
-        <option value={1}>Mode 1</option>
-        <option value={2}>Mode 2</option>
-        <option value={3}>Mode 3</option>
-        <option value={4}>Mode 4</option>
-        <option value={5}>Mode 5</option>
-      </select>
       <button
         onClick={isPlaying ? stopPlayback : generateSpeech}
         disabled={isLoading}
@@ -663,6 +653,31 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
         className="hidden"
         controls={false}
       />
+
+      {showPlayModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl p-4 max-w-sm w-full mx-4">
+            <div className="text-black dark:text-white mb-3 font-medium">Audio is ready</div>
+            <div className="text-sm text-black/70 dark:text-white/70 mb-4">
+              Tap Play to start the narration.
+            </div>
+            <div className="flex items-center justify-end space-x-2">
+              <button
+                className="px-3 py-1.5 rounded-md text-sm bg-gray-200 dark:bg-gray-800 text-black dark:text-white"
+                onClick={() => setShowPlayModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-3 py-1.5 rounded-md text-sm bg-[#24A0ED] text-white"
+                onClick={() => { setShowPlayModal(false); playAudioChunks(); }}
+              >
+                Play
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
