@@ -10,11 +10,34 @@ interface TTSPlayerProps {
 }
 
 export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlayerProps) {
+  // Toggle to re-enable temporary download of the first audio chunk for debugging
+  const DEBUG_TTS_DOWNLOAD = false;
+
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [audioUrls, setAudioUrls] = useState<string[]>([]);
+  const [audioUrls, setAudioUrls] = useState<string[]>([]); // Blob/object URLs
+  const [audioDataUrls, setAudioDataUrls] = useState<string[]>([]); // Base64 data URLs
   const [currentChunkIndex, setCurrentChunkIndex] = useState(0);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const isPlayingRef = useRef<boolean>(false);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const mediaDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
+  const gainRef = useRef<GainNode | null>(null);
+  const externalAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  type PlaybackMode = 1 | 2 | 3 | 4 | 5;
+  const [playbackMode, setPlaybackMode] = useState<PlaybackMode>(1);
+
+  const startPlaying = () => {
+    isPlayingRef.current = true;
+    setIsPlaying(true);
+  };
+
+  const stopPlaying = () => {
+    isPlayingRef.current = false;
+    setIsPlaying(false);
+  };
 
   // Function to split text into chunks by paragraphs or newlines
   const splitTextIntoChunks = (text: string, maxLength: number = 1800): string[] => {
@@ -87,8 +110,40 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
     });
   };
 
+  // Convert a data URL (base64) to a Blob-backed object URL for more reliable playback
+  const dataUrlToObjectUrl = (dataUrl: string): string => {
+    try {
+      const parts = dataUrl.split(',');
+      const header = parts[0] || '';
+      const base64 = parts[1] || '';
+      const mimeMatch = header.match(/data:(.*?);base64/);
+      const mime = (mimeMatch && mimeMatch[1]) || 'audio/wav';
+      const binary = atob(base64);
+      const len = binary.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+      const blob = new Blob([bytes], { type: mime });
+      return URL.createObjectURL(blob);
+    } catch (e) {
+      console.error('Failed converting data URL to object URL:', e);
+      return dataUrl; // Fallback to original
+    }
+  };
+
+  // Convert data URL to ArrayBuffer (for Web Audio decoding)
+  const dataUrlToArrayBuffer = (dataUrl: string): ArrayBuffer => {
+    const parts = dataUrl.split(',');
+    const base64 = parts[1] || '';
+    const binary = atob(base64);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes.buffer;
+  };
+
   // Temporary download function to debug audio
   const downloadFirstChunk = async () => {
+    if (!DEBUG_TTS_DOWNLOAD) return; // Hidden behind flag entirely
     try {
       console.log('Downloading first chunk for debugging...');
       const response = await fetch('/api/tts', {
@@ -106,8 +161,7 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
 
       if (data.success && data.audioUrl) {
         console.log('Audio URL received:', data.audioUrl.substring(0, 100) + '...');
-
-        // Create download link
+        // Create download link (debug only)
         const link = document.createElement('a');
         link.href = data.audioUrl;
         link.download = 'tts-debug-audio.wav';
@@ -146,6 +200,7 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
 
       // Generate audio for each chunk and start playing as soon as first chunk is ready
       const urls: string[] = [];
+      const dataUrls: string[] = [];
       let hasErrors = false;
       let firstChunkReady = false;
 
@@ -167,11 +222,13 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
           const data = await response.json();
 
           if (data.success && data.audioUrl) {
-            urls.push(data.audioUrl);
+            const objectUrl = dataUrlToObjectUrl(data.audioUrl);
+            urls.push(objectUrl);
+            dataUrls.push(data.audioUrl);
             console.log(`Chunk ${i + 1} audio generated successfully`);
 
-            // TEMPORARY: Also download the first chunk for debugging
-            if (i === 0) {
+            // Download first chunk only when debug flag is enabled
+            if (i === 0 && DEBUG_TTS_DOWNLOAD) {
               downloadFirstChunk();
             }
 
@@ -179,6 +236,7 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
             if (!firstChunkReady) {
               firstChunkReady = true;
               setAudioUrls([...urls]);
+              setAudioDataUrls([...dataUrls]);
               setIsLoading(false); // Allow user to stop while more chunks are loading
               playAudioChunks();
 
@@ -188,6 +246,7 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
 
             // Update audioUrls for subsequent chunks
             setAudioUrls([...urls]);
+            setAudioDataUrls([...dataUrls]);
           } else {
             console.warn(`TTS chunk ${i + 1} failed:`, data.error);
             hasErrors = true;
@@ -224,71 +283,238 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
   const playAudioChunks = async () => {
     if (audioUrls.length === 0) return;
 
-    setIsPlaying(true);
+    console.log('[TTS] Starting playback with mode', playbackMode);
+    startPlaying();
     setCurrentChunkIndex(0);
 
     for (let i = 0; i < audioUrls.length; i++) {
-      if (!isPlaying) break; // Stop if user clicked stop
+      if (!isPlayingRef.current) break; // Stop if user clicked stop
 
       setCurrentChunkIndex(i);
 
       try {
         await new Promise<void>((resolve, reject) => {
-          if (!audioRef.current) {
-            resolve();
-            return;
-          }
+          console.log(`[TTS] Preparing chunk ${i + 1} with mode ${playbackMode}`);
+          const dataUrl = audioDataUrls[i];
+          const objUrl = audioUrls[i];
 
-          const audio = audioRef.current;
-
-          // Set up event handlers
-          const cleanup = () => {
-            audio.oncanplay = null;
-            audio.onended = null;
-            audio.onerror = null;
+          // Mode 1: HTMLAudioElement + Blob URL (default)
+          const playWithAudioElementBlob = () => {
+            if (!audioRef.current) { resolve(); return; }
+            const audio = audioRef.current;
+            const cleanup = () => {
+              audio.oncanplay = null;
+              audio.oncanplaythrough = null;
+              audio.onloadeddata = null;
+              audio.onloadedmetadata = null;
+              audio.onplay = null;
+              audio.onplaying = null;
+              (audio as any).ontimeupdate = null;
+              audio.onpause = null;
+              audio.onended = null;
+              audio.onerror = null;
+            };
+            const tryPlay = async () => {
+              try {
+                console.log(`[TTS] play() called for chunk ${i + 1}`);
+                audio.muted = false;
+                audio.volume = 1.0;
+                await audio.play();
+                console.log(`[TTS] play() promise resolved for chunk ${i + 1}`);
+              } catch (e) {
+                console.error('[TTS] play() failed:', e);
+                cleanup();
+                reject(e);
+              }
+            };
+            audio.oncanplaythrough = tryPlay;
+            audio.oncanplay = tryPlay;
+            audio.onloadeddata = () => { console.log('[TTS] onloadeddata'); if (audio.paused) tryPlay(); };
+            audio.onloadedmetadata = () => { console.log('[TTS] onloadedmetadata'); if (audio.paused) tryPlay(); };
+            audio.onplay = () => console.log('[TTS] onplay');
+            audio.onplaying = () => console.log('[TTS] onplaying');
+            (audio as any).ontimeupdate = () => console.log('[TTS] ontimeupdate', audio.currentTime.toFixed(2));
+            audio.onpause = () => console.log('[TTS] onpause');
+            audio.onended = () => {
+              console.log(`{[TTS]} onended chunk ${i + 1}`);
+              try { if (audio.src && audio.src.startsWith('blob:')) URL.revokeObjectURL(audio.src); } catch {}
+              cleanup();
+              resolve();
+            };
+            audio.onerror = () => {
+              console.error('[TTS] onerror', audio.error);
+              try { if (audio.src && audio.src.startsWith('blob:')) URL.revokeObjectURL(audio.src); } catch {}
+              cleanup();
+              reject(new Error('Audio playback failed'));
+            };
+            try {
+              audio.pause();
+              audio.currentTime = 0;
+              audio.preload = 'auto';
+              (audio as any).playsInline = true;
+            } catch {}
+            audio.src = objUrl;
+            audio.load();
           };
 
-          audio.oncanplay = async () => {
+          // Mode 2: Web Audio API (decode and play buffer)
+          const playWithWebAudio = async () => {
             try {
-              console.log(`Playing chunk ${i + 1}/${audioUrls.length}`);
-              await audio.play();
-              console.log(`Chunk ${i + 1} started playing`);
-            } catch (playError) {
-              console.error('Audio play failed:', playError);
-              cleanup();
-              reject(playError);
+              const Ctor = (window as any).AudioContext || (window as any).webkitAudioContext;
+              const ctx: AudioContext = audioCtxRef.current || new Ctor();
+              audioCtxRef.current = ctx;
+              await ctx.resume();
+              const arr = dataUrlToArrayBuffer(dataUrl);
+              const buffer = await new Promise<AudioBuffer>((resolve, reject) =>
+                ctx.decodeAudioData(arr.slice(0), resolve, reject)
+              );
+              const source = ctx.createBufferSource();
+              currentSourceRef.current = source;
+              const gain = gainRef.current || ctx.createGain();
+              gainRef.current = gain;
+              gain.gain.value = 1.0;
+              source.buffer = buffer;
+              source.connect(gain).connect(ctx.destination);
+              source.onended = () => { console.log(`[TTS] WebAudio ended chunk ${i + 1}`); currentSourceRef.current = null; resolve(); };
+              console.log('[TTS] WebAudio start');
+              source.start(0);
+            } catch (e) {
+              console.error('[TTS] WebAudio error', e);
+              reject(e);
             }
           };
 
-          audio.onended = () => {
-            console.log(`Chunk ${i + 1} ended`);
-            cleanup();
-            resolve();
+          // Mode 3: HTMLAudioElement + data URL
+          const playWithAudioElementDataUrl = () => {
+            if (!audioRef.current) { resolve(); return; }
+            const audio = audioRef.current;
+            const cleanup = () => {
+              audio.oncanplay = null;
+              audio.oncanplaythrough = null;
+              audio.onloadeddata = null;
+              audio.onloadedmetadata = null;
+              audio.onplay = null;
+              audio.onplaying = null;
+              (audio as any).ontimeupdate = null;
+              audio.onpause = null;
+              audio.onended = null;
+              audio.onerror = null;
+            };
+            const tryPlay = async () => {
+              try {
+                console.log(`[TTS] (dataURL) play() called for chunk ${i + 1}`);
+                audio.muted = false;
+                audio.volume = 1.0;
+                await audio.play();
+                console.log(`[TTS] (dataURL) play() resolved for chunk ${i + 1}`);
+              } catch (e) {
+                console.error('[TTS] (dataURL) play() failed:', e);
+                cleanup();
+                reject(e);
+              }
+            };
+            audio.oncanplaythrough = tryPlay;
+            audio.oncanplay = tryPlay;
+            audio.onloadeddata = () => { console.log('[TTS] (dataURL) onloadeddata'); if (audio.paused) tryPlay(); };
+            audio.onloadedmetadata = () => { console.log('[TTS] (dataURL) onloadedmetadata'); if (audio.paused) tryPlay(); };
+            audio.onplay = () => console.log('[TTS] (dataURL) onplay');
+            audio.onplaying = () => console.log('[TTS] (dataURL) onplaying');
+            (audio as any).ontimeupdate = () => console.log('[TTS] (dataURL) ontimeupdate', audio.currentTime.toFixed(2));
+            audio.onpause = () => console.log('[TTS] (dataURL) onpause');
+            audio.onended = () => { console.log(`[TTS] (dataURL) onended chunk ${i + 1}`); cleanup(); resolve(); };
+            audio.onerror = () => { console.error('[TTS] (dataURL) onerror', audio.error); cleanup(); reject(new Error('Audio playback failed')); };
+            try {
+              audio.pause();
+              audio.currentTime = 0;
+              audio.preload = 'auto';
+              (audio as any).playsInline = true;
+            } catch {}
+            audio.src = dataUrl;
+            audio.load();
           };
 
-          audio.onerror = (error) => {
-            console.error('Audio error:', error);
-            cleanup();
-            reject(new Error('Audio playback failed'));
+          // Mode 4: New ephemeral Audio element with Blob URL
+          const playWithNewAudio = () => {
+            try {
+              const el = new Audio();
+              externalAudioRef.current = el;
+              el.preload = 'auto';
+              (el as any).playsInline = true;
+              el.muted = false;
+              el.volume = 1.0;
+              el.oncanplaythrough = async () => {
+                try {
+                  console.log('[TTS] new Audio play');
+                  await el.play();
+                } catch (e) {
+                  console.error('[TTS] new Audio play() failed', e);
+                  reject(e);
+                }
+              };
+              el.onended = () => { console.log('[TTS] new Audio ended'); try { if (el.src.startsWith('blob:')) URL.revokeObjectURL(el.src); } catch {} resolve(); };
+              el.onerror = () => { console.error('[TTS] new Audio error', el.error); try { if (el.src.startsWith('blob:')) URL.revokeObjectURL(el.src); } catch {} reject(new Error('Audio playback failed')); };
+              el.src = objUrl;
+              el.load();
+            } catch (e) {
+              reject(e);
+            }
           };
 
-          // Load the audio source
-          audio.src = audioUrls[i];
-          audio.load();
+          // Mode 5: Web Audio -> MediaStreamDestination -> HTMLAudioElement
+          const playWithWebAudioToMedia = async () => {
+            if (!audioRef.current) { resolve(); return; }
+            try {
+              const audio = audioRef.current;
+              const Ctor = (window as any).AudioContext || (window as any).webkitAudioContext;
+              const ctx: AudioContext = audioCtxRef.current || new Ctor();
+              audioCtxRef.current = ctx;
+              await ctx.resume();
+              const arr = dataUrlToArrayBuffer(dataUrl);
+              const buffer = await new Promise<AudioBuffer>((resolve2, reject2) =>
+                ctx.decodeAudioData(arr.slice(0), resolve2, reject2)
+              );
+              const source = ctx.createBufferSource();
+              currentSourceRef.current = source;
+              const dest = mediaDestRef.current || ctx.createMediaStreamDestination();
+              mediaDestRef.current = dest;
+              const gain = gainRef.current || ctx.createGain();
+              gainRef.current = gain;
+              gain.gain.value = 1.0;
+              source.buffer = buffer;
+              source.connect(gain).connect(dest);
+              (audio as any).srcObject = dest.stream;
+              source.onended = () => { console.log('[TTS] WebAudio->Media ended'); currentSourceRef.current = null; resolve(); };
+              console.log('[TTS] WebAudio->Media start');
+              try { await audio.play(); } catch {}
+              source.start(0);
+            } catch (e) {
+              console.error('[TTS] WebAudio->Media error', e);
+              reject(e);
+            }
+          };
+
+          switch (playbackMode) {
+            case 1: return playWithAudioElementBlob();
+            case 2: return void playWithWebAudio();
+            case 3: return playWithAudioElementDataUrl();
+            case 4: return playWithNewAudio();
+            case 5: return void playWithWebAudioToMedia();
+            default: return playWithAudioElementBlob();
+          }
         });
 
         // Check if more chunks are available now
         if (i + 1 >= audioUrls.length) {
           // Wait a bit to see if more chunks become available
           let waitCount = 0;
-          while (i + 1 >= audioUrls.length && waitCount < 50 && isPlaying) {
+          while (i + 1 >= audioUrls.length && waitCount < 50 && isPlayingRef.current) {
             await new Promise(resolve => setTimeout(resolve, 100));
             waitCount++;
           }
         }
 
         // Add pause between chunks (0.3 seconds) if there are more chunks
-        if (i + 1 < audioUrls.length && isPlaying) {
+        if (i + 1 < audioUrls.length && isPlayingRef.current) {
           await new Promise(resolve => setTimeout(resolve, 300));
         }
       } catch (error) {
@@ -297,15 +523,38 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
       }
     }
 
-    setIsPlaying(false);
+    stopPlaying();
     setCurrentChunkIndex(0);
   };
 
   const stopPlayback = () => {
-    setIsPlaying(false);
+    stopPlaying();
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
+      try {
+        if (audioRef.current.src && audioRef.current.src.startsWith('blob:')) {
+          URL.revokeObjectURL(audioRef.current.src);
+          audioRef.current.src = '';
+        }
+      } catch {}
+    }
+    if (externalAudioRef.current) {
+      try {
+        externalAudioRef.current.pause();
+        if (externalAudioRef.current.src && externalAudioRef.current.src.startsWith('blob:')) {
+          URL.revokeObjectURL(externalAudioRef.current.src);
+        }
+      } catch {}
+      externalAudioRef.current = null;
+    }
+    if (currentSourceRef.current) {
+      try { currentSourceRef.current.stop(0); } catch {}
+      try { currentSourceRef.current.disconnect(); } catch {}
+      currentSourceRef.current = null;
+    }
+    if (audioCtxRef.current) {
+      try { audioCtxRef.current.suspend(); } catch {}
     }
     // Stop browser TTS if it's speaking
     if ('speechSynthesis' in window) {
@@ -319,6 +568,18 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
 
   return (
     <div className={`inline-flex items-center ${className}`}>
+      <select
+        value={playbackMode}
+        onChange={(e) => { const m = Number(e.target.value) as PlaybackMode; console.log('[TTS] changed playback mode to', m); setPlaybackMode(m); }}
+        className="mr-2 text-xs border rounded px-1 py-0.5 dark:bg-gray-800 dark:border-gray-700"
+        title="TTS Playback Mode"
+      >
+        <option value={1}>Mode 1</option>
+        <option value={2}>Mode 2</option>
+        <option value={3}>Mode 3</option>
+        <option value={4}>Mode 4</option>
+        <option value={5}>Mode 5</option>
+      </select>
       <button
         onClick={isPlaying ? stopPlayback : generateSpeech}
         disabled={isLoading}
@@ -337,6 +598,7 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
         ref={audioRef}
         onEnded={handleAudioEnded}
         className="hidden"
+        controls={false}
       />
     </div>
   );

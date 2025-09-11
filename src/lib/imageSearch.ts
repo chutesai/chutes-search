@@ -89,3 +89,4 @@ export async function searchImagesSafe(request: ImageSearchRequest): Promise<Ima
     return []; // Return empty array on error
   }
 }
+

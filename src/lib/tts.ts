@@ -55,6 +55,7 @@ export async function generateSpeech(request: TTSRequest): Promise<TTSResponse> 
         };
       }
 
+      // Prefer returning as data URL; the client will convert to Blob URL for playback
       return {
         success: true,
         audioUrl: `data:audio/wav;base64,${audioBase64}`
