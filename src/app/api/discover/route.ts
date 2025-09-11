@@ -29,7 +29,7 @@ async function ensureCacheDir() {
     try {
       await fs.mkdir(CACHE_DIR, { recursive: true });
     } catch (error) {
-      console.log('[discover] Could not create cache directory:', error?.message || 'Unknown error');
+      console.log('[discover] Could not create cache directory:', error instanceof Error ? error.message : 'Unknown error');
     }
   }
 }
@@ -55,7 +55,7 @@ async function getFSCache(key: string): Promise<any[] | null> {
     return null;
   } catch (error) {
     // Silently fail if filesystem operations aren't available
-    console.log(`[discover] Filesystem cache not available for ${key}:`, error?.message || 'Unknown error');
+    console.log(`[discover] Filesystem cache not available for ${key}:`, error instanceof Error ? error.message : 'Unknown error');
     return null;
   }
 }
@@ -77,7 +77,7 @@ async function setFSCache(key: string, data: any[]) {
     console.log(`[discover] Saved filesystem cache for ${key}`);
   } catch (error) {
     // Silently fail if filesystem operations aren't available
-    console.log(`[discover] Could not save filesystem cache for ${key}:`, error?.message || 'Unknown error');
+    console.log(`[discover] Could not save filesystem cache for ${key}:`, error instanceof Error ? error.message : 'Unknown error');
   }
 }
 

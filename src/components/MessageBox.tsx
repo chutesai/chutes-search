@@ -18,7 +18,7 @@ import SearchImages from './SearchImages';
 import SearchVideos from './SearchVideos';
 import ThinkBox from './ThinkBox';
 import { useChat } from '@/lib/hooks/useChat';
-import { TTSPlayer } from './TTSPlayer';
+import { TTSPlayer } from '@/app/components/TTSPlayer';
 
 const ThinkTagProcessor = ({
   children,
