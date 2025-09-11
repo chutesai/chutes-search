@@ -1,6 +1,8 @@
 'use client';
 
 import { useChat } from '@/lib/hooks/useChat';
+import { Settings } from 'lucide-react';
+import Link from 'next/link';
 
 const Header = () => {
   const { messages, loading } = useChat();
@@ -9,9 +11,19 @@ const Header = () => {
   return (
     <>
       {shouldShowHeader && (
-        <div className="hidden sm:flex items-center gap-3 mb-4 pt-8">
-          <img src="/chutes-logo.svg" alt="Chutes" className="h-10 w-auto" />
-          <h1 className="text-2xl font-semibold">Chutes Search</h1>
+        <div className="relative">
+          {/* Settings icon in top right corner */}
+          <div className="absolute right-0 top-0">
+            <Link href="/settings">
+              <Settings className="cursor-pointer w-6 h-6 text-black/70 dark:text-white/70 hover:text-black dark:hover:text-white transition-colors" />
+            </Link>
+          </div>
+
+          {/* Main header content */}
+          <div className="flex items-center gap-3 mb-4 pt-8">
+            <img src="/chutes-logo.svg" alt="Chutes" className="h-10 w-auto" />
+            <h1 className="text-2xl font-semibold">Chutes Search</h1>
+          </div>
         </div>
       )}
     </>

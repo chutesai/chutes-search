@@ -4,8 +4,6 @@ import { Document } from '@langchain/core/documents';
 import Navbar from './Navbar';
 import Chat from './Chat';
 import EmptyChat from './EmptyChat';
-import { Settings } from 'lucide-react';
-import Link from 'next/link';
 import NextError from 'next/error';
 import { useChat } from '@/lib/hooks/useChat';
 
@@ -29,17 +27,10 @@ const ChatWindow = () => {
   const { hasError, isReady, notFound, messages } = useChat();
   if (hasError) {
     return (
-      <div className="relative">
-        <div className="absolute w-full flex flex-row items-center justify-end mr-5 mt-5">
-          <Link href="/settings">
-            <Settings className="cursor-pointer lg:hidden" />
-          </Link>
-        </div>
-        <div className="flex flex-col items-center justify-center min-h-screen">
-          <p className="dark:text-white/70 text-black/70 text-sm">
-            Failed to connect to the server. Please try again later.
-          </p>
-        </div>
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <p className="dark:text-white/70 text-black/70 text-sm">
+          Failed to connect to the server. Please try again later.
+        </p>
       </div>
     );
   }
