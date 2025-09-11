@@ -1,83 +1,78 @@
-import handleImageSearch from '@/lib/chains/imageSearchAgent';
-import {
-  getCustomOpenaiApiKey,
-  getCustomOpenaiApiUrl,
-  getCustomOpenaiModelName,
-} from '@/lib/config';
-import { getAvailableChatModelProviders } from '@/lib/providers';
-import { BaseChatModel } from '@langchain/core/language_models/chat_models';
-import { AIMessage, BaseMessage, HumanMessage } from '@langchain/core/messages';
-import { ChatOpenAI } from '@langchain/openai';
+import { NextRequest, NextResponse } from 'next/server';
+import { searchImagesSafe, ImageSearchRequest } from '@/lib/imageSearch';
 
-interface ChatModel {
-  provider: string;
-  model: string;
-}
-
-interface ImageSearchBody {
-  query: string;
-  chatHistory: any[];
-  chatModel?: ChatModel;
-}
-
-export const POST = async (req: Request) => {
+export async function POST(request: NextRequest) {
   try {
-    const body: ImageSearchBody = await req.json();
+    const body = await request.json() as ImageSearchRequest;
 
-    const chatHistory = body.chatHistory
-      .map((msg: any) => {
-        if (msg.role === 'user') {
-          return new HumanMessage(msg.content);
-        } else if (msg.role === 'assistant') {
-          return new AIMessage(msg.content);
-        }
-      })
-      .filter((msg) => msg !== undefined) as BaseMessage[];
-
-    const chatModelProviders = await getAvailableChatModelProviders();
-
-    const chatModelProvider =
-      chatModelProviders[
-        body.chatModel?.provider || Object.keys(chatModelProviders)[0]
-      ];
-    const chatModel =
-      chatModelProvider[
-        body.chatModel?.model || Object.keys(chatModelProvider)[0]
-      ];
-
-    let llm: BaseChatModel | undefined;
-
-    if (body.chatModel?.provider === 'custom_openai') {
-      llm = new ChatOpenAI({
-        apiKey: getCustomOpenaiApiKey(),
-        modelName: getCustomOpenaiModelName(),
-        temperature: 0.7,
-        configuration: {
-          baseURL: getCustomOpenaiApiUrl(),
-        },
-      }) as unknown as BaseChatModel;
-    } else if (chatModelProvider && chatModel) {
-      llm = chatModel.model;
+    if (!body.query || typeof body.query !== 'string') {
+      return NextResponse.json(
+        { error: 'Query is required and must be a string' },
+        { status: 400 }
+      );
     }
 
-    if (!llm) {
-      return Response.json({ error: 'Invalid chat model' }, { status: 400 });
+    // Limit query length to prevent abuse
+    if (body.query.length > 200) {
+      return NextResponse.json(
+        { error: 'Query is too long (max 200 characters)' },
+        { status: 400 }
+      );
     }
 
-    const images = await handleImageSearch(
-      {
-        chat_history: chatHistory,
-        query: body.query,
-      },
-      llm,
-    );
+    // Limit number of results
+    const num = Math.min(body.num || 10, 50); // Max 50 results
 
-    return Response.json({ images }, { status: 200 });
-  } catch (err) {
-    console.error(`An error occurred while searching images: ${err}`);
-    return Response.json(
-      { message: 'An error occurred while searching images' },
-      { status: 500 },
+    console.log(`Searching images for: "${body.query}" (${num} results)`);
+
+    const images = await searchImagesSafe({
+      query: body.query,
+      num: num
+    });
+
+    return NextResponse.json({
+      success: true,
+      query: body.query,
+      count: images.length,
+      images: images
+    });
+  } catch (error: any) {
+    console.error('Images API error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
     );
   }
-};
+}
+
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const query = searchParams.get('q');
+
+  if (!query) {
+    return NextResponse.json(
+      { error: 'Query parameter "q" is required' },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const images = await searchImagesSafe({
+      query: query,
+      num: 10
+    });
+
+    return NextResponse.json({
+      success: true,
+      query: query,
+      count: images.length,
+      images: images
+    });
+  } catch (error: any) {
+    console.error('Images API error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}

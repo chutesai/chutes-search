@@ -6,9 +6,18 @@ import 'yet-another-react-lightbox/styles.css';
 import { Message } from './ChatWindow';
 
 type Image = {
-  url: string;
-  img_src: string;
   title: string;
+  imageUrl: string;
+  imageWidth: number;
+  imageHeight: number;
+  thumbnailUrl: string;
+  thumbnailWidth: number;
+  thumbnailHeight: number;
+  source: string;
+  domain: string;
+  link: string;
+  googleUrl: string;
+  position: number;
 };
 
 const SearchImages = ({
@@ -33,43 +42,40 @@ const SearchImages = ({
           onClick={async () => {
             setLoading(true);
 
-            const chatModelProvider = localStorage.getItem('chatModelProvider');
-            const chatModel = localStorage.getItem('chatModel');
-
-            const customOpenAIBaseURL = localStorage.getItem('openAIBaseURL');
-            const customOpenAIKey = localStorage.getItem('openAIApiKey');
-
-            const res = await fetch(`/api/images`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                query: query,
-                chatHistory: chatHistory,
-                chatModel: {
-                  provider: chatModelProvider,
-                  model: chatModel,
-                  ...(chatModelProvider === 'custom_openai' && {
-                    customOpenAIBaseURL: customOpenAIBaseURL,
-                    customOpenAIKey: customOpenAIKey,
-                  }),
+            try {
+              const res = await fetch(`/api/images`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
                 },
-              }),
-            });
+                body: JSON.stringify({
+                  query: query,
+                  num: 10
+                }),
+              });
 
-            const data = await res.json();
+              const data = await res.json();
 
-            const images = data.images ?? [];
-            setImages(images);
-            setSlides(
-              images.map((image: Image) => {
-                return {
-                  src: image.img_src,
-                };
-              }),
-            );
-            setLoading(false);
+              if (data.success && data.images) {
+                const images = data.images;
+                setImages(images);
+                setSlides(
+                  images.map((image: Image) => {
+                    return {
+                      src: image.imageUrl,
+                    };
+                  }),
+                );
+              } else {
+                console.error('Image search failed:', data.error);
+                setImages([]);
+              }
+            } catch (error) {
+              console.error('Image search error:', error);
+              setImages([]);
+            } finally {
+              setLoading(false);
+            }
           }}
           className="border border-dashed border-light-200 dark:border-dark-200 hover:bg-light-200 dark:hover:bg-dark-200 active:scale-95 duration-200 transition px-4 py-2 flex flex-row items-center justify-between rounded-lg dark:text-white text-sm w-full"
         >
@@ -105,7 +111,7 @@ const SearchImages = ({
                       ]);
                     }}
                     key={i}
-                    src={image.img_src}
+                    src={image.thumbnailUrl || image.imageUrl}
                     alt={image.title}
                     className="h-full w-full aspect-video object-cover rounded-lg transition duration-200 active:scale-95 hover:scale-[1.02] cursor-zoom-in"
                   />
@@ -121,7 +127,7 @@ const SearchImages = ({
                       ]);
                     }}
                     key={i}
-                    src={image.img_src}
+                    src={image.thumbnailUrl || image.imageUrl}
                     alt={image.title}
                     className="h-full w-full aspect-video object-cover rounded-lg transition duration-200 active:scale-95 hover:scale-[1.02] cursor-zoom-in"
                   />
@@ -135,7 +141,7 @@ const SearchImages = ({
                   {images.slice(3, 6).map((image, i) => (
                     <img
                       key={i}
-                      src={image.img_src}
+                      src={image.thumbnailUrl || image.imageUrl}
                       alt={image.title}
                       className="h-6 w-12 rounded-md lg:h-3 lg:w-6 lg:rounded-sm aspect-video object-cover"
                     />
