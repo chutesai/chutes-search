@@ -12,13 +12,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Limit text length to prevent abuse
-    if (body.text.length > 5000) {
+    // Limit text length to prevent abuse and long processing times
+    if (body.text.length > 2000) {
       return NextResponse.json(
-        { error: 'Text is too long (max 5000 characters)' },
+        { error: 'Text is too long (max 2000 characters)' },
         { status: 400 }
       );
     }
+
+    console.log(`TTS request: ${body.text.length} chars, voice: ${body.voice || 'default'}`);
 
     const result = await generateSpeech(body);
 

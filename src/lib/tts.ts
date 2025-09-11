@@ -39,13 +39,21 @@ export async function generateSpeech(request: TTSRequest): Promise<TTSResponse> 
     const response = await axios.post(KOKORO_API_URL, body, {
       headers,
       responseType: 'arraybuffer', // Get binary data for audio
-      timeout: 30000 // 30 second timeout
+      timeout: 45000 // 45 second timeout for TTS generation
     });
 
     if (response.status === 200) {
       // Convert the audio buffer to a base64 string for easy transmission
       const audioBuffer = Buffer.from(response.data);
       const audioBase64 = audioBuffer.toString('base64');
+
+      // Check if the base64 string is too large (> 10MB)
+      if (audioBase64.length > 10 * 1024 * 1024) {
+        return {
+          success: false,
+          error: 'Generated audio is too large'
+        };
+      }
 
       return {
         success: true,

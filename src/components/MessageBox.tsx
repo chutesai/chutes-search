@@ -15,7 +15,7 @@ import Copy from './MessageActions/Copy';
 import Rewrite from './MessageActions/Rewrite';
 import MessageSources from './MessageSources';
 import SearchImages from './SearchImages';
-import SearchVideos from './SearchVideos';
+// import SearchVideos from './SearchVideos'; // Temporarily disabled
 import ThinkBox from './ThinkBox';
 import { useChat } from '@/lib/hooks/useChat';
 import { TTSPlayer } from '@/app/components/TTSPlayer';
@@ -236,11 +236,12 @@ const MessageBox = ({
               chatHistory={history.slice(0, messageIndex - 1)}
               messageId={message.messageId}
             />
-            <SearchVideos
+            {/* SearchVideos functionality temporarily disabled */}
+            {/* <SearchVideos
               chatHistory={history.slice(0, messageIndex - 1)}
               query={history[messageIndex - 1].content}
               messageId={message.messageId}
-            />
+            /> */}
           </div>
         </div>
       )}
