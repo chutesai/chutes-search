@@ -129,6 +129,45 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
     });
   };
 
+  // Prime/unlock audio playback within the user gesture
+  const primePlayback = async () => {
+    try {
+      if (!audioRef.current) return;
+      const audio = audioRef.current;
+      const Ctor = (window as any).AudioContext || (window as any).webkitAudioContext;
+      const ctx: AudioContext = audioCtxRef.current || new Ctor();
+      audioCtxRef.current = ctx;
+      await ctx.resume();
+
+      const dest = ctx.createMediaStreamDestination();
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      g.gain.value = 0.000001; // practically silent
+      osc.connect(g).connect(dest);
+      osc.start();
+
+      (audio as any).playsInline = true;
+      audio.preload = 'auto';
+      audio.muted = true; // ensure silence
+      (audio as any).srcObject = dest.stream;
+      try { await audio.play(); } catch (e) { /* ignore */ }
+
+      // Stop the priming after a brief moment
+      setTimeout(() => {
+        try {
+          osc.stop();
+          osc.disconnect();
+          g.disconnect();
+          audio.pause();
+          (audio as any).srcObject = null;
+          audio.muted = false; // unmute for real playback
+        } catch {}
+      }, 150);
+    } catch {
+      // ignore
+    }
+  };
+
   // Convert a data URL (base64) to a Blob-backed object URL for more reliable playback
   const dataUrlToObjectUrl = (dataUrl: string): string => {
     try {
@@ -206,6 +245,9 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
 
     setIsLoading(true);
     try {
+      // Unlock audio immediately within click stack
+      await primePlayback();
+
       // Sanitize and split text into chunks
       const sanitized = sanitizeTextForTTS(text);
       console.log('[TTS] Sanitized length:', sanitized.length);
