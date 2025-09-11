@@ -35,32 +35,32 @@ const websitesForTopic = {
   tech: {
     query: ['technology news', 'latest tech developments', 'science breakthroughs'],
     links: ['techcrunch.com', 'wired.com', 'arstechnica.com'],
-    broadSearch: 'technology OR science OR innovation -site:pinterest.com -site:facebook.com -site:twitter.com'
+    broadSearch: 'technology OR science OR innovation OR AI OR machine learning -site:pinterest.com -site:facebook.com -site:twitter.com -site:instagram.com -site:youtube.com'
   },
   finance: {
     query: ['finance news', 'market updates'],
     links: ['bloomberg.com', 'wsj.com'],
-    broadSearch: 'finance OR markets OR economy -site:pinterest.com -site:facebook.com -site:twitter.com'
+    broadSearch: 'finance OR markets OR economy OR stocks OR investing -site:pinterest.com -site:facebook.com -site:twitter.com -site:instagram.com -site:youtube.com'
   },
   art: {
     query: ['art news', 'cultural events'],
     links: ['artnews.com', 'artsy.net'],
-    broadSearch: 'art OR culture OR museum OR exhibition -site:pinterest.com -site:facebook.com -site:twitter.com'
+    broadSearch: 'art OR culture OR museum OR exhibition OR contemporary art -site:pinterest.com -site:facebook.com -site:twitter.com -site:instagram.com -site:youtube.com'
   },
   sports: {
     query: ['sports news', 'athletics'],
     links: ['espn.com', 'sportsillustrated.com'],
-    broadSearch: 'sports OR athletics OR games -site:pinterest.com -site:facebook.com -site:twitter.com'
+    broadSearch: 'sports OR athletics OR football OR basketball OR soccer -site:pinterest.com -site:facebook.com -site:twitter.com -site:instagram.com -site:youtube.com'
   },
   entertainment: {
     query: ['entertainment news', 'celebrity news'],
     links: ['hollywoodreporter.com', 'variety.com'],
-    broadSearch: 'entertainment OR celebrity OR movies OR music -site:pinterest.com -site:facebook.com -site:twitter.com'
+    broadSearch: 'entertainment OR celebrity OR movies OR music OR film OR TV -site:pinterest.com -site:facebook.com -site:twitter.com -site:instagram.com -site:youtube.com'
   },
   ai: {
     query: ['artificial intelligence news', 'AI developments', 'machine learning'],
     links: ['techcrunch.com', 'venturebeat.com', 'mit.edu'],
-    broadSearch: 'artificial intelligence OR AI OR machine learning OR deep learning -site:pinterest.com -site:facebook.com -site:twitter.com'
+    broadSearch: 'artificial intelligence OR AI OR machine learning OR deep learning OR neural networks -site:pinterest.com -site:facebook.com -site:twitter.com -site:instagram.com -site:youtube.com'
   },
 };
 
@@ -116,13 +116,13 @@ export const GET = async (req: Request) => {
         }
       }
 
-      // Then, get broader results for more variety (but fewer to avoid overwhelming)
-      if (selectedTopic.broadSearch && allResults.length < 15) {
+      // Then, get broader results for more variety (always include some for diversity)
+      if (selectedTopic.broadSearch) {
         console.log(`[discover] Fetching broader results for more variety`);
         try {
           const broadResult = await rateLimitedSearchSerper(selectedTopic.broadSearch);
-          // Only take a few broad results to maintain quality
-          const broadResults = broadResult.results.slice(0, 5);
+          // Take more broad results to ensure variety
+          const broadResults = broadResult.results.slice(0, 8);
           allResults.push(...broadResults);
           console.log(`[discover] Added ${broadResults.length} broader results`);
         } catch (err) {
