@@ -39,6 +39,25 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
     setIsPlaying(false);
   };
 
+  // Sanitize text: strip anchor citations and generic HTML tags/attributes
+  const sanitizeTextForTTS = (raw: string): string => {
+    try {
+      let t = raw;
+      // Remove inline anchor citation pills like <a ...>1</a>
+      t = t.replace(/<a\b[^>]*>\s*\d+\s*<\/a>/gi, '');
+      // Strip all other anchor tags but keep inner text (if any)
+      t = t.replace(/<a\b[^>]*>(.*?)<\/a>/gi, '$1');
+      // Strip any remaining HTML tags
+      t = t.replace(/<[^>]+>/g, '');
+      // Collapse excessive whitespace
+      t = t.replace(/[\t\r]+/g, ' ');
+      t = t.replace(/\s{2,}/g, ' ').trim();
+      return t;
+    } catch {
+      return raw;
+    }
+  };
+
   // Function to split text into chunks by paragraphs or newlines
   const splitTextIntoChunks = (text: string, maxLength: number = 1800): string[] => {
     const chunks: string[] = [];
@@ -187,8 +206,10 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
 
     setIsLoading(true);
     try {
-      // Split text into chunks
-      const chunks = splitTextIntoChunks(text);
+      // Sanitize and split text into chunks
+      const sanitized = sanitizeTextForTTS(text);
+      console.log('[TTS] Sanitized length:', sanitized.length);
+      const chunks = splitTextIntoChunks(sanitized);
 
       if (chunks.length === 0) {
         console.error('No text chunks to process');
