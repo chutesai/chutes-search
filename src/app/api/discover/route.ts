@@ -11,40 +11,61 @@ const MIN_REQUEST_INTERVAL = 2000; // 2 seconds between requests to be more cons
 const cache = new Map<string, { data: any[]; timestamp: number }>();
 const CACHE_DURATION = 300000; // 5 minutes
 
-// Filesystem cache for persistent caching
+// Filesystem cache for persistent caching (disabled in serverless environments)
 const CACHE_DIR = path.join(process.cwd(), 'cache');
 const FS_CACHE_DURATION = 1800000; // 30 minutes for filesystem cache
+const IS_SERVERLESS = process.env.LAMBDA_TASK_ROOT || process.env.VERCEL || !process.cwd().includes('/');
 
 // Ensure cache directory exists
 async function ensureCacheDir() {
+  if (IS_SERVERLESS) {
+    console.log('[discover] Serverless environment detected, skipping filesystem cache setup');
+    return;
+  }
+
   try {
     await fs.access(CACHE_DIR);
   } catch {
-    await fs.mkdir(CACHE_DIR, { recursive: true });
+    try {
+      await fs.mkdir(CACHE_DIR, { recursive: true });
+    } catch (error) {
+      console.log('[discover] Could not create cache directory:', error?.message || 'Unknown error');
+    }
   }
 }
 
 // Get cached data from filesystem
 async function getFSCache(key: string): Promise<any[] | null> {
+  if (IS_SERVERLESS) {
+    return null;
+  }
+
   try {
     const cacheFile = path.join(CACHE_DIR, `${key}.json`);
     const cacheData = await fs.readFile(cacheFile, 'utf-8');
     const parsed = JSON.parse(cacheData);
 
     if (Date.now() - parsed.timestamp < FS_CACHE_DURATION) {
+      console.log(`[discover] Found valid filesystem cache for ${key}`);
       return parsed.data;
     }
 
     // Cache expired, remove file
     await fs.unlink(cacheFile).catch(() => {});
     return null;
-  } catch {
+  } catch (error) {
+    // Silently fail if filesystem operations aren't available
+    console.log(`[discover] Filesystem cache not available for ${key}:`, error?.message || 'Unknown error');
     return null;
   }
 }
 
 // Save data to filesystem cache
 async function setFSCache(key: string, data: any[]) {
+  if (IS_SERVERLESS) {
+    return;
+  }
+
   try {
     await ensureCacheDir();
     const cacheFile = path.join(CACHE_DIR, `${key}.json`);
@@ -53,8 +74,10 @@ async function setFSCache(key: string, data: any[]) {
       timestamp: Date.now()
     };
     await fs.writeFile(cacheFile, JSON.stringify(cacheData));
+    console.log(`[discover] Saved filesystem cache for ${key}`);
   } catch (error) {
-    console.warn('[discover] Failed to save cache:', error);
+    // Silently fail if filesystem operations aren't available
+    console.log(`[discover] Could not save filesystem cache for ${key}:`, error?.message || 'Unknown error');
   }
 }
 
