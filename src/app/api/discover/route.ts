@@ -132,22 +132,20 @@ const websitesForTopic = {
     broadSearch: 'art OR culture OR museum OR gallery OR painting OR sculpture OR contemporary art OR modern art OR exhibition OR artist -site:pinterest.com -site:facebook.com -site:twitter.com -site:instagram.com -site:youtube.com'
   },
   sports: {
-    query: ['sports news', 'athletics', 'sports scores', 'football', 'basketball', 'soccer'],
+    query: ['sports news', 'athletics', 'sports scores'],
     links: [
-      'espn.com', 'sportsillustrated.com', 'cbssports.com', 'foxsports.com', 'nbcsports.com',
-      'sports.yahoo.com', 'bleacherreport.com', 'nfl.com', 'nba.com', 'mlb.com',
-      'soccer.com', 'goal.com', 'transfermarkt.com', 'theathletic.com', 'sportingnews.com'
+      'espn.com', 'sportsillustrated.com', 'cbssports.com', 'foxsports.com',
+      'bleacherreport.com', 'nfl.com', 'nba.com', 'theathletic.com'
     ],
-    broadSearch: 'sports OR athletics OR football OR basketball OR soccer OR nba OR nfl OR tennis OR golf OR olympics OR championship -site:pinterest.com -site:facebook.com -site:twitter.com -site:instagram.com -site:youtube.com'
+    broadSearch: 'sports OR athletics OR football OR basketball OR soccer OR nba OR nfl -site:pinterest.com -site:facebook.com -site:twitter.com'
   },
   entertainment: {
-    query: ['entertainment news', 'celebrity news', 'hollywood news', 'movies', 'tv shows'],
+    query: ['entertainment news', 'celebrity news', 'hollywood news'],
     links: [
-      'hollywoodreporter.com', 'variety.com', 'deadline.com', 'ew.com', 'people.com',
-      'usmagazine.com', 'tmz.com', 'etonline.com', 'perezhilton.com', 'justjared.com',
-      'imdb.com', 'rottentomatoes.com', 'metacritic.com', 'tvguide.com', 'entertainmentweekly.com'
+      'hollywoodreporter.com', 'variety.com', 'deadline.com', 'ew.com',
+      'people.com', 'tmz.com', 'imdb.com', 'rottentomatoes.com'
     ],
-    broadSearch: 'entertainment OR celebrity OR movies OR music OR film OR television OR hollywood OR awards OR streaming OR netflix OR disney -site:pinterest.com -site:facebook.com -site:twitter.com -site:instagram.com -site:youtube.com'
+    broadSearch: 'entertainment OR celebrity OR movies OR television OR hollywood -site:pinterest.com -site:facebook.com -site:twitter.com'
   },
   ai: {
     query: ['artificial intelligence news', 'AI developments', 'machine learning', 'deep learning', 'robotics'],
@@ -271,10 +269,10 @@ export const GET = async (req: Request) => {
       });
 
       const filteredBroaderResults = broaderResults.filter((item) => {
-        const url = item.url?.toLowerCase().trim();
-        if (seenUrls.has(url)) return false;
-        seenUrls.add(url);
-        return true;
+          const url = item.url?.toLowerCase().trim();
+          if (seenUrls.has(url)) return false;
+          seenUrls.add(url);
+          return true;
       });
 
       // Combine results with preference for variety: take site results + broader results
