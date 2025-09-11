@@ -176,7 +176,6 @@ export const GET = async (req: Request) => {
       data.forEach(item => {
         if (!item.thumbnail && item.url.includes('bloomberg.com')) {
           item.thumbnail = 'https://assets.bwbx.io/images/users/iqjWHBFdfxIU/i5PGsA7G0NRA/v0/1200x630.png';
-          console.log(`[discover] Forced high-quality thumbnail for Bloomberg: ${item.title}`);
         }
       });
 
@@ -190,15 +189,12 @@ export const GET = async (req: Request) => {
             if (siteThumbnails[domain]) {
               item.thumbnail = siteThumbnails[domain];
               fallbackCount++;
-              console.log(`[discover] Applied fallback thumbnail for ${domain}: ${item.thumbnail}`);
             } else {
               // Use a generic placeholder for unknown domains
               item.thumbnail = `https://via.placeholder.com/150x100?text=${encodeURIComponent(domain)}`;
-              console.log(`[discover] Applied generic placeholder for ${domain}`);
             }
           } catch (error) {
             item.thumbnail = 'https://via.placeholder.com/150x100?text=Unknown';
-            console.log(`[discover] Applied error placeholder for ${item.url}`);
           }
         }
       });

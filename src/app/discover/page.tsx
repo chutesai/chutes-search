@@ -149,8 +149,6 @@ const Page = () => {
                           const isSmall = img.naturalWidth < 100 || img.naturalHeight < 100;
                           const isIcon = item.thumbnail?.includes('favicon') || item.thumbnail?.includes('icon');
 
-                          console.log(`Image loaded: ${item.thumbnail}, size: ${img.naturalWidth}x${img.naturalHeight}, isSmall: ${isSmall}, isIcon: ${isIcon}`);
-
                           if (isSmall || isIcon) {
                             // Small images or icons: center them without stretching
                             img.className = 'w-12 h-12 object-contain';
@@ -160,10 +158,8 @@ const Page = () => {
                           }
                         }}
                         onError={(e) => {
-                          console.log(`Image failed to load: ${item.thumbnail}`);
-                          // For debugging, don't hide the image immediately
-                          // (e.target as HTMLImageElement).style.display = 'none';
-                          (e.target as HTMLImageElement).style.opacity = '0.3';
+                          // Hide image if it fails to load
+                          (e.target as HTMLImageElement).style.display = 'none';
                         }}
                       />
                     </div>
