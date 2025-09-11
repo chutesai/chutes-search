@@ -49,7 +49,8 @@ export const POST = async (req: Request) => {
     }
 
     body.history = body.history || [];
-    body.optimizationMode = body.optimizationMode || 'balanced';
+    // Default to 'quality' (renamed from previous 'balanced')
+    body.optimizationMode = body.optimizationMode || 'quality';
     body.stream = body.stream || false;
 
     const history: BaseMessage[] = body.history.map((msg) => {
@@ -73,6 +74,7 @@ export const POST = async (req: Request) => {
     if (body.optimizationMode) {
       const optimizationModels: Record<string, { provider: string; model: string }> = {
         'speed': { provider: 'openai', model: 'gpt-oss-20b' },
+        // Map both keys to the same balanced/quality model for now
         'balanced': { provider: 'moonshotai', model: 'Kimi-K2-Instruct-0905' },
         'quality': { provider: 'moonshotai', model: 'Kimi-K2-Instruct-0905' }
       };

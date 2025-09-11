@@ -18,22 +18,10 @@ const OptimizationModes = [
     model: 'openai/gpt-oss-20b',
   },
   {
-    key: 'balanced',
-    title: 'Balanced',
-    description: 'Find the right balance between speed and accuracy',
-    icon: <Sliders size={20} className="text-[#4CAF50]" />,
-    model: 'moonshotai/Kimi-K2-Instruct-0905',
-  },
-  {
     key: 'quality',
     title: 'Quality',
-    description: 'Get the most thorough and accurate answer',
-    icon: (
-      <Star
-        size={16}
-        className="text-[#2196F3] dark:text-[#BBDEFB] fill-[#BBDEFB] dark:fill-[#2196F3]"
-      />
-    ),
+    description: 'Find the right balance between speed and accuracy',
+    icon: <Sliders size={20} className="text-[#4CAF50]" />,
     model: 'moonshotai/Kimi-K2-Instruct-0905',
   },
 ];
