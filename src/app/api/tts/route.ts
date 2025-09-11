@@ -13,9 +13,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Limit text length to prevent abuse and long processing times
-    if (body.text.length > 2000) {
+    // Allow longer chunks since frontend handles splitting
+    if (body.text.length > 2500) {
       return NextResponse.json(
-        { error: 'Text is too long (max 2000 characters)' },
+        { error: 'Text chunk is too long (max 2500 characters)' },
         { status: 400 }
       );
     }

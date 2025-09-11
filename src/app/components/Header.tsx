@@ -12,8 +12,8 @@ const Header = () => {
     <>
       {shouldShowHeader && (
         <div className="relative">
-          {/* Settings icon in top right corner */}
-          <div className="absolute right-0 top-0">
+          {/* Settings icon in top right corner - only on small screens */}
+          <div className="absolute right-0 top-0 pt-8 lg:hidden">
             <Link href="/settings">
               <Settings className="cursor-pointer w-6 h-6 text-black/70 dark:text-white/70 hover:text-black dark:hover:text-white transition-colors" />
             </Link>
