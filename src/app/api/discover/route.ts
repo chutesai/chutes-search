@@ -172,6 +172,14 @@ export const GET = async (req: Request) => {
         'hollywoodreporter.com': 'https://www.hollywoodreporter.com/wp-content/themes/pmc-hollywood-reporter/assets/app/icons/favicon.ico',
       };
 
+      // Force high-quality images for Bloomberg articles
+      data.forEach(item => {
+        if (!item.thumbnail && item.url.includes('bloomberg.com')) {
+          item.thumbnail = 'https://assets.bwbx.io/images/users/iqjWHBFdfxIU/i5PGsA7G0NRA/v0/1200x630.png';
+          console.log(`[discover] Forced high-quality thumbnail for Bloomberg: ${item.title}`);
+        }
+      });
+
       // Apply fallback thumbnails only for articles without thumbnails
       let fallbackCount = 0;
       data.forEach(item => {
