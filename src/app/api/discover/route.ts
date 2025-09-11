@@ -43,19 +43,19 @@ const websitesForTopic = {
     broadSearch: 'finance OR markets OR economy OR stocks OR investing -site:pinterest.com -site:facebook.com -site:twitter.com -site:instagram.com -site:youtube.com'
   },
   art: {
-    query: ['art news', 'cultural events'],
-    links: ['artnews.com', 'artsy.net'],
-    broadSearch: 'art OR culture OR museum OR exhibition OR contemporary art -site:pinterest.com -site:facebook.com -site:twitter.com -site:instagram.com -site:youtube.com'
+    query: ['art news', 'cultural events', 'contemporary art'],
+    links: ['artnews.com', 'artsy.net', 'artforum.com'],
+    broadSearch: 'art OR culture OR museum OR gallery OR painting OR sculpture OR contemporary art OR modern art -site:pinterest.com -site:facebook.com -site:twitter.com'
   },
   sports: {
-    query: ['sports news', 'athletics'],
-    links: ['espn.com', 'sportsillustrated.com'],
-    broadSearch: 'sports OR athletics OR football OR basketball OR soccer -site:pinterest.com -site:facebook.com -site:twitter.com -site:instagram.com -site:youtube.com'
+    query: ['sports news', 'athletics', 'sports scores'],
+    links: ['espn.com', 'sportsillustrated.com', 'cbssports.com'],
+    broadSearch: 'sports OR athletics OR football OR basketball OR soccer OR nba OR nfl OR tennis OR golf -site:pinterest.com -site:facebook.com -site:twitter.com'
   },
   entertainment: {
-    query: ['entertainment news', 'celebrity news'],
-    links: ['hollywoodreporter.com', 'variety.com'],
-    broadSearch: 'entertainment OR celebrity OR movies OR music OR film OR TV -site:pinterest.com -site:facebook.com -site:twitter.com -site:instagram.com -site:youtube.com'
+    query: ['entertainment news', 'celebrity news', 'hollywood news'],
+    links: ['hollywoodreporter.com', 'variety.com', 'deadline.com'],
+    broadSearch: 'entertainment OR celebrity OR movies OR music OR film OR television OR hollywood OR awards -site:pinterest.com -site:facebook.com -site:twitter.com'
   },
   ai: {
     query: ['artificial intelligence news', 'AI developments', 'machine learning'],
@@ -118,25 +118,49 @@ export const GET = async (req: Request) => {
 
       // Then, get broader results for more variety (always include some for diversity)
       if (selectedTopic.broadSearch) {
-        console.log(`[discover] Fetching broader results for more variety`);
+        console.log(`[discover] Fetching broader results for topic ${topic} with query: ${selectedTopic.broadSearch}`);
         try {
           const broadResult = await rateLimitedSearchSerper(selectedTopic.broadSearch);
-          // Take more broad results to ensure variety
-          const broadResults = broadResult.results.slice(0, 8);
+          console.log(`[discover] Broader search returned ${broadResult.results.length} results`);
+
+          // Take more broad results to ensure variety, but prioritize quality
+          const broadResults = broadResult.results.slice(0, 12);
+          console.log(`[discover] Broader result domains:`, broadResults.map(r => {
+            try {
+              return new URL(r.url).hostname.replace('www.', '');
+            } catch {
+              return 'invalid-url';
+            }
+          }));
+
           allResults.push(...broadResults);
-          console.log(`[discover] Added ${broadResults.length} broader results`);
+          console.log(`[discover] Added ${broadResults.length} broader results for ${topic}`);
         } catch (err) {
-          console.warn(`[discover] Failed to fetch broad search:`, err);
+          console.warn(`[discover] Failed to fetch broad search for ${topic}:`, err);
         }
       }
 
-      data = allResults
-        .filter((item) => {
-          const url = item.url?.toLowerCase().trim();
-          if (seenUrls.has(url)) return false;
-          seenUrls.add(url);
-          return true;
-        })
+      // Separate site-specific and broader results for better variety
+      const siteSpecificResults = allResults.slice(0, allResults.length - 12); // First N results are from specific sites
+      const broaderResults = allResults.slice(-12); // Last 12 results are from broader search
+
+      // Filter duplicates but be more lenient with broader results
+      const filteredSiteResults = siteSpecificResults.filter((item) => {
+        const url = item.url?.toLowerCase().trim();
+        if (seenUrls.has(url)) return false;
+        seenUrls.add(url);
+        return true;
+      });
+
+      const filteredBroaderResults = broaderResults.filter((item) => {
+        const url = item.url?.toLowerCase().trim();
+        if (seenUrls.has(url)) return false;
+        seenUrls.add(url);
+        return true;
+      });
+
+      // Combine results with preference for variety: take most site results + all broader results
+      data = [...filteredSiteResults, ...filteredBroaderResults]
         .sort(() => Math.random() - 0.5);
 
       // If no results from Serper, add mock data for testing
