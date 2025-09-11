@@ -214,8 +214,9 @@ export const GET = async (req: Request) => {
           console.log(`[discover] Preview OG image results:`, ogImages);
 
           data.forEach(item => {
-            if (ogImages[item.url] && !item.thumbnail) {
-              item.thumbnail = ogImages[item.url];
+            const ogImage = ogImages[item.url];
+            if (ogImage && !item.thumbnail) {
+              item.thumbnail = ogImage;
             }
           });
 
