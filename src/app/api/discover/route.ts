@@ -33,28 +33,34 @@ const rateLimitedSearchSerper = async (query: string) => {
 
 const websitesForTopic = {
   tech: {
-    query: ['technology news'],
-    links: ['techcrunch.com'],
+    query: ['technology news', 'latest tech developments', 'science breakthroughs'],
+    links: ['techcrunch.com', 'wired.com', 'arstechnica.com'],
+    broadSearch: 'technology OR science OR innovation -site:pinterest.com -site:facebook.com -site:twitter.com'
   },
   finance: {
-    query: ['finance news'],
-    links: ['bloomberg.com'],
+    query: ['finance news', 'market updates'],
+    links: ['bloomberg.com', 'wsj.com'],
+    broadSearch: 'finance OR markets OR economy -site:pinterest.com -site:facebook.com -site:twitter.com'
   },
   art: {
-    query: ['art news'],
-    links: ['artnews.com'],
+    query: ['art news', 'cultural events'],
+    links: ['artnews.com', 'artsy.net'],
+    broadSearch: 'art OR culture OR museum OR exhibition -site:pinterest.com -site:facebook.com -site:twitter.com'
   },
   sports: {
-    query: ['sports news'],
-    links: ['espn.com'],
+    query: ['sports news', 'athletics'],
+    links: ['espn.com', 'sportsillustrated.com'],
+    broadSearch: 'sports OR athletics OR games -site:pinterest.com -site:facebook.com -site:twitter.com'
   },
   entertainment: {
-    query: ['entertainment news'],
-    links: ['hollywoodreporter.com'],
+    query: ['entertainment news', 'celebrity news'],
+    links: ['hollywoodreporter.com', 'variety.com'],
+    broadSearch: 'entertainment OR celebrity OR movies OR music -site:pinterest.com -site:facebook.com -site:twitter.com'
   },
   ai: {
-    query: ['artificial intelligence news', 'AI developments'],
-    links: ['techcrunch.com', 'venturebeat.com'],
+    query: ['artificial intelligence news', 'AI developments', 'machine learning'],
+    links: ['techcrunch.com', 'venturebeat.com', 'mit.edu'],
+    broadSearch: 'artificial intelligence OR AI OR machine learning OR deep learning -site:pinterest.com -site:facebook.com -site:twitter.com'
   },
 };
 
@@ -91,19 +97,36 @@ export const GET = async (req: Request) => {
 
     if (mode === 'normal') {
       const seenUrls = new Set();
-      const allRequests = selectedTopic.links.flatMap((link) =>
-        selectedTopic.query.map((query) => ({ link, query }))
+      const allResults = [];
+
+      // First, get results from specific trusted sites
+      console.log(`[discover] Fetching from ${selectedTopic.links.length} specific sites`);
+      const siteRequests = selectedTopic.links.flatMap((link) =>
+        selectedTopic.query.map((query) => ({ link, query, type: 'site' as const }))
       );
 
-      // Process requests sequentially to avoid rate limits
-      const allResults = [];
-      for (const { link, query } of allRequests) {
+      for (const { link, query, type } of siteRequests) {
         try {
           const result = await rateLimitedSearchSerper(`${query} site:${link}`);
           allResults.push(...result.results);
+          console.log(`[discover] Got ${result.results.length} results from ${link}`);
         } catch (err) {
           console.warn(`[discover] Failed to fetch ${query} site:${link}:`, err);
           // Continue with other requests even if one fails
+        }
+      }
+
+      // Then, get broader results for more variety (but fewer to avoid overwhelming)
+      if (selectedTopic.broadSearch && allResults.length < 15) {
+        console.log(`[discover] Fetching broader results for more variety`);
+        try {
+          const broadResult = await rateLimitedSearchSerper(selectedTopic.broadSearch);
+          // Only take a few broad results to maintain quality
+          const broadResults = broadResult.results.slice(0, 5);
+          allResults.push(...broadResults);
+          console.log(`[discover] Added ${broadResults.length} broader results`);
+        } catch (err) {
+          console.warn(`[discover] Failed to fetch broad search:`, err);
         }
       }
 
@@ -162,39 +185,61 @@ export const GET = async (req: Request) => {
         }
       }
 
-      // Fallback: Add high-quality thumbnails for popular sites
+      // Robust fallback chain: OG images -> High-quality images -> Favicons -> Generic placeholders
       const siteThumbnails: Record<string, string> = {
+        // High-quality images for major sites
         'techcrunch.com': 'https://techcrunch.com/wp-content/uploads/2022/12/tc-logo-2021.svg',
         'venturebeat.com': 'https://venturebeat.com/wp-content/themes/vbnews/img/favicon.ico',
         'bloomberg.com': 'https://assets.bwbx.io/images/users/iqjWHBFdfxIU/i5PGsA7G0NRA/v0/1200x630.png',
         'artnews.com': 'https://www.artnews.com/wp-content/themes/vip/pmc-artnews/assets/dist/img/favicon.ico',
+        'artsy.net': 'https://www.artsy.net/images/favicon.ico',
         'espn.com': 'https://a.espncdn.com/favicon.ico',
         'hollywoodreporter.com': 'https://www.hollywoodreporter.com/wp-content/themes/pmc-hollywood-reporter/assets/app/icons/favicon.ico',
+        'variety.com': 'https://variety.com/wp-content/themes/vip/pmc-variety-2020/assets/app/icons/favicon.ico',
+        'wired.com': 'https://www.wired.com/favicon.ico',
+        'arstechnica.com': 'https://cdn.arstechnica.net/favicon.ico',
+        'wsj.com': 'https://www.wsj.com/favicon.ico',
+        'sportsillustrated.com': 'https://www.si.com/favicon.ico',
+        'mit.edu': 'https://web.mit.edu/favicon.ico',
       };
 
-      // Force high-quality images for Bloomberg articles
-      data.forEach(item => {
-        if (!item.thumbnail && item.url.includes('bloomberg.com')) {
-          item.thumbnail = 'https://assets.bwbx.io/images/users/iqjWHBFdfxIU/i5PGsA7G0NRA/v0/1200x630.png';
-        }
-      });
+      // Force high-quality images for specific sites
+      const highQualityOverrides: Record<string, string> = {
+        'bloomberg.com': 'https://assets.bwbx.io/images/users/iqjWHBFdfxIU/i5PGsA7G0NRA/v0/1200x630.png',
+        'techcrunch.com': 'https://techcrunch.com/wp-content/uploads/2022/12/tc-logo-2021.svg',
+      };
 
-      // Apply fallback thumbnails only for articles without thumbnails
+      // Apply robust fallback thumbnails for articles without thumbnails
       let fallbackCount = 0;
       data.forEach(item => {
         if (!item.thumbnail) {
           try {
             const url = new URL(item.url);
             const domain = url.hostname.replace('www.', '');
-            if (siteThumbnails[domain]) {
+
+            // First priority: High-quality overrides
+            if (highQualityOverrides[domain]) {
+              item.thumbnail = highQualityOverrides[domain];
+              fallbackCount++;
+              console.log(`[discover] Applied high-quality override for ${domain}`);
+            }
+            // Second priority: Site-specific thumbnails
+            else if (siteThumbnails[domain]) {
               item.thumbnail = siteThumbnails[domain];
               fallbackCount++;
-            } else {
-              // Use a generic placeholder for unknown domains
-              item.thumbnail = `https://via.placeholder.com/150x100?text=${encodeURIComponent(domain)}`;
+              console.log(`[discover] Applied site-specific thumbnail for ${domain}`);
+            }
+            // Third priority: Generic favicon fallback
+            else {
+              // Try to construct a favicon URL
+              const faviconUrl = `https://${domain}/favicon.ico`;
+              item.thumbnail = faviconUrl;
+              console.log(`[discover] Applied favicon fallback for ${domain}: ${faviconUrl}`);
             }
           } catch (error) {
-            item.thumbnail = 'https://via.placeholder.com/150x100?text=Unknown';
+            // Final fallback: Generic placeholder
+            item.thumbnail = 'https://via.placeholder.com/150x100?text=Image';
+            console.log(`[discover] Applied generic placeholder for ${item.url}`);
           }
         }
       });
@@ -224,14 +269,26 @@ export const GET = async (req: Request) => {
               }
             });
 
-            // Fallback: Add high-quality thumbnails for popular sites in preview mode
-            const siteThumbnails: Record<string, string> = {
+            // Robust fallback chain for preview mode
+            const previewSiteThumbnails: Record<string, string> = {
               'techcrunch.com': 'https://techcrunch.com/wp-content/uploads/2022/12/tc-logo-2021.svg',
               'venturebeat.com': 'https://venturebeat.com/wp-content/themes/vbnews/img/favicon.ico',
               'bloomberg.com': 'https://assets.bwbx.io/images/users/iqjWHBFdfxIU/i5PGsA7G0NRA/v0/1200x630.png',
               'artnews.com': 'https://www.artnews.com/wp-content/themes/vip/pmc-artnews/assets/dist/img/favicon.ico',
+              'artsy.net': 'https://www.artsy.net/images/favicon.ico',
               'espn.com': 'https://a.espncdn.com/favicon.ico',
               'hollywoodreporter.com': 'https://www.hollywoodreporter.com/wp-content/themes/pmc-hollywood-reporter/assets/app/icons/favicon.ico',
+              'variety.com': 'https://variety.com/wp-content/themes/vip/pmc-variety-2020/assets/app/icons/favicon.ico',
+              'wired.com': 'https://www.wired.com/favicon.ico',
+              'arstechnica.com': 'https://cdn.arstechnica.net/favicon.ico',
+              'wsj.com': 'https://www.wsj.com/favicon.ico',
+              'sportsillustrated.com': 'https://www.si.com/favicon.ico',
+              'mit.edu': 'https://web.mit.edu/favicon.ico',
+            };
+
+            const previewHighQualityOverrides: Record<string, string> = {
+              'bloomberg.com': 'https://assets.bwbx.io/images/users/iqjWHBFdfxIU/i5PGsA7G0NRA/v0/1200x630.png',
+              'techcrunch.com': 'https://techcrunch.com/wp-content/uploads/2022/12/tc-logo-2021.svg',
             };
 
             data.forEach(item => {
@@ -239,13 +296,17 @@ export const GET = async (req: Request) => {
                 try {
                   const url = new URL(item.url);
                   const domain = url.hostname.replace('www.', '');
-                  if (siteThumbnails[domain]) {
-                    item.thumbnail = siteThumbnails[domain];
+
+                  if (previewHighQualityOverrides[domain]) {
+                    item.thumbnail = previewHighQualityOverrides[domain];
+                  } else if (previewSiteThumbnails[domain]) {
+                    item.thumbnail = previewSiteThumbnails[domain];
                   } else {
-                    item.thumbnail = `https://via.placeholder.com/150x100?text=${encodeURIComponent(domain)}`;
+                    const faviconUrl = `https://${domain}/favicon.ico`;
+                    item.thumbnail = faviconUrl;
                   }
                 } catch (error) {
-                  item.thumbnail = 'https://via.placeholder.com/150x100?text=Unknown';
+                  item.thumbnail = 'https://via.placeholder.com/150x100?text=Image';
                 }
               }
             });

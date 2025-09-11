@@ -28,12 +28,13 @@ export const fetchOGData = async (url: string): Promise<OGData | null> => {
 
     // First try to get a quick response by setting a short timeout
     const response = await axios.get(url, {
-      timeout: 3000, // Reduced timeout
+      timeout: 5000, // Allow more time for slower sites
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; ChutesSearch/1.0)',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       },
       maxRedirects: 3,
+      validateStatus: (status) => status < 400, // Accept 2xx and 3xx
     });
 
     const html = response.data;
