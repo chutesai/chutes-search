@@ -1,5 +1,7 @@
 import { searchSerper } from '@/lib/serper';
 import { fetchMultipleOGImages } from '@/lib/og-image';
+import fs from 'fs/promises';
+import path from 'path';
 
 // Rate limiting and error handling for Serper API
 let lastRequestTime = 0;
@@ -8,6 +10,53 @@ const MIN_REQUEST_INTERVAL = 2000; // 2 seconds between requests to be more cons
 // Simple in-memory cache to avoid duplicate requests
 const cache = new Map<string, { data: any[]; timestamp: number }>();
 const CACHE_DURATION = 300000; // 5 minutes
+
+// Filesystem cache for persistent caching
+const CACHE_DIR = path.join(process.cwd(), 'cache');
+const FS_CACHE_DURATION = 1800000; // 30 minutes for filesystem cache
+
+// Ensure cache directory exists
+async function ensureCacheDir() {
+  try {
+    await fs.access(CACHE_DIR);
+  } catch {
+    await fs.mkdir(CACHE_DIR, { recursive: true });
+  }
+}
+
+// Get cached data from filesystem
+async function getFSCache(key: string): Promise<any[] | null> {
+  try {
+    const cacheFile = path.join(CACHE_DIR, `${key}.json`);
+    const cacheData = await fs.readFile(cacheFile, 'utf-8');
+    const parsed = JSON.parse(cacheData);
+
+    if (Date.now() - parsed.timestamp < FS_CACHE_DURATION) {
+      return parsed.data;
+    }
+
+    // Cache expired, remove file
+    await fs.unlink(cacheFile).catch(() => {});
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// Save data to filesystem cache
+async function setFSCache(key: string, data: any[]) {
+  try {
+    await ensureCacheDir();
+    const cacheFile = path.join(CACHE_DIR, `${key}.json`);
+    const cacheData = {
+      data,
+      timestamp: Date.now()
+    };
+    await fs.writeFile(cacheFile, JSON.stringify(cacheData));
+  } catch (error) {
+    console.warn('[discover] Failed to save cache:', error);
+  }
+}
 
 const rateLimitedSearchSerper = async (query: string) => {
   const now = Date.now();
@@ -33,34 +82,58 @@ const rateLimitedSearchSerper = async (query: string) => {
 
 const websitesForTopic = {
   tech: {
-    query: ['technology news', 'latest tech developments', 'science breakthroughs'],
-    links: ['techcrunch.com', 'wired.com', 'arstechnica.com'],
-    broadSearch: 'technology OR science OR innovation OR AI OR machine learning -site:pinterest.com -site:facebook.com -site:twitter.com -site:instagram.com -site:youtube.com'
+    query: ['technology news', 'latest tech developments', 'science breakthroughs', 'innovation', 'gadgets', 'AI developments'],
+    links: [
+      'techcrunch.com', 'wired.com', 'arstechnica.com', 'theverge.com', 'engadget.com',
+      'cnet.com', 'zdnet.com', 'venturebeat.com', 'techradar.com', 'digitaltrends.com',
+      'gizmodo.com', 'slashdot.org', 'hackernews.com', 'reuters.com', 'bbc.com'
+    ],
+    broadSearch: 'technology OR science OR innovation OR AI OR machine learning OR gadgets OR startups OR research -site:pinterest.com -site:facebook.com -site:twitter.com -site:instagram.com -site:youtube.com'
   },
   finance: {
-    query: ['finance news', 'market updates'],
-    links: ['bloomberg.com', 'wsj.com'],
-    broadSearch: 'finance OR markets OR economy OR stocks OR investing -site:pinterest.com -site:facebook.com -site:twitter.com -site:instagram.com -site:youtube.com'
+    query: ['finance news', 'market updates', 'stock market', 'investing', 'economy news'],
+    links: [
+      'bloomberg.com', 'wsj.com', 'cnbc.com', 'reuters.com', 'ft.com',
+      'forbes.com', 'businessinsider.com', 'marketwatch.com', 'investing.com', 'yahoo.com',
+      'seekingalpha.com', 'zacks.com', 'fool.com', 'barrons.com', 'economist.com'
+    ],
+    broadSearch: 'finance OR markets OR economy OR stocks OR investing OR banking OR cryptocurrency OR trading -site:pinterest.com -site:facebook.com -site:twitter.com -site:instagram.com -site:youtube.com'
   },
   art: {
-    query: ['art news', 'cultural events', 'contemporary art'],
-    links: ['artnews.com', 'artsy.net', 'artforum.com'],
-    broadSearch: 'art OR culture OR museum OR gallery OR painting OR sculpture OR contemporary art OR modern art -site:pinterest.com -site:facebook.com -site:twitter.com'
+    query: ['art news', 'cultural events', 'contemporary art', 'museum news', 'gallery exhibitions'],
+    links: [
+      'artnews.com', 'artsy.net', 'artforum.com', 'hyperallergic.com', 'artnet.com',
+      'theartnewspaper.com', 'frieze.com', 'artbasel.com', 'phillips.com', 'sothebys.com',
+      'christies.com', 'tate.org.uk', 'metmuseum.org', 'guggenheim.org', 'moma.org'
+    ],
+    broadSearch: 'art OR culture OR museum OR gallery OR painting OR sculpture OR contemporary art OR modern art OR exhibition OR artist -site:pinterest.com -site:facebook.com -site:twitter.com -site:instagram.com -site:youtube.com'
   },
   sports: {
-    query: ['sports news', 'athletics', 'sports scores'],
-    links: ['espn.com', 'sportsillustrated.com', 'cbssports.com'],
-    broadSearch: 'sports OR athletics OR football OR basketball OR soccer OR nba OR nfl OR tennis OR golf -site:pinterest.com -site:facebook.com -site:twitter.com'
+    query: ['sports news', 'athletics', 'sports scores', 'football', 'basketball', 'soccer'],
+    links: [
+      'espn.com', 'sportsillustrated.com', 'cbssports.com', 'foxsports.com', 'nbcsports.com',
+      'sports.yahoo.com', 'bleacherreport.com', 'nfl.com', 'nba.com', 'mlb.com',
+      'soccer.com', 'goal.com', 'transfermarkt.com', 'theathletic.com', 'sportingnews.com'
+    ],
+    broadSearch: 'sports OR athletics OR football OR basketball OR soccer OR nba OR nfl OR tennis OR golf OR olympics OR championship -site:pinterest.com -site:facebook.com -site:twitter.com -site:instagram.com -site:youtube.com'
   },
   entertainment: {
-    query: ['entertainment news', 'celebrity news', 'hollywood news'],
-    links: ['hollywoodreporter.com', 'variety.com', 'deadline.com'],
-    broadSearch: 'entertainment OR celebrity OR movies OR music OR film OR television OR hollywood OR awards -site:pinterest.com -site:facebook.com -site:twitter.com'
+    query: ['entertainment news', 'celebrity news', 'hollywood news', 'movies', 'tv shows'],
+    links: [
+      'hollywoodreporter.com', 'variety.com', 'deadline.com', 'ew.com', 'people.com',
+      'usmagazine.com', 'tmz.com', 'etonline.com', 'perezhilton.com', 'justjared.com',
+      'imdb.com', 'rottentomatoes.com', 'metacritic.com', 'tvguide.com', 'entertainmentweekly.com'
+    ],
+    broadSearch: 'entertainment OR celebrity OR movies OR music OR film OR television OR hollywood OR awards OR streaming OR netflix OR disney -site:pinterest.com -site:facebook.com -site:twitter.com -site:instagram.com -site:youtube.com'
   },
   ai: {
-    query: ['artificial intelligence news', 'AI developments', 'machine learning'],
-    links: ['techcrunch.com', 'venturebeat.com', 'mit.edu'],
-    broadSearch: 'artificial intelligence OR AI OR machine learning OR deep learning OR neural networks -site:pinterest.com -site:facebook.com -site:twitter.com -site:instagram.com -site:youtube.com'
+    query: ['artificial intelligence news', 'AI developments', 'machine learning', 'deep learning', 'robotics'],
+    links: [
+      'techcrunch.com', 'venturebeat.com', 'mit.edu', 'stanford.edu', 'arxiv.org',
+      'towardsdatascience.com', 'machinelearningmastery.com', 'deepmind.com', 'openai.com', 'anthropic.com',
+      'google.ai', 'microsoft.com', 'ibm.com', 'nvidia.com', 'apple.com'
+    ],
+    broadSearch: 'artificial intelligence OR AI OR machine learning OR deep learning OR neural networks OR robotics OR automation OR computer vision -site:pinterest.com -site:facebook.com -site:twitter.com -site:instagram.com -site:youtube.com'
   },
 };
 
@@ -75,15 +148,37 @@ export const GET = async (req: Request) => {
     const topic = (params.get('topic') as Topic) || 'tech';
 
     const cacheKey = `${topic}-${mode}`;
-    const cached = cache.get(cacheKey);
     const now = Date.now();
 
-    // RE-ENABLE CACHE but add debug info
+    // Check in-memory cache first
+    const cached = cache.get(cacheKey);
     if (cached && (now - cached.timestamp) < CACHE_DURATION) {
-      console.log(`[discover] Returning cached data with ${cached.data.length} blogs`);
+      console.log(`[discover] Returning in-memory cached data with ${cached.data.length} blogs`);
       return Response.json(
         {
           blogs: cached.data,
+          cached: true,
+          timestamp: cached.timestamp,
+          cacheType: 'memory'
+        },
+        {
+          status: 200,
+        },
+      );
+    }
+
+    // Check filesystem cache
+    const fsCached = await getFSCache(cacheKey);
+    if (fsCached) {
+      console.log(`[discover] Returning filesystem cached data with ${fsCached.length} blogs`);
+      // Update in-memory cache
+      cache.set(cacheKey, { data: fsCached, timestamp: now });
+      return Response.json(
+        {
+          blogs: fsCached,
+          cached: true,
+          timestamp: now,
+          cacheType: 'filesystem'
         },
         {
           status: 200,
@@ -99,19 +194,19 @@ export const GET = async (req: Request) => {
       const seenUrls = new Set();
       const allResults = [];
 
-      // First, get results from specific trusted sites
-      console.log(`[discover] Fetching from ${selectedTopic.links.length} specific sites`);
-      const siteRequests = selectedTopic.links.flatMap((link) =>
-        selectedTopic.query.map((query) => ({ link, query, type: 'site' as const }))
-      );
+      // First, get results from a diverse selection of trusted sites (limit to 8 for performance)
+      const selectedSites = selectedTopic.links.slice(0, 8); // Use first 8 sites for diversity
+      console.log(`[discover] Fetching from ${selectedSites.length} selected sites: ${selectedSites.join(', ')}`);
 
-      for (const { link, query, type } of siteRequests) {
+      for (const link of selectedSites) {
         try {
-          const result = await rateLimitedSearchSerper(`${query} site:${link}`);
+          // Use a random query from the topic's query array for variety
+          const randomQuery = selectedTopic.query[Math.floor(Math.random() * selectedTopic.query.length)];
+          const result = await rateLimitedSearchSerper(`${randomQuery} site:${link}`);
           allResults.push(...result.results);
-          console.log(`[discover] Got ${result.results.length} results from ${link}`);
+          console.log(`[discover] Got ${result.results.length} results from ${link} using query: "${randomQuery}"`);
         } catch (err) {
-          console.warn(`[discover] Failed to fetch ${query} site:${link}:`, err);
+          console.warn(`[discover] Failed to fetch from ${link}:`, err);
           // Continue with other requests even if one fails
         }
       }
@@ -123,8 +218,8 @@ export const GET = async (req: Request) => {
           const broadResult = await rateLimitedSearchSerper(selectedTopic.broadSearch);
           console.log(`[discover] Broader search returned ${broadResult.results.length} results`);
 
-          // Take more broad results to ensure variety, but prioritize quality
-          const broadResults = broadResult.results.slice(0, 12);
+          // Take broad results to ensure variety, but prioritize quality
+          const broadResults = broadResult.results.slice(0, 15);
           console.log(`[discover] Broader result domains:`, broadResults.map(r => {
             try {
               return new URL(r.url).hostname.replace('www.', '');
@@ -141,10 +236,10 @@ export const GET = async (req: Request) => {
       }
 
       // Separate site-specific and broader results for better variety
-      const siteSpecificResults = allResults.slice(0, allResults.length - 12); // First N results are from specific sites
-      const broaderResults = allResults.slice(-12); // Last 12 results are from broader search
+      const siteSpecificResults = allResults.slice(0, allResults.length - 15); // First N results are from specific sites
+      const broaderResults = allResults.slice(-15); // Last 15 results are from broader search
 
-      // Filter duplicates but be more lenient with broader results
+      // Filter duplicates but be more lenient with broader results to ensure variety
       const filteredSiteResults = siteSpecificResults.filter((item) => {
         const url = item.url?.toLowerCase().trim();
         if (seenUrls.has(url)) return false;
@@ -159,9 +254,11 @@ export const GET = async (req: Request) => {
         return true;
       });
 
-      // Combine results with preference for variety: take most site results + all broader results
+      // Combine results with preference for variety: take site results + broader results
       data = [...filteredSiteResults, ...filteredBroaderResults]
         .sort(() => Math.random() - 0.5);
+
+      console.log(`[discover] Final variety: ${filteredSiteResults.length} site-specific + ${filteredBroaderResults.length} broader results = ${data.length} total`);
 
       // If no results from Serper, add mock data for testing
       if (data.length === 0) {
@@ -344,8 +441,9 @@ export const GET = async (req: Request) => {
       }
     }
 
-    // Cache the results
+    // Cache the results in both memory and filesystem
     cache.set(cacheKey, { data, timestamp: now });
+    await setFSCache(cacheKey, data);
 
     console.log(`[discover] Final response with ${data.length} blogs:`, data.map(item => ({ title: item.title, url: item.url, thumbnail: item.thumbnail })));
     console.log(`[discover] Sample blog with thumbnail:`, data[0]);

@@ -28,6 +28,10 @@ config.toml
 logs/
 *.log
 
+# Cache files
+cache/
+*.cache
+
 # Testing
 /coverage/
 
