@@ -21,7 +21,12 @@ const OptimizationModes = [
     key: 'balanced', // keep identifier as 'balanced' but label it as Quality
     title: 'Quality',
     description: 'Find the right balance between speed and accuracy',
-    icon: <Sliders size={20} className="text-[#4CAF50]" />,
+    icon: (
+      <Star
+        size={16}
+        className="text-[#2196F3] dark:text-[#BBDEFB] fill-[#BBDEFB] dark:fill-[#2196F3]"
+      />
+    ),
     model: 'moonshotai/Kimi-K2-Instruct-0905',
   },
 ];
