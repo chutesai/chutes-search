@@ -53,6 +53,7 @@ export const searchSerper = async (
           title: kg.title,
           url: kg.descriptionLink || 'https://google.com/search?q=' + encodeURIComponent(query),
           content: kg.description,
+          thumbnail: undefined,
         });
       }
     }
@@ -60,7 +61,7 @@ export const searchSerper = async (
     if ((!results || results.length === 0) && Array.isArray(res.data?.topStories)) {
       for (const s of res.data.topStories) {
         if (s.title && s.link) {
-          results.push({ title: s.title, url: s.link, content: s.source || s.date });
+          results.push({ title: s.title, url: s.link, content: s.source || s.date, thumbnail: undefined });
         }
       }
     }
