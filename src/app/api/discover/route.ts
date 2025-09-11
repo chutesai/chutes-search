@@ -72,17 +72,18 @@ export const GET = async (req: Request) => {
     const cached = cache.get(cacheKey);
     const now = Date.now();
 
-    // TEMPORARILY DISABLE CACHE for testing
-    // if (cached && (now - cached.timestamp) < CACHE_DURATION) {
-    //   return Response.json(
-    //     {
-    //       blogs: cached.data,
-    //     },
-    //     {
-    //       status: 200,
-    //     },
-    //   );
-    // }
+    // RE-ENABLE CACHE but add debug info
+    if (cached && (now - cached.timestamp) < CACHE_DURATION) {
+      console.log(`[discover] Returning cached data with ${cached.data.length} blogs`);
+      return Response.json(
+        {
+          blogs: cached.data,
+        },
+        {
+          status: 200,
+        },
+      );
+    }
 
     const selectedTopic = websitesForTopic[topic];
 
@@ -256,6 +257,7 @@ export const GET = async (req: Request) => {
     cache.set(cacheKey, { data, timestamp: now });
 
     console.log(`[discover] Final response with ${data.length} blogs:`, data.map(item => ({ title: item.title, url: item.url, thumbnail: item.thumbnail })));
+    console.log(`[discover] Sample blog with thumbnail:`, data[0]);
 
     return Response.json(
       {
