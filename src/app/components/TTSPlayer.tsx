@@ -29,6 +29,9 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
   type PlaybackMode = 1 | 2 | 3 | 4 | 5;
   const [playbackMode] = useState<PlaybackMode>(1); // hide selector, default to Mode 1
   const [showPlayModal, setShowPlayModal] = useState(false);
+  const [modalState, setModalState] = useState<'loading' | 'ready'>('loading');
+  const [totalChunks, setTotalChunks] = useState<number>(0);
+  const [generatedChunks, setGeneratedChunks] = useState<number>(0);
 
   const startPlaying = () => {
     isPlayingRef.current = true;
@@ -48,6 +51,25 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
       t = t.replace(/<a\b[^>]*>\s*\d+\s*<\/a>/gi, '');
       // Strip all other anchor tags but keep inner text (if any)
       t = t.replace(/<a\b[^>]*>(.*?)<\/a>/gi, '$1');
+      // Markdown: remove headings like #, ##, ### at line start
+      t = t.replace(/^\s*#{1,6}\s+/gm, '');
+      // Markdown: remove fenced code blocks ``` ```
+      t = t.replace(/```[\s\S]*?```/g, '');
+      // Markdown: inline code `code`
+      t = t.replace(/`([^`]+)`/g, '$1');
+      // Markdown: images ![alt](url)
+      t = t.replace(/!\[[^\]]*\]\([^)]*\)/g, '');
+      // Markdown: links [text](url) -> keep text
+      t = t.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1');
+      // Markdown emphasis **bold**, *italic*, __bold__, _italic_
+      t = t.replace(/\*\*([^*]+)\*\*/g, '$1');
+      t = t.replace(/__([^_]+)__/g, '$1');
+      t = t.replace(/\*([^*]+)\*/g, '$1');
+      t = t.replace(/_([^_]+)_/g, '$1');
+      // Markdown: lists and blockquotes
+      t = t.replace(/^\s*[-*+]\s+/gm, '');
+      t = t.replace(/^\s*\d+\.\s+/gm, '');
+      t = t.replace(/^\s*>\s+/gm, '');
       // Strip any remaining HTML tags
       t = t.replace(/<[^>]+>/g, '');
       // Collapse excessive whitespace
@@ -246,6 +268,11 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
 
     setIsLoading(true);
     try {
+      // Show modal immediately and unlock audio within click stack
+      setShowPlayModal(true);
+      setModalState('loading');
+      setTotalChunks(0);
+      setGeneratedChunks(0);
       // Unlock audio immediately within click stack
       await primePlayback();
 
@@ -253,6 +280,7 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
       const sanitized = sanitizeTextForTTS(text);
       console.log('[TTS] Sanitized length:', sanitized.length);
       const chunks = splitTextIntoChunks(sanitized);
+      setTotalChunks(chunks.length);
 
       if (chunks.length === 0) {
         console.error('No text chunks to process');
@@ -290,6 +318,7 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
             urls.push(objectUrl);
             dataUrls.push(data.audioUrl);
             console.log(`Chunk ${i + 1} audio generated successfully`);
+            setGeneratedChunks(prev => Math.min(prev + 1, chunks.length));
 
             // Download first chunk only when debug flag is enabled
             if (i === 0 && DEBUG_TTS_DOWNLOAD) {
@@ -302,8 +331,8 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
               setAudioUrls([...urls]);
               setAudioDataUrls([...dataUrls]);
               setIsLoading(false); // Allow user to stop while more chunks are loading
-              // Present a modal to get explicit user gesture for autoplay-restricted browsers
-              setShowPlayModal(true);
+              // Switch modal to ready state (Play button enabled)
+              setModalState('ready');
 
               // Continue loading remaining chunks in background
               continue;
@@ -327,6 +356,7 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
       if (hasErrors && urls.length === 0) {
         // Fallback to browser TTS for the entire text
         console.log('Using browser TTS fallback');
+        setShowPlayModal(false);
         setIsLoading(false);
         await speakWithBrowserTTS(text);
         return;
@@ -340,6 +370,7 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
     } catch (error) {
       console.error('TTS error:', error);
       // Fallback to browser TTS
+      setShowPlayModal(false);
       setIsLoading(false);
       await speakWithBrowserTTS(text);
     }
@@ -655,26 +686,39 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
       />
 
       {showPlayModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl p-4 max-w-sm w-full mx-4">
-            <div className="text-black dark:text-white mb-3 font-medium">Audio is ready</div>
-            <div className="text-sm text-black/70 dark:text-white/70 mb-4">
-              Tap Play to start the narration.
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-[1px]">
+          <div className="bg-white dark:bg-gray-900 border border-black/5 dark:border-white/10 rounded-xl shadow-2xl p-5 max-w-sm w-full mx-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-black dark:text-white font-semibold">Text to Speech</div>
             </div>
-            <div className="flex items-center justify-end space-x-2">
-              <button
-                className="px-3 py-1.5 rounded-md text-sm bg-gray-200 dark:bg-gray-800 text-black dark:text-white"
-                onClick={() => setShowPlayModal(false)}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-3 py-1.5 rounded-md text-sm bg-[#24A0ED] text-white"
-                onClick={() => { setShowPlayModal(false); playAudioChunks(); }}
-              >
-                Play
-              </button>
-            </div>
+            {modalState === 'loading' ? (
+              <div className="flex items-center space-x-3 text-black dark:text-white">
+                <Loader2 className="w-5 h-5 animate-spin text-[#24A0ED]" />
+                <div className="text-sm">
+                  Generating audio{totalChunks > 0 ? ` (${generatedChunks}/${totalChunks})` : ''}...
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="text-sm text-black/80 dark:text-white/80 mb-4">
+                  Audio is ready. Press Play to start the narration.
+                </div>
+                <div className="flex items-center justify-end space-x-2">
+                  <button
+                    className="px-3 py-1.5 rounded-md text-sm bg-gray-200 dark:bg-gray-800 text-black dark:text-white"
+                    onClick={() => setShowPlayModal(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="px-3 py-1.5 rounded-md text-sm bg-[#24A0ED] hover:brightness-110 text-white"
+                    onClick={() => { setShowPlayModal(false); playAudioChunks(); }}
+                  >
+                    Play
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
