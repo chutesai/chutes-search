@@ -135,19 +135,34 @@ const Page = () => {
                   target="_blank"
                 >
                   {item.thumbnail ? (
-                    <img
-                      className="object-cover w-full aspect-video"
-                      src={
-                        new URL(item.thumbnail).origin +
-                        new URL(item.thumbnail).pathname +
-                        `?id=${new URL(item.thumbnail).searchParams.get('id')}`
-                      }
-                      alt={item.title}
-                      onError={(e) => {
-                        // Hide image if it fails to load
-                        (e.target as HTMLImageElement).style.display = 'none';
-                      }}
-                    />
+                    <div className="w-full aspect-video bg-light-tertiary dark:bg-dark-tertiary flex items-center justify-center overflow-hidden">
+                      <img
+                        className="max-w-full max-h-full object-contain"
+                        src={
+                          new URL(item.thumbnail).origin +
+                          new URL(item.thumbnail).pathname +
+                          `?id=${new URL(item.thumbnail).searchParams.get('id')}`
+                        }
+                        alt={item.title}
+                        onLoad={(e) => {
+                          const img = e.target as HTMLImageElement;
+                          const isSmall = img.naturalWidth < 100 || img.naturalHeight < 100;
+                          const isIcon = item.thumbnail?.includes('favicon') || item.thumbnail?.includes('icon');
+
+                          if (isSmall || isIcon) {
+                            // Small images or icons: center them without stretching
+                            img.className = 'w-12 h-12 object-contain';
+                          } else {
+                            // Large images: cover the full area
+                            img.className = 'w-full h-full object-cover';
+                          }
+                        }}
+                        onError={(e) => {
+                          // Hide image if it fails to load
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    </div>
                   ) : (
                     <div className="w-full aspect-video bg-light-tertiary dark:bg-dark-tertiary flex items-center justify-center">
                       <svg

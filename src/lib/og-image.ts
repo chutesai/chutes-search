@@ -126,11 +126,11 @@ export const fetchOGImage = async (url: string): Promise<string | null> => {
 // Batch fetch OG images with rate limiting
 export const fetchMultipleOGImages = async (
   urls: string[],
-  concurrency: number = 2 // Reduced concurrency
+  concurrency: number = 3
 ): Promise<Record<string, string | null>> => {
   const results: Record<string, string | null> = {};
 
-  // Process in smaller batches to avoid overwhelming servers
+  // Process in batches to avoid overwhelming servers
   for (let i = 0; i < urls.length; i += concurrency) {
     const batch = urls.slice(i, i + concurrency);
     const batchPromises = batch.map(async (url) => {
@@ -143,9 +143,9 @@ export const fetchMultipleOGImages = async (
       results[url] = image;
     });
 
-    // Longer delay between batches to be more respectful
+    // Small delay between batches
     if (i + concurrency < urls.length) {
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
   }
 
