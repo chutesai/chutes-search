@@ -23,3 +23,4 @@ export const GET = async (req: Request) => {
     }, { status: 500 });
   }
 };
+
