@@ -63,11 +63,37 @@ export const POST = async (req: Request) => {
       getAvailableEmbeddingModelProviders(),
     ]);
 
-    const chatModelProvider =
+    let chatModelProvider =
       body.chatModel?.provider || Object.keys(chatModelProviders)[0];
-    const chatModel =
+    let chatModel =
       body.chatModel?.name ||
       Object.keys(chatModelProviders[chatModelProvider])[0];
+
+    // Override model based on optimization mode
+    if (body.optimizationMode) {
+      const optimizationModels: Record<string, { provider: string; model: string }> = {
+        'speed': { provider: 'openai', model: 'gpt-oss-20b' },
+        'balanced': { provider: 'moonshotai', model: 'Kimi-K2-Instruct-0905' },
+        'quality': { provider: 'deepseek', model: 'DeepSeek-V3.1' }
+      };
+
+      const optimizedModel = optimizationModels[body.optimizationMode];
+      if (optimizedModel) {
+        // Check if the optimized model provider exists
+        if (chatModelProviders[optimizedModel.provider]) {
+          // Check if the specific model exists in that provider
+          if (chatModelProviders[optimizedModel.provider][optimizedModel.model]) {
+            chatModelProvider = optimizedModel.provider;
+            chatModel = optimizedModel.model;
+            console.log(`Using optimized model for ${body.optimizationMode}: ${optimizedModel.provider}/${optimizedModel.model}`);
+          } else {
+            console.log(`Optimized model ${optimizedModel.provider}/${optimizedModel.model} not available, using default`);
+          }
+        } else {
+          console.log(`Optimized model provider ${optimizedModel.provider} not available, using default`);
+        }
+      }
+    }
 
     const embeddingModelProvider =
       body.embeddingModel?.provider || Object.keys(embeddingModelProviders)[0];

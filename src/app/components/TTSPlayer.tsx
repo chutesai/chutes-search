@@ -87,6 +87,43 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
     });
   };
 
+  // Temporary download function to debug audio
+  const downloadFirstChunk = async () => {
+    try {
+      console.log('Downloading first chunk for debugging...');
+      const response = await fetch('/api/tts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: text.substring(0, 100), // First 100 chars for testing
+          voice
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.audioUrl) {
+        console.log('Audio URL received:', data.audioUrl.substring(0, 100) + '...');
+
+        // Create download link
+        const link = document.createElement('a');
+        link.href = data.audioUrl;
+        link.download = 'tts-debug-audio.wav';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        console.log('Download triggered for debugging');
+      } else {
+        console.error('Download failed:', data.error);
+      }
+    } catch (error) {
+      console.error('Download error:', error);
+    }
+  };
+
   const generateSpeech = async () => {
     if (audioUrls.length > 0) {
       // If we already have audio chunks, just play them
@@ -132,6 +169,11 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
           if (data.success && data.audioUrl) {
             urls.push(data.audioUrl);
             console.log(`Chunk ${i + 1} audio generated successfully`);
+
+            // TEMPORARY: Also download the first chunk for debugging
+            if (i === 0) {
+              downloadFirstChunk();
+            }
 
             // Start playing as soon as we have the first chunk ready
             if (!firstChunkReady) {

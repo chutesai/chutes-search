@@ -501,7 +501,8 @@ const Page = () => {
                   </Switch>
                 </div>
 
-                <div className="flex items-center justify-between p-3 bg-light-secondary dark:bg-dark-secondary rounded-lg hover:bg-light-200 dark:hover:bg-dark-200 transition-colors">
+                {/* Automatic Video Search section temporarily hidden */}
+                {/* <div className="flex items-center justify-between p-3 bg-light-secondary dark:bg-dark-secondary rounded-lg hover:bg-light-200 dark:hover:bg-dark-200 transition-colors">
                   <div className="flex items-center space-x-3">
                     <div className="p-2 bg-light-200 dark:bg-dark-200 rounded-lg">
                       <VideoIcon
@@ -541,7 +542,7 @@ const Page = () => {
                       )}
                     />
                   </Switch>
-                </div>
+                </div> */}
               </div>
             </SettingsSection>
 
@@ -558,7 +559,8 @@ const Page = () => {
               </div>
             </SettingsSection>
 
-            <SettingsSection title="Model Settings">
+            {/* Model Settings section temporarily hidden */}
+            {/* <SettingsSection title="Model Settings">
               {selectedChatModelProvider && (
                   <div className="flex flex-col space-y-4">
                     <div className="flex flex-col space-y-1">
@@ -677,7 +679,7 @@ const Page = () => {
                   )}
                 </div>
               )}
-            </SettingsSection>
+            </SettingsSection> */}
 
             {false && (
             <SettingsSection title="API Keys">

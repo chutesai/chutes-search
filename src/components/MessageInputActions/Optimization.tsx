@@ -15,16 +15,18 @@ const OptimizationModes = [
     title: 'Speed',
     description: 'Prioritize speed and get the quickest possible answer.',
     icon: <Zap size={20} className="text-[#FF9800]" />,
+    model: 'openai/gpt-oss-20b',
   },
   {
     key: 'balanced',
     title: 'Balanced',
     description: 'Find the right balance between speed and accuracy',
     icon: <Sliders size={20} className="text-[#4CAF50]" />,
+    model: 'moonshotai/Kimi-K2-Instruct-0905',
   },
   {
     key: 'quality',
-    title: 'Quality (Soon)',
+    title: 'Quality',
     description: 'Get the most thorough and accurate answer',
     icon: (
       <Star
@@ -32,6 +34,7 @@ const OptimizationModes = [
         className="text-[#2196F3] dark:text-[#BBDEFB] fill-[#BBDEFB] dark:fill-[#2196F3]"
       />
     ),
+    model: 'deepseek-ai/DeepSeek-V3.1',
   },
 ];
 
@@ -73,13 +76,11 @@ const Optimization = () => {
               <PopoverButton
                 onClick={() => setOptimizationMode(mode.key)}
                 key={i}
-                disabled={mode.key === 'quality'}
                 className={cn(
                   'p-2 rounded-lg flex flex-col items-start justify-start text-start space-y-1 duration-200 cursor-pointer transition',
                   optimizationMode === mode.key
                     ? 'bg-light-secondary dark:bg-dark-secondary'
                     : 'hover:bg-light-secondary dark:hover:bg-dark-secondary',
-                  mode.key === 'quality' && 'opacity-50 cursor-not-allowed',
                 )}
               >
                 <div className="flex flex-row items-center space-x-1 text-black dark:text-white">
