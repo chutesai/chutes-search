@@ -105,19 +105,24 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
         return;
       }
 
-      // Generate audio for each chunk
+      console.log(`Processing ${chunks.length} text chunks for TTS`);
+
+      // Generate audio for each chunk and start playing as soon as first chunk is ready
       const urls: string[] = [];
       let hasErrors = false;
+      let firstChunkReady = false;
 
-      for (const chunk of chunks) {
+      for (let i = 0; i < chunks.length; i++) {
         try {
+          console.log(`Generating audio for chunk ${i + 1}/${chunks.length} (${chunks[i].length} chars)`);
+
           const response = await fetch('/api/tts', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              text: chunk,
+              text: chunks[i],
               voice
             }),
           });
@@ -126,19 +131,34 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
 
           if (data.success && data.audioUrl) {
             urls.push(data.audioUrl);
+            console.log(`Chunk ${i + 1} audio generated successfully`);
+
+            // Start playing as soon as we have the first chunk ready
+            if (!firstChunkReady) {
+              firstChunkReady = true;
+              setAudioUrls([...urls]);
+              setIsLoading(false); // Allow user to stop while more chunks are loading
+              playAudioChunks();
+
+              // Continue loading remaining chunks in background
+              continue;
+            }
+
+            // Update audioUrls for subsequent chunks
+            setAudioUrls([...urls]);
           } else {
-            console.warn('TTS chunk failed, will use browser TTS:', data.error);
+            console.warn(`TTS chunk ${i + 1} failed:`, data.error);
             hasErrors = true;
-            break; // Stop processing chunks if one fails
+            break;
           }
         } catch (error) {
-          console.warn('TTS chunk error, will use browser TTS:', error);
+          console.warn(`TTS chunk ${i + 1} error:`, error);
           hasErrors = true;
-          break; // Stop processing chunks if one fails
+          break;
         }
       }
 
-      if (hasErrors || urls.length === 0) {
+      if (hasErrors && urls.length === 0) {
         // Fallback to browser TTS for the entire text
         console.log('Using browser TTS fallback');
         setIsLoading(false);
@@ -146,15 +166,16 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
         return;
       }
 
-      setAudioUrls(urls);
-      playAudioChunks();
+      // If we had some chunks but others failed, continue with what we have
+      if (hasErrors && urls.length > 0) {
+        console.log(`Continuing with ${urls.length} successful chunks`);
+      }
+
     } catch (error) {
       console.error('TTS error:', error);
       // Fallback to browser TTS
       setIsLoading(false);
       await speakWithBrowserTTS(text);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -170,23 +191,67 @@ export function TTSPlayer({ text, voice = 'af_heart', className = '' }: TTSPlaye
       setCurrentChunkIndex(i);
 
       try {
-        await new Promise<void>((resolve) => {
-          if (audioRef.current) {
-            audioRef.current.src = audioUrls[i];
-            audioRef.current.onended = () => resolve();
-            audioRef.current.onerror = () => resolve();
-            audioRef.current.play().catch(() => resolve());
-          } else {
+        await new Promise<void>((resolve, reject) => {
+          if (!audioRef.current) {
             resolve();
+            return;
           }
+
+          const audio = audioRef.current;
+
+          // Set up event handlers
+          const cleanup = () => {
+            audio.oncanplay = null;
+            audio.onended = null;
+            audio.onerror = null;
+          };
+
+          audio.oncanplay = async () => {
+            try {
+              console.log(`Playing chunk ${i + 1}/${audioUrls.length}`);
+              await audio.play();
+              console.log(`Chunk ${i + 1} started playing`);
+            } catch (playError) {
+              console.error('Audio play failed:', playError);
+              cleanup();
+              reject(playError);
+            }
+          };
+
+          audio.onended = () => {
+            console.log(`Chunk ${i + 1} ended`);
+            cleanup();
+            resolve();
+          };
+
+          audio.onerror = (error) => {
+            console.error('Audio error:', error);
+            cleanup();
+            reject(new Error('Audio playback failed'));
+          };
+
+          // Load the audio source
+          audio.src = audioUrls[i];
+          audio.load();
         });
 
-        // Add pause between chunks (0.3 seconds)
-        if (i < audioUrls.length - 1) {
+        // Check if more chunks are available now
+        if (i + 1 >= audioUrls.length) {
+          // Wait a bit to see if more chunks become available
+          let waitCount = 0;
+          while (i + 1 >= audioUrls.length && waitCount < 50 && isPlaying) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            waitCount++;
+          }
+        }
+
+        // Add pause between chunks (0.3 seconds) if there are more chunks
+        if (i + 1 < audioUrls.length && isPlaying) {
           await new Promise(resolve => setTimeout(resolve, 300));
         }
       } catch (error) {
         console.error('Error playing chunk:', error);
+        // Continue with next chunk instead of stopping entirely
       }
     }
 
