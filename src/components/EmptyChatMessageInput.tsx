@@ -65,8 +65,12 @@ const EmptyChatMessageInput = () => {
         />
         <div className="flex flex-row items-center justify-between mt-4">
           <div className="flex flex-row items-center space-x-2 lg:space-x-4">
-            <Focus />
-            <Attach showText />
+            {/* Focus and Attach icons hidden as requested */}
+            {/* <Focus /> */}
+            {/* <Attach showText /> */}
+            <span className="text-xs text-black/50 dark:text-white/50">
+              Start typing to search
+            </span>
           </div>
           <div className="flex flex-row items-center space-x-1 sm:space-x-4">
             <Optimization />

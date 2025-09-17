@@ -102,8 +102,29 @@ const WeatherWidget = () => {
     });
   }, []);
 
+  const handleWeatherClick = () => {
+    if (data.location && !loading) {
+      const searchQuery = `weather and news in ${data.location}`;
+      window.location.href = `/?q=${encodeURIComponent(searchQuery)}`;
+    }
+  };
+
   return (
-    <div className="bg-light-secondary dark:bg-dark-secondary rounded-xl border border-light-200 dark:border-dark-200 shadow-sm flex flex-row items-center w-full h-24 min-h-[96px] max-h-[96px] px-3 py-2 gap-3">
+    <div
+      className={`bg-light-secondary dark:bg-dark-secondary rounded-xl border border-light-200 dark:border-dark-200 shadow-sm flex flex-row items-center w-full h-24 min-h-[96px] max-h-[96px] px-3 py-2 gap-3 transition-colors duration-200 ${
+        loading ? 'cursor-not-allowed opacity-75' : 'cursor-pointer hover:bg-light-tertiary dark:hover:bg-dark-tertiary'
+      }`}
+      onClick={handleWeatherClick}
+      title={loading ? 'Loading weather data...' : `Click to search for weather and news in ${data.location}`}
+      role="button"
+      tabIndex={loading ? -1 : 0}
+      onKeyDown={(e) => {
+        if (!loading && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          handleWeatherClick();
+        }
+      }}
+    >
       {loading ? (
         <>
           <div className="flex flex-col items-center justify-center w-16 min-w-16 max-w-16 h-full animate-pulse">

@@ -1,7 +1,7 @@
 'use client';
 
 import { Search } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -44,31 +44,78 @@ const Page = () => {
   const [discover, setDiscover] = useState<Discover[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTopic, setActiveTopic] = useState<string>(topics[0].key);
+  const latestFetchId = useRef(0);
 
   const fetchArticles = async (topic: string) => {
+    const requestId = ++latestFetchId.current;
     setLoading(true);
-    try {
-      const res = await fetch(`/api/discover?topic=${topic}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
 
-      const data = await res.json();
+    let blogs: Discover[] = [];
+    let success = false;
 
-      if (!res.ok) {
-        throw new Error(data.message);
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const params = new URLSearchParams({ topic });
+
+        // Always try preview mode first for better reliability
+        if (attempt === 1) {
+          params.set('mode', 'preview');
+        }
+
+        const res = await fetch(`/api/discover?${params.toString()}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          cache: 'no-store',
+        });
+
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({ message: `Failed with status ${res.status}` }));
+          throw new Error(errorData?.message || `Failed with status ${res.status}`);
+        }
+
+        const data = await res.json().catch(() => ({ blogs: [] })) as { blogs?: Discover[]; message?: string };
+        const blogsData = Array.isArray(data.blogs) ? data.blogs : [];
+        
+        // Filter out invalid entries and ensure we have valid data
+        blogs = blogsData.filter((blog: Discover) =>
+          blog &&
+          typeof blog === 'object' &&
+          blog.title &&
+          typeof blog.title === 'string' &&
+          blog.title.trim().length > 0 &&
+          blog.url &&
+          typeof blog.url === 'string' &&
+          blog.url.trim().length > 0
+        );
+
+        // If we got some valid results, consider it a success
+        if (blogs.length > 0) {
+          success = true;
+          break;
+        } else if (attempt === 3) {
+          // On final attempt, accept even empty results to avoid complete failure
+          success = true;
+          blogs = [];
+          break;
+        }
+      } catch (err) {
+        console.error(`[discover] Error fetching data (attempt ${attempt}):`, err);
+        if (attempt < 3) {
+          // Exponential backoff: 500ms, 1000ms, 1500ms
+          await new Promise((resolve) => setTimeout(resolve, attempt * 500));
+        }
       }
+    }
 
-      // Filter out blogs without required fields, but don't require thumbnail
-      data.blogs = data.blogs.filter((blog: Discover) => blog.title && blog.url);
-
-      setDiscover(data.blogs);
-    } catch (err: any) {
-      console.error('Error fetching data:', err.message);
-      toast.error('Error fetching data');
-    } finally {
+    if (latestFetchId.current === requestId) {
+      if (success) {
+        setDiscover(blogs);
+      } else {
+        setDiscover([]);
+        toast.error('Unable to load articles. Please try again later.');
+      }
       setLoading(false);
     }
   };
@@ -88,7 +135,7 @@ const Page = () => {
           <hr className="border-t border-[#2B2C2C] my-4 w-full" />
         </div>
 
-        <div className="flex flex-row items-center space-x-2 overflow-x-auto">
+        <div className="flex flex-row items-center space-x-2 overflow-x-auto overflow-hidden-scrollable scrollbar-hide">
           {topics.map((t, i) => (
             <div
               key={i}
@@ -158,8 +205,26 @@ const Page = () => {
                           }
                         }}
                         onError={(e) => {
-                          // Hide image if it fails to load
-                          (e.target as HTMLImageElement).style.display = 'none';
+                          // Instead of hiding, show a placeholder icon
+                          const img = e.target as HTMLImageElement;
+                          img.style.display = 'none';
+                          
+                          // Create and show placeholder icon only if not already exists
+                          const parent = img.parentNode as HTMLElement;
+                          if (parent && !parent.querySelector('.placeholder-icon')) {
+                            const placeholder = document.createElement('div');
+                            placeholder.className = 'flex items-center justify-center w-full h-full placeholder-icon';
+                            placeholder.innerHTML = `
+                              <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="text-black/30 dark:text-white/30">
+                                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                                <polyline points="14,2 14,8 20,8"/>
+                                <line x1="16" y1="13" x2="8" y2="13"/>
+                                <line x1="16" y1="17" x2="8" y2="17"/>
+                                <line x1="10" y1="9" x2="8" y2="9"/>
+                              </svg>
+                            `;
+                            parent.appendChild(placeholder);
+                          }
                         }}
                       />
                     </div>

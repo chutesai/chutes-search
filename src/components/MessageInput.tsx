@@ -66,7 +66,8 @@ const MessageInput = () => {
         mode === 'multi' ? 'flex-col rounded-lg' : 'flex-row rounded-full',
       )}
     >
-      {mode === 'single' && <AttachSmall />}
+      {/* AttachSmall hidden as requested for follow-up mode */}
+      {/* {mode === 'single' && <AttachSmall />} */}
       <TextareaAutosize
         ref={inputRef}
         value={message}
@@ -89,7 +90,8 @@ const MessageInput = () => {
       )}
       {mode === 'multi' && (
         <div className="flex flex-row items-center justify-between w-full pt-2">
-          <AttachSmall />
+          {/* AttachSmall hidden as requested for follow-up mode */}
+          {/* <AttachSmall /> */}
           <div className="flex flex-row items-center space-x-4">
             <button
               disabled={message.trim().length === 0 || loading}

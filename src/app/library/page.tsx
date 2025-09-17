@@ -2,9 +2,11 @@
 
 import DeleteChat from '@/components/DeleteChat';
 import { cn, formatTimeDifference } from '@/lib/utils';
-import { BookOpenText, ClockIcon, Delete, ScanEye } from 'lucide-react';
+import { BookOpenText, ClockIcon, Delete, ScanEye, Trash } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { getLocalChats, deleteLocalChat } from '@/lib/localStorage';
 
 export interface Chat {
   id: string;
@@ -20,22 +22,39 @@ const Page = () => {
   useEffect(() => {
     const fetchChats = async () => {
       setLoading(true);
-
-      const res = await fetch(`/api/chats`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const data = await res.json();
-
-      setChats(data.chats);
-      setLoading(false);
+      
+      try {
+        // Use local storage instead of API
+        const localChats = getLocalChats();
+        setChats(localChats);
+      } catch (error) {
+        console.error('Error loading chats from local storage:', error);
+        setChats([]);
+        // Show user-friendly error message
+        toast.error('Failed to load chat history. Please refresh the page.');
+      } finally {
+        setLoading(false);
+      }
     };
 
-    fetchChats();
+    // Use a small delay to prevent flash for fast localStorage operations
+    const timer = setTimeout(() => {
+      fetchChats();
+    }, 100);
+
+    return () => clearTimeout(timer);
   }, []);
+
+  const handleDeleteChat = (chatId: string) => {
+    try {
+      deleteLocalChat(chatId);
+      setChats(prevChats => prevChats.filter(chat => chat.id !== chatId));
+      toast.success('Chat deleted successfully');
+    } catch (error) {
+      console.error('Error deleting chat:', error);
+      toast.error('Failed to delete chat. Please try again.');
+    }
+  };
 
   return loading ? (
     <div className="flex flex-row items-center justify-center min-h-screen">
@@ -97,11 +116,13 @@ const Page = () => {
                     {formatTimeDifference(new Date(), chat.createdAt)} Ago
                   </p>
                 </div>
-                <DeleteChat
-                  chatId={chat.id}
-                  chats={chats}
-                  setChats={setChats}
-                />
+                <button
+                  onClick={() => handleDeleteChat(chat.id)}
+                  className="bg-transparent text-red-400 hover:scale-105 transition duration-200"
+                  title="Delete chat"
+                >
+                  <Trash size={17} />
+                </button>
               </div>
             </div>
           ))}

@@ -73,10 +73,10 @@ export const POST = async (req: Request) => {
     // Override model based on optimization mode
     if (body.optimizationMode) {
       const optimizationModels: Record<string, { provider: string; model: string }> = {
-        'speed': { provider: 'openai', model: 'gpt-oss-20b' },
+        'speed': { provider: 'custom_openai', model: 'Alibaba-NLP/Tongyi-DeepResearch-30B-A3B' },
         // Map both keys to the same balanced/quality model for now
-        'balanced': { provider: 'moonshotai', model: 'Kimi-K2-Instruct-0905' },
-        'quality': { provider: 'moonshotai', model: 'Kimi-K2-Instruct-0905' }
+        'balanced': { provider: 'custom_openai', model: 'deepseek-ai/DeepSeek-V3.1' },
+        'quality': { provider: 'custom_openai', model: 'deepseek-ai/DeepSeek-V3.1' }
       };
 
       const optimizedModel = optimizationModels[body.optimizationMode];
