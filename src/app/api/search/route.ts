@@ -73,8 +73,8 @@ export const POST = async (req: Request) => {
     // Override model based on optimization mode
     if (body.optimizationMode) {
       const optimizationModels: Record<string, { provider: string; model: string }> = {
-        'speed': { provider: 'custom_openai', model: 'Alibaba-NLP/Tongyi-DeepResearch-30B-A3B' },
-        // Map both keys to the same balanced/quality model for now
+        // Use available Chutes model for all modes to avoid unavailable model errors
+        'speed': { provider: 'custom_openai', model: 'deepseek-ai/DeepSeek-V3.1' },
         'balanced': { provider: 'custom_openai', model: 'deepseek-ai/DeepSeek-V3.1' },
         'quality': { provider: 'custom_openai', model: 'deepseek-ai/DeepSeek-V3.1' }
       };
