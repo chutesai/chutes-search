@@ -207,20 +207,31 @@ class MetaSearchAgent implements MetaSearchAgentType {
 
           const res = await runWebSearch(question, this.config.activeEngines);
 
-          const documents = (res.results || []).map(
-            (result) =>
-              new Document({
-                pageContent:
-                  result.content ||
-                  (this.config.activeEngines.includes('youtube')
-                    ? result.title
-                    : '') /* Todo: Implement transcript grabbing using Youtubei (source: https://www.npmjs.com/package/youtubei) */,
-                metadata: {
-                  title: result.title,
-                  url: result.url,
-                },
-              }),
-          );
+          const documents =
+            res.results.length === 0 && res.error
+              ? [
+                  new Document({
+                    pageContent: res.error,
+                    metadata: {
+                      title: 'Search unavailable',
+                      url: '',
+                    },
+                  }),
+                ]
+              : (res.results || []).map(
+                  (result) =>
+                    new Document({
+                      pageContent:
+                        result.content ||
+                        (this.config.activeEngines.includes('youtube')
+                          ? result.title
+                          : '') /* Todo: Implement transcript grabbing using Youtubei (source: https://www.npmjs.com/package/youtubei) */,
+                      metadata: {
+                        title: result.title,
+                        url: result.url,
+                      },
+                    }),
+                );
 
           return { query: question, docs: documents };
         }

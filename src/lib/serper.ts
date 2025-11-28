@@ -7,13 +7,23 @@ type SerperSearchResult = {
   imageUrl?: string;
 };
 
-export const searchSerper = async (
-  query: string,
-): Promise<{ results: { title: string; url: string; content?: string; thumbnail?: string }[]; suggestions: string[] }> => {
+type SerperResponse = {
+  results: {
+    title: string;
+    url: string;
+    content?: string;
+    thumbnail?: string;
+  }[];
+  suggestions: string[];
+  error?: string;
+};
+
+export const searchSerper = async (query: string): Promise<SerperResponse> => {
   const apiKey = process.env.SERPER_API_KEY;
   if (!apiKey) {
-    console.warn('[serper] SERPER_API_KEY not set; returning empty results');
-    return { results: [], suggestions: [] };
+    const error = '[serper] SERPER_API_KEY not set';
+    console.warn(`${error}; returning empty results`);
+    return { results: [], suggestions: [], error };
   }
 
     const url = 'https://google.serper.dev/search';
@@ -68,9 +78,16 @@ export const searchSerper = async (
 
     return { results, suggestions };
   } catch (err: any) {
-    console.error('[serper] request failed', err?.response?.status, err?.message);
-    return { results: [], suggestions: [] };
+    const status = err?.response?.status;
+    const message =
+      err?.response?.data?.message ||
+      err?.message ||
+      'Serper request failed';
+    console.error('[serper] request failed', status, message);
+    return {
+      results: [],
+      suggestions: [],
+      error: `[serper] ${message}${status ? ` (status ${status})` : ''}`,
+    };
   }
 };
-
-

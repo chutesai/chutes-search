@@ -14,6 +14,7 @@ export type SearchRunResult = {
   engine: SearchEngine;
   results: UnifiedResult[];
   suggestions: string[];
+  error?: string;
 };
 
 type SearchOverrides = {
@@ -38,6 +39,7 @@ export const runWebSearch = async (
   const serperSearch = overrides?.searchSerperFn ?? searchSerper;
 
   let searxSuggestions: string[] = [];
+  let searxError: string | undefined;
 
   try {
     const searxngRes = await searxngSearch(query, {
@@ -60,6 +62,11 @@ export const runWebSearch = async (
         err?.message ?? err,
       );
     }
+
+    searxError =
+      err?.response?.status === 429
+        ? 'SearxNG rate limited this request.'
+        : err?.message ?? 'SearxNG search failed.';
   }
 
   const serperRes = await serperSearch(query);
@@ -68,9 +75,12 @@ export const runWebSearch = async (
     ? serperRes.results
     : [];
 
+  const error = serperRes?.error || searxError;
+
   return {
     engine: 'serper',
     results: serperResults,
     suggestions: [...new Set([...searxSuggestions, ...serperSuggestions])],
+    ...(error ? { error } : {}),
   };
 };

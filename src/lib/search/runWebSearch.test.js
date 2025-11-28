@@ -70,3 +70,22 @@ test('falls back to serper when searxng throws', async () => {
   assert.equal(res.engine, 'serper');
   assert.equal(serperCalls, 1);
 });
+
+test('surfaces errors when both providers fail', async () => {
+  const res = await runWebSearch('query', [], {
+    searchSearxngFn: async () => {
+      const err = new Error('rate limit');
+      err.response = { status: 429 };
+      throw err;
+    },
+    searchSerperFn: async () => ({
+      results: [],
+      suggestions: [],
+      error: 'Serper credits exhausted',
+    }),
+  });
+
+  assert.equal(res.engine, 'serper');
+  assert.equal(res.results.length, 0);
+  assert.equal(res.error, 'Serper credits exhausted');
+});
