@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build": "npm run db:push && next build",
     "start": "next start",
-    "test": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' node --require ts-node/register --test --test-reporter=spec src/lib",
+    "test": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' node --require ts-node/register --require tsconfig-paths/register --test --test-reporter=spec src/lib",
     "lint": "next lint",
     "format:write": "prettier . --write",
     "db:push": "drizzle-kit push"
@@ -67,6 +67,7 @@
     "prettier": "^3.2.5",
     "tailwindcss": "^3.3.0",
     "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
     "typescript": "^5"
   }
 }

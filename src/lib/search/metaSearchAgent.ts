@@ -207,6 +207,10 @@ class MetaSearchAgent implements MetaSearchAgentType {
 
           const res = await runWebSearch(question, this.config.activeEngines);
 
+          if (res.error && (res.results?.length ?? 0) === 0) {
+            throw new Error(res.error);
+          }
+
           const documents =
             res.results.length === 0 && res.error
               ? [
@@ -442,32 +446,45 @@ class MetaSearchAgent implements MetaSearchAgentType {
     stream: AsyncGenerator<StreamEvent, any, any>,
     emitter: eventEmitter,
   ) {
-    for await (const event of stream) {
-      if (
-        event.event === 'on_chain_end' &&
-        event.name === 'FinalSourceRetriever'
-      ) {
-        ``;
-        emitter.emit(
-          'data',
-          JSON.stringify({ type: 'sources', data: event.data.output }),
-        );
+    let completed = false;
+    try {
+      for await (const event of stream) {
+        if (
+          event.event === 'on_chain_end' &&
+          event.name === 'FinalSourceRetriever'
+        ) {
+          emitter.emit(
+            'data',
+            JSON.stringify({ type: 'sources', data: event.data.output }),
+          );
+        }
+        if (
+          event.event === 'on_chain_stream' &&
+          event.name === 'FinalResponseGenerator'
+        ) {
+          emitter.emit(
+            'data',
+            JSON.stringify({ type: 'response', data: event.data.chunk }),
+          );
+        }
+        if (
+          event.event === 'on_chain_end' &&
+          event.name === 'FinalResponseGenerator'
+        ) {
+          completed = true;
+          emitter.emit('end');
+        }
       }
-      if (
-        event.event === 'on_chain_stream' &&
-        event.name === 'FinalResponseGenerator'
-      ) {
-        emitter.emit(
-          'data',
-          JSON.stringify({ type: 'response', data: event.data.chunk }),
-        );
-      }
-      if (
-        event.event === 'on_chain_end' &&
-        event.name === 'FinalResponseGenerator'
-      ) {
-        emitter.emit('end');
-      }
+    } catch (err: any) {
+      emitter.emit(
+        'error',
+        JSON.stringify({
+          type: 'error',
+          data: err?.message || 'Search failed',
+        }),
+      );
+    } finally {
+      if (!completed) emitter.emit('end');
     }
   }
 
@@ -482,25 +499,36 @@ class MetaSearchAgent implements MetaSearchAgentType {
   ) {
     const emitter = new eventEmitter();
 
-    const answeringChain = await this.createAnsweringChain(
-      llm,
-      fileIds,
-      embeddings,
-      optimizationMode,
-      systemInstructions,
-    );
+    try {
+      const answeringChain = await this.createAnsweringChain(
+        llm,
+        fileIds,
+        embeddings,
+        optimizationMode,
+        systemInstructions,
+      );
 
-    const stream = answeringChain.streamEvents(
-      {
-        chat_history: history,
-        query: message,
-      },
-      {
-        version: 'v1',
-      },
-    );
+      const stream = answeringChain.streamEvents(
+        {
+          chat_history: history,
+          query: message,
+        },
+        {
+          version: 'v1',
+        },
+      );
 
-    this.handleStream(stream, emitter);
+      this.handleStream(stream, emitter);
+    } catch (err: any) {
+      emitter.emit(
+        'error',
+        JSON.stringify({
+          type: 'error',
+          data: err?.message || 'Search failed',
+        }),
+      );
+      process.nextTick(() => emitter.emit('end'));
+    }
 
     return emitter;
   }

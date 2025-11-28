@@ -238,6 +238,7 @@ export const POST = async (req: Request) => {
         apiKey: getCustomOpenaiApiKey(),
         modelName: getCustomOpenaiModelName(),
         temperature: 0.7,
+        maxRetries: 1,
         configuration: {
           baseURL: getCustomOpenaiApiUrl(),
         },
