@@ -17,14 +17,13 @@ import LineListOutputParser from '../outputParsers/listLineOutputParser';
 import LineOutputParser from '../outputParsers/lineOutputParser';
 import { getDocumentsFromLinks } from '../utils/documents';
 import { Document } from 'langchain/document';
-// import { searchSearxng } from '../searxng';
-import { searchSerper } from '../serper';
 import path from 'node:path';
 import fs from 'node:fs';
 import computeSimilarity from '../utils/computeSimilarity';
 import formatChatHistoryAsString from '../utils/formatHistory';
 import eventEmitter from 'events';
 import { StreamEvent } from '@langchain/core/tracers/log_stream';
+import { runWebSearch } from './runWebSearch';
 
 export interface MetaSearchAgentType {
   searchAndAnswer: (
@@ -206,7 +205,7 @@ class MetaSearchAgent implements MetaSearchAgentType {
         } else {
           question = question.replace(/<think>.*?<\/think>/g, '');
 
-          const res = await searchSerper(question);
+          const res = await runWebSearch(question, this.config.activeEngines);
 
           const documents = (res.results || []).map(
             (result) =>

@@ -1,7 +1,7 @@
 const assert = require('node:assert');
 const { describe, it, beforeEach, after } = require('node:test');
 
-const cfg = require('./config');
+const cfg = require('./config.ts');
 
 describe('SearXNG endpoints selection (JS)', () => {
   const OLD = process.env;
@@ -37,5 +37,4 @@ describe('SearXNG endpoints selection (JS)', () => {
     assert.deepEqual(all, []);
   });
 });
-
 
