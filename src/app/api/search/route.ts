@@ -73,8 +73,8 @@ export const POST = async (req: Request) => {
     // Override model based on optimization mode
     if (body.optimizationMode) {
       const optimizationModels: Record<string, { provider: string; model: string }> = {
-        // Use available Chutes model for all modes to avoid unavailable model errors
-        'speed': { provider: 'custom_openai', model: 'deepseek-ai/DeepSeek-V3.1' },
+        // Keep speed on Qwen for faster responses, others stay on DeepSeek
+        'speed': { provider: 'custom_openai', model: 'Qwen/Qwen3-32B' },
         'balanced': { provider: 'custom_openai', model: 'deepseek-ai/DeepSeek-V3.1' },
         'quality': { provider: 'custom_openai', model: 'deepseek-ai/DeepSeek-V3.1' }
       };
