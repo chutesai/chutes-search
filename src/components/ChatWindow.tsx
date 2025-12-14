@@ -6,6 +6,7 @@ import Chat from './Chat';
 import EmptyChat from './EmptyChat';
 import NextError from 'next/error';
 import { useChat } from '@/lib/hooks/useChat';
+import FreeSearchGateDialog from '@/components/auth/FreeSearchGateDialog';
 
 export type Message = {
   messageId: string;
@@ -40,6 +41,7 @@ const ChatWindow = () => {
       <NextError statusCode={404} />
     ) : (
       <div>
+        <FreeSearchGateDialog />
         {messages.length > 0 ? (
           <>
             <Navbar />

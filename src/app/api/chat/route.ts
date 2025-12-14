@@ -271,9 +271,7 @@ export const POST = async (req: Request) => {
     let embedding = embeddingModel.model;
 
     if (body.chatModel?.provider === 'custom_openai') {
-      const scopes = (authSession?.scope || '').split(' ').filter(Boolean);
-      const hasInvoke = scopes.includes('chutes:invoke');
-      const useUserToken = Boolean(authSession?.accessToken && hasInvoke);
+      const useUserToken = Boolean(authSession?.accessToken);
 
       const baseURL = useUserToken
         ? process.env.CHUTES_OAUTH_API_URL || 'https://idp.chutes.ai/v1'

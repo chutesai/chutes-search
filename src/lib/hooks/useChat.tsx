@@ -1,12 +1,17 @@
 'use client';
 
 import { Message } from '@/components/ChatWindow';
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import crypto from 'crypto';
 import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { Document } from '@langchain/core/documents';
 import { getSuggestions } from '../actions';
+import {
+  FREE_SEARCH_LIMIT,
+  incrementFreeSearchState,
+  readFreeSearchState,
+} from '@/lib/freeSearch';
 
 type ChatContext = {
   messages: Message[];
@@ -32,6 +37,14 @@ type ChatContext = {
     rewrite?: boolean,
   ) => Promise<void>;
   rewrite: (messageId: string) => void;
+
+  freeSearchGate: {
+    open: boolean;
+    mode: 'warn' | 'block';
+    count: number;
+    limit: number;
+  };
+  closeFreeSearchGate: () => void;
 };
 
 export interface File {
@@ -49,6 +62,11 @@ interface EmbeddingModelProvider {
   name: string;
   provider: string;
 }
+
+type AuthMe = {
+  user: { id: string; username: string | null } | null;
+  hasInvoke?: boolean;
+};
 
 const checkConfig = async (
   setChatModelProvider: (provider: ChatModelProvider) => void,
@@ -295,6 +313,8 @@ export const chatContext = createContext<ChatContext>({
   setFiles: () => {},
   setFocusMode: () => {},
   setOptimizationMode: () => {},
+  freeSearchGate: { open: false, mode: 'block', count: 0, limit: FREE_SEARCH_LIMIT },
+  closeFreeSearchGate: () => {},
 });
 
 export const ChatProvider = ({
@@ -342,6 +362,37 @@ export const ChatProvider = ({
   const [isConfigReady, setIsConfigReady] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [isReady, setIsReady] = useState(false);
+
+  const [authMe, setAuthMe] = useState<AuthMe>({ user: null });
+  const [isAuthLoaded, setIsAuthLoaded] = useState(false);
+
+  const refreshAuth = useCallback(async (): Promise<AuthMe> => {
+    let data: AuthMe = { user: null };
+    try {
+      const res = await fetch('/api/auth/me', { cache: 'no-store' });
+      data = (await res.json()) as AuthMe;
+    } catch {
+      data = { user: null };
+    }
+    setAuthMe(data);
+    setIsAuthLoaded(true);
+    return data;
+  }, []);
+
+  useEffect(() => {
+    refreshAuth();
+  }, [refreshAuth]);
+
+  const [freeSearchGate, setFreeSearchGate] = useState<ChatContext['freeSearchGate']>({
+    open: false,
+    mode: 'block',
+    count: 0,
+    limit: FREE_SEARCH_LIMIT,
+  });
+
+  const closeFreeSearchGate = useCallback(() => {
+    setFreeSearchGate((prev) => ({ ...prev, open: false }));
+  }, []);
 
   const messagesRef = useRef<Message[]>([]);
 
@@ -427,6 +478,42 @@ export const ChatProvider = ({
     rewrite = false,
   ) => {
     if (loading) return;
+
+    const trimmed = message.trim();
+    if (!trimmed) return;
+
+    if (!rewrite) {
+      const me = isAuthLoaded ? authMe : await refreshAuth();
+      const isSignedIn = Boolean(me.user);
+
+      if (!isSignedIn) {
+        try {
+          const current = readFreeSearchState(localStorage);
+          if (current.count >= FREE_SEARCH_LIMIT) {
+            setFreeSearchGate({
+              open: true,
+              mode: 'block',
+              count: current.count,
+              limit: FREE_SEARCH_LIMIT,
+            });
+            return;
+          }
+
+          const next = incrementFreeSearchState(localStorage);
+          if (next.count === FREE_SEARCH_LIMIT) {
+            setFreeSearchGate({
+              open: true,
+              mode: 'warn',
+              count: next.count,
+              limit: FREE_SEARCH_LIMIT,
+            });
+          }
+        } catch {
+          // If localStorage is unavailable, default to allowing the request.
+        }
+      }
+    }
+
     setLoading(true);
     setMessageAppeared(false);
 
@@ -439,7 +526,7 @@ export const ChatProvider = ({
     setMessages((prevMessages) => [
       ...prevMessages,
       {
-        content: message,
+        content: trimmed,
         messageId: messageId,
         chatId: chatId!,
         role: 'user',
@@ -506,7 +593,7 @@ export const ChatProvider = ({
       if (data.type === 'messageEnd') {
         setChatHistory((prevHistory) => [
           ...prevHistory,
-          ['human', message],
+          ['human', trimmed],
           ['assistant', recievedMessage],
         ]);
 
@@ -556,11 +643,11 @@ export const ChatProvider = ({
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        content: message,
+        content: trimmed,
         message: {
           messageId: messageId,
           chatId: chatId!,
-          content: message,
+          content: trimmed,
         },
         chatId: chatId!,
         files: fileIds,
@@ -630,6 +717,8 @@ export const ChatProvider = ({
         setOptimizationMode,
         rewrite,
         sendMessage,
+        freeSearchGate,
+        closeFreeSearchGate,
       }}
     >
       {children}

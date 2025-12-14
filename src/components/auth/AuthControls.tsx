@@ -60,7 +60,9 @@ export default function AuthControls() {
               {username}
             </p>
             <p className="text-xs text-black/60 dark:text-white/60">
-              {me.hasInvoke ? 'Inference via your Chutes account enabled' : 'Inference via app key'}
+              {me.hasInvoke
+                ? 'Inference runs via your Chutes account'
+                : 'Signed in, but missing chutes:invoke permission'}
             </p>
           </div>
           <Link
