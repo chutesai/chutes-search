@@ -1,11 +1,12 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { BookOpenText, Home, Search, SquarePen, Settings } from 'lucide-react';
+import { BookOpenText, Home, Search, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { useSelectedLayoutSegments } from 'next/navigation';
-import React, { useState, type ReactNode } from 'react';
+import React, { type ReactNode } from 'react';
 import Layout from './Layout';
+import AuthIconButton from '@/components/auth/AuthIconButton';
 
 const VerticalIconContainer = ({ children }: { children: ReactNode }) => {
   return (
@@ -64,9 +65,24 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
             ))}
           </VerticalIconContainer>
 
-          <Link href="/settings">
-            <Settings className="cursor-pointer" />
-          </Link>
+          <div className="flex flex-col items-center gap-y-3 w-full">
+            <AuthIconButton />
+            <Link
+              href="/settings"
+              className={cn(
+                'relative flex flex-row items-center justify-center cursor-pointer hover:bg-black/10 dark:hover:bg-white/10 duration-150 transition w-full py-2 rounded-lg',
+                segments.includes('settings')
+                  ? 'text-black dark:text-white'
+                  : 'text-black/70 dark:text-white/70',
+              )}
+              title="Settings"
+            >
+              <Settings className="cursor-pointer" />
+              {segments.includes('settings') && (
+                <div className="absolute right-0 -mr-2 h-full w-1 rounded-l-lg bg-black dark:bg-white" />
+              )}
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -89,6 +105,22 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
             <p className="text-xs">{link.label}</p>
           </Link>
         ))}
+
+        <Link
+          href="/settings"
+          className={cn(
+            'relative flex flex-col items-center space-y-1 text-center w-full',
+            segments.includes('settings')
+              ? 'text-black dark:text-white'
+              : 'text-black dark:text-white/70',
+          )}
+        >
+          {segments.includes('settings') && (
+            <div className="absolute top-0 -mt-4 h-1 w-full rounded-b-lg bg-black dark:bg-white" />
+          )}
+          <Settings />
+          <p className="text-xs">Settings</p>
+        </Link>
       </div>
 
       <Layout>{children}</Layout>

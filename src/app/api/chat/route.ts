@@ -18,6 +18,11 @@ import {
   getCustomOpenaiModelName,
 } from '@/lib/config';
 import { searchHandlers } from '@/lib/search';
+import {
+  ANON_SESSION_COOKIE_NAME,
+  AUTH_SESSION_COOKIE_NAME,
+} from '@/lib/auth/constants';
+import { refreshAuthSessionIfNeeded } from '@/lib/auth/session';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -130,13 +135,8 @@ const handleHistorySave = async (
   humanMessageId: string,
   focusMode: string,
   files: string[],
+  owner: { sessionId: string; userId: string | null },
 ) => {
-  const cookieStore = await cookies();
-  const sessionId =
-    cookieStore.get('sessionId')?.value || crypto.randomBytes(8).toString('hex');
-  if (!cookieStore.get('sessionId')?.value) {
-    cookieStore.set('sessionId', sessionId, { sameSite: 'lax', httpOnly: false });
-  }
   const chat = await db.query.chats.findFirst({
     where: eq(chats.id, message.chatId),
   });
@@ -149,18 +149,28 @@ const handleHistorySave = async (
       .values({
         id: message.chatId,
         title: message.content,
-        createdAt: new Date().toString(),
+        createdAt: new Date().toISOString(),
         focusMode: focusMode,
-        sessionId: sessionId,
+        sessionId: owner.sessionId,
+        userId: owner.userId,
         files: fileData,
       })
       .execute();
-  } else if (JSON.stringify(chat.files ?? []) != JSON.stringify(fileData)) {
-    db.update(chats)
-      .set({
-        files: files.map(getFileDetails),
-      })
-      .where(eq(chats.id, message.chatId));
+  } else {
+    const needsUserIdBackfill = !chat.userId && owner.userId;
+    const needsFilesUpdate =
+      JSON.stringify(chat.files ?? []) != JSON.stringify(fileData);
+
+    if (needsUserIdBackfill || needsFilesUpdate) {
+      await db
+        .update(chats)
+        .set({
+          ...(needsUserIdBackfill ? { userId: owner.userId } : {}),
+          ...(needsFilesUpdate ? { files: fileData } : {}),
+        })
+        .where(eq(chats.id, message.chatId))
+        .execute();
+    }
   }
 
   const messageExists = await db.query.messages.findFirst({
@@ -195,6 +205,33 @@ const handleHistorySave = async (
 
 export const POST = async (req: Request) => {
   try {
+    const cookieStore = await cookies();
+    let sessionId = cookieStore.get(ANON_SESSION_COOKIE_NAME)?.value;
+    if (!sessionId) {
+      sessionId = crypto.randomBytes(16).toString('hex');
+      cookieStore.set(ANON_SESSION_COOKIE_NAME, sessionId, {
+        path: '/',
+        sameSite: 'lax',
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 30 * 24 * 60 * 60,
+      });
+    }
+
+    const authSessionId = cookieStore.get(AUTH_SESSION_COOKIE_NAME)?.value;
+    const authSession = authSessionId
+      ? await refreshAuthSessionIfNeeded(authSessionId)
+      : null;
+    if (authSessionId && !authSession) {
+      cookieStore.set(AUTH_SESSION_COOKIE_NAME, '', {
+        path: '/',
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 0,
+      });
+    }
+
     const body = (await req.json()) as Body;
     const { message } = body;
 
@@ -234,13 +271,26 @@ export const POST = async (req: Request) => {
     let embedding = embeddingModel.model;
 
     if (body.chatModel?.provider === 'custom_openai') {
+      const scopes = (authSession?.scope || '').split(' ').filter(Boolean);
+      const hasInvoke = scopes.includes('chutes:invoke');
+      const useUserToken = Boolean(authSession?.accessToken && hasInvoke);
+
+      const baseURL = useUserToken
+        ? process.env.CHUTES_OAUTH_API_URL || 'https://idp.chutes.ai/v1'
+        : getCustomOpenaiApiUrl();
+      const apiKey = useUserToken ? authSession!.accessToken : getCustomOpenaiApiKey();
+      const defaultHeaders = useUserToken
+        ? { Host: process.env.CHUTES_OAUTH_HOST || 'llm.chutes.ai' }
+        : undefined;
+
       llm = new ChatOpenAI({
-        apiKey: getCustomOpenaiApiKey(),
+        apiKey,
         modelName: getCustomOpenaiModelName(),
         temperature: 0.7,
         maxRetries: 1,
         configuration: {
-          baseURL: getCustomOpenaiApiUrl(),
+          baseURL,
+          ...(defaultHeaders ? { defaultHeaders } : {}),
         },
       }) as unknown as BaseChatModel;
     } else if (chatModelProvider && chatModel) {
@@ -300,7 +350,10 @@ export const POST = async (req: Request) => {
     const encoder = new TextEncoder();
 
     handleEmitterEvents(stream, writer, encoder, aiMessageId, message.chatId);
-    handleHistorySave(message, humanMessageId, body.focusMode, body.files);
+    handleHistorySave(message, humanMessageId, body.focusMode, body.files, {
+      sessionId,
+      userId: authSession?.user.id ?? null,
+    });
 
     return new Response(responseStream.readable, {
       headers: {

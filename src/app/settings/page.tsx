@@ -8,6 +8,7 @@ import ThemeSwitcher from '@/components/theme/Switcher';
 import { ImagesIcon, VideoIcon } from 'lucide-react';
 import Link from 'next/link';
 import { PROVIDER_METADATA } from '@/lib/providers';
+import AuthControls from '@/components/auth/AuthControls';
 
 interface SettingsType {
   chatModelProviders: {
@@ -426,6 +427,10 @@ const Page = () => {
       ) : (
         config && (
           <div className="flex flex-col space-y-6 pb-28 lg:pb-8">
+            <SettingsSection title="Account">
+              <AuthControls />
+            </SettingsSection>
+
             <SettingsSection title="Preferences">
               <div className="flex flex-col space-y-1">
                 <p className="text-black/70 dark:text-white/70 text-sm">

@@ -1,6 +1,25 @@
 import { sql } from 'drizzle-orm';
 import { text, integer, sqliteTable } from 'drizzle-orm/sqlite-core';
 
+export const users = sqliteTable('users', {
+  id: text('id').primaryKey(), // OIDC "sub"
+  username: text('username'),
+  createdAt: text('createdAt'),
+  updatedAt: text('updatedAt'),
+});
+
+export const authSessions = sqliteTable('auth_sessions', {
+  id: text('id').primaryKey(),
+  userId: text('userId').notNull(),
+  createdAt: text('createdAt').notNull(),
+  expiresAt: integer('expiresAt', { mode: 'number' }).notNull(),
+  accessTokenEnc: text('accessTokenEnc').notNull(),
+  refreshTokenEnc: text('refreshTokenEnc'),
+  accessTokenExpiresAt: integer('accessTokenExpiresAt', { mode: 'number' }),
+  scope: text('scope'),
+  tokenType: text('tokenType'),
+});
+
 export const messages = sqliteTable('messages', {
   id: integer('id').primaryKey(),
   content: text('content').notNull(),
@@ -23,6 +42,7 @@ export const chats = sqliteTable('chats', {
   createdAt: text('createdAt').notNull(),
   focusMode: text('focusMode').notNull(),
   sessionId: text('sessionId'),
+  userId: text('userId'),
   files: text('files', { mode: 'json' })
     .$type<File[]>()
     .default(sql`'[]'`),

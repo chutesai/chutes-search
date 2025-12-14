@@ -1,6 +1,15 @@
 import db from '@/lib/db';
 import { chats, messages } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
+import { cookies } from 'next/headers';
+import {
+  ANON_SESSION_COOKIE_NAME,
+  AUTH_SESSION_COOKIE_NAME,
+} from '@/lib/auth/constants';
+import { getAuthSessionById } from '@/lib/auth/session';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export const GET = async (
   req: Request,
@@ -9,12 +18,38 @@ export const GET = async (
   try {
     const { id } = await params;
 
+    const cookieStore = await cookies();
+    const sessionId = cookieStore.get(ANON_SESSION_COOKIE_NAME)?.value || null;
+    const authSessionId = cookieStore.get(AUTH_SESSION_COOKIE_NAME)?.value;
+    const authSession = authSessionId
+      ? await getAuthSessionById(authSessionId)
+      : null;
+    if (authSessionId && !authSession) {
+      cookieStore.set(AUTH_SESSION_COOKIE_NAME, '', {
+        path: '/',
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 0,
+      });
+    }
+
     const chatExists = await db.query.chats.findFirst({
       where: eq(chats.id, id),
     });
 
     if (!chatExists) {
       return Response.json({ message: 'Chat not found' }, { status: 404 });
+    }
+
+    if (chatExists.userId) {
+      if (!authSession || chatExists.userId !== authSession.user.id) {
+        return Response.json({ message: 'Chat not found' }, { status: 404 });
+      }
+    } else {
+      if (!sessionId || chatExists.sessionId !== sessionId) {
+        return Response.json({ message: 'Chat not found' }, { status: 404 });
+      }
     }
 
     const chatMessages = await db.query.messages.findMany({
@@ -44,12 +79,38 @@ export const DELETE = async (
   try {
     const { id } = await params;
 
+    const cookieStore = await cookies();
+    const sessionId = cookieStore.get(ANON_SESSION_COOKIE_NAME)?.value || null;
+    const authSessionId = cookieStore.get(AUTH_SESSION_COOKIE_NAME)?.value;
+    const authSession = authSessionId
+      ? await getAuthSessionById(authSessionId)
+      : null;
+    if (authSessionId && !authSession) {
+      cookieStore.set(AUTH_SESSION_COOKIE_NAME, '', {
+        path: '/',
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 0,
+      });
+    }
+
     const chatExists = await db.query.chats.findFirst({
       where: eq(chats.id, id),
     });
 
     if (!chatExists) {
       return Response.json({ message: 'Chat not found' }, { status: 404 });
+    }
+
+    if (chatExists.userId) {
+      if (!authSession || chatExists.userId !== authSession.user.id) {
+        return Response.json({ message: 'Chat not found' }, { status: 404 });
+      }
+    } else {
+      if (!sessionId || chatExists.sessionId !== sessionId) {
+        return Response.json({ message: 'Chat not found' }, { status: 404 });
+      }
     }
 
     await db.delete(chats).where(eq(chats.id, id)).execute();

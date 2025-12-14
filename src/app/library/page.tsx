@@ -2,11 +2,10 @@
 
 import DeleteChat from '@/components/DeleteChat';
 import { cn, formatTimeDifference } from '@/lib/utils';
-import { BookOpenText, ClockIcon, Delete, ScanEye, Trash } from 'lucide-react';
+import { BookOpenText, ClockIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { getLocalChats, deleteLocalChat } from '@/lib/localStorage';
 
 export interface Chat {
   id: string;
@@ -24,11 +23,12 @@ const Page = () => {
       setLoading(true);
       
       try {
-        // Use local storage instead of API
-        const localChats = getLocalChats();
-        setChats(localChats);
+        const res = await fetch('/api/chats', { cache: 'no-store' });
+        if (!res.ok) throw new Error('Failed to load chats');
+        const data = await res.json();
+        setChats(data.chats || []);
       } catch (error) {
-        console.error('Error loading chats from local storage:', error);
+        console.error('Error loading chats:', error);
         setChats([]);
         // Show user-friendly error message
         toast.error('Failed to load chat history. Please refresh the page.');
@@ -44,17 +44,6 @@ const Page = () => {
 
     return () => clearTimeout(timer);
   }, []);
-
-  const handleDeleteChat = (chatId: string) => {
-    try {
-      deleteLocalChat(chatId);
-      setChats(prevChats => prevChats.filter(chat => chat.id !== chatId));
-      toast.success('Chat deleted successfully');
-    } catch (error) {
-      console.error('Error deleting chat:', error);
-      toast.error('Failed to delete chat. Please try again.');
-    }
-  };
 
   return loading ? (
     <div className="flex flex-row items-center justify-center min-h-screen">
@@ -116,13 +105,7 @@ const Page = () => {
                     {formatTimeDifference(new Date(), chat.createdAt)} Ago
                   </p>
                 </div>
-                <button
-                  onClick={() => handleDeleteChat(chat.id)}
-                  className="bg-transparent text-red-400 hover:scale-105 transition duration-200"
-                  title="Delete chat"
-                >
-                  <Trash size={17} />
-                </button>
+                <DeleteChat chatId={chat.id} chats={chats} setChats={setChats} />
               </div>
             </div>
           ))}

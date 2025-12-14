@@ -1,37 +1,33 @@
 #!/usr/bin/env python3
 """
-Send notifications about Chutes Search deployment completion
+Send notifications about Chutes Search status updates.
+
+Credentials MUST be provided via environment variables (never commit tokens):
+- TG_BOT_TOKEN
+- TG_CHAT_ID
+- PUSHBULLET_API_KEY (optional)
 """
 
-import sys
 import os
+import sys
+from typing import Optional
+
 import requests
 
-# Add path for notifications module
-sys.path.append('/home/flori/Dev/chutes/algotrading/backend/app')
+def _get_env(name: str) -> Optional[str]:
+    value = os.environ.get(name)
+    return value.strip() if value and value.strip() else None
 
-def send_telegram_notification():
-    """Send Telegram notification about deployment completion"""
+
+def send_telegram_notification(message: str) -> bool:
+    """Send Telegram notification."""
     try:
-        bot_token = "8264160091:AAHJVlv2MYbaU4plbpmBLnKn6Wi-vG52nGM"
-        chat_id = "7367548582"
-        
-        message = """🚀 Chutes Search Deployment Complete!
+        bot_token = _get_env("TG_BOT_TOKEN")
+        chat_id = _get_env("TG_CHAT_ID")
 
-✅ All requested improvements implemented:
-• Speed model updated to Alibaba-NLP/Tongyi-DeepResearch-30B-A3B
-• Mobile scrollbar fixed in Discover page
-• Article loading reliability improved
-• Broken images now hidden completely (no more ugly icons!)
-• Weather tile clickable for location searches
-• User isolation via local storage (no more shared chats)
-• Focus/Attach icons hidden as requested
-• File attachment hidden in follow-up mode
-
-🌐 Live at: https://chutes-search.onrender.com/
-📋 Changes deployed to chutes-integration branch
-
-All features ready for testing! 🎉"""
+        if not bot_token or not chat_id:
+            print("⚠️ Telegram env not set (TG_BOT_TOKEN/TG_CHAT_ID); skipping.")
+            return False
         
         response = requests.post(
             f"https://api.telegram.org/bot{bot_token}/sendMessage",
@@ -50,70 +46,41 @@ All features ready for testing! 🎉"""
         print(f"❌ Telegram notification error: {e}")
         return False
 
-def send_pushbullet_notification():
-    """Send Pushbullet notification about deployment completion"""
+def send_pushbullet_notification(message: str) -> bool:
+    """Send Pushbullet notification (optional)."""
     try:
-        # Import the existing pushbullet module
-        from notifications import pushbullet
-        
-        message = """🚀 Chutes Search Deployment Complete!
+        api_key = _get_env("PUSHBULLET_API_KEY")
+        if not api_key:
+            print("ℹ️ PUSHBULLET_API_KEY not set; skipping Pushbullet.")
+            return False
 
-All requested improvements have been successfully implemented and deployed:
-
-✅ Speed model updated to Alibaba-NLP/Tongyi-DeepResearch-30B-A3B
-✅ Mobile scrollbar fixed in Discover page headers
-✅ Article loading reliability improved with better error handling
-✅ Broken images now completely hidden (no more ugly broken icons!)
-✅ Weather tile made clickable for location-based searches
-✅ User isolation implemented via browser local storage
-✅ Focus and Attach icons hidden from main interface
-✅ File attachment symbol hidden in follow-up mode
-
-The deployment is live at https://chutes-search.onrender.com/
-Changes are in the chutes-integration branch and should be visible within 2-5 minutes.
-
-Ready for testing! 🎉"""
-        
-        pushbullet.send_notification(
-            title="Chutes Search Deployment Complete",
-            body=message
+        response = requests.post(
+            "https://api.pushbullet.com/v2/pushes",
+            headers={"Access-Token": api_key, "Content-Type": "application/json"},
+            json={"type": "note", "title": "Chutes Search Update", "body": message},
+            timeout=20,
         )
-        
-        print("✅ Pushbullet notification sent successfully!")
-        return True
-        
+
+        if response.status_code == 200:
+            print("✅ Pushbullet notification sent successfully!")
+            return True
+
+        print(f"❌ Pushbullet notification failed: {response.status_code} - {response.text}")
+        return False
     except Exception as e:
         print(f"❌ Pushbullet notification error: {e}")
-        # Fallback to direct API call
-        try:
-            api_key = "o.VUVCoj5JJDZq9IeiOxiNrLnbSrGi0xud"
-            response = requests.post(
-                "https://api.pushbullet.com/v2/pushes",
-                headers={"Access-Token": api_key, "Content-Type": "application/json"},
-                json={"type": "note", "title": "Chutes Search Deployment Complete", "body": message},
-                timeout=20
-            )
-            
-            if response.status_code == 200:
-                print("✅ Pushbullet notification sent via fallback!")
-                return True
-            else:
-                print(f"❌ Pushbullet fallback failed: {response.status_code}")
-                return False
-                
-        except Exception as fallback_error:
-            print(f"❌ Pushbullet fallback also failed: {fallback_error}")
-            return False
+        return False
 
 def main():
     """Main function to send all notifications"""
-    print("📤 Sending deployment notifications...")
+    message = sys.argv[1] if len(sys.argv) > 1 else "Chutes Search update"
+    print("📤 Sending notifications...")
     
     # Send Telegram notification
-    telegram_success = send_telegram_notification()
+    telegram_success = send_telegram_notification(message)
     
     # Send Pushbullet notification
-    pushbullet_success = send_pushbullet_notification()
+    pushbullet_success = send_pushbullet_notification(message)
     
     if telegram_success and pushbullet_success:
         print("\n🎉 All notifications sent successfully!")
