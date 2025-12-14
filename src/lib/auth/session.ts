@@ -143,7 +143,7 @@ export async function refreshAuthSessionIfNeeded(
   if (!session.refreshToken) return session;
 
   try {
-    const { clientId, clientSecret } = getChutesIdpClientCredentials();
+    const { clientId, clientSecret } = await getChutesIdpClientCredentials();
     const refreshed = await refreshChutesAccessToken({
       refreshToken: session.refreshToken,
       clientId,

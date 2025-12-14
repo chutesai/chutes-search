@@ -65,7 +65,9 @@ export const GET = async (req: Request) => {
   try {
     const redirectUri =
       process.env.CHUTES_IDP_REDIRECT_URI || `${origin}/api/auth/callback`;
-    const { clientId, clientSecret } = getChutesIdpClientCredentials();
+    const { clientId, clientSecret } = await getChutesIdpClientCredentials({
+      redirectUri,
+    });
 
     const token = await exchangeChutesAuthorizationCode({
       code,

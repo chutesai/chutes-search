@@ -16,10 +16,6 @@ export const dynamic = 'force-dynamic';
 
 export const GET = async (req: Request) => {
   try {
-    const { clientId } = getChutesIdpClientCredentials();
-    const { codeVerifier, codeChallenge } = generatePkcePair();
-    const state = generateOAuthState();
-
     const url = new URL(req.url);
     const returnTo = getSafeReturnTo(
       url.searchParams.get('returnTo') || url.searchParams.get('redirect'),
@@ -28,6 +24,10 @@ export const GET = async (req: Request) => {
     const origin = getRequestOrigin(req);
     const redirectUri =
       process.env.CHUTES_IDP_REDIRECT_URI || `${origin}/api/auth/callback`;
+
+    const { clientId } = await getChutesIdpClientCredentials({ redirectUri });
+    const { codeVerifier, codeChallenge } = generatePkcePair();
+    const state = generateOAuthState();
 
     const secret = getChutesAuthSecret();
     const sealed = sealJson(
@@ -78,4 +78,3 @@ export const GET = async (req: Request) => {
     );
   }
 };
-
