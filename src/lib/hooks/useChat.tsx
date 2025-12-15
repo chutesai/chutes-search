@@ -42,6 +42,7 @@ type ChatContext = {
     open: boolean;
     count: number;
     limit: number;
+    pendingQuery?: string;
   };
   closeFreeSearchGate: () => void;
 };
@@ -386,6 +387,7 @@ export const ChatProvider = ({
     open: false,
     count: 0,
     limit: FREE_SEARCH_LIMIT,
+    pendingQuery: undefined,
   });
 
   const closeFreeSearchGate = useCallback(() => {
@@ -492,6 +494,7 @@ export const ChatProvider = ({
               open: true,
               count: current.count,
               limit: FREE_SEARCH_LIMIT,
+              pendingQuery: trimmed,
             });
             return;
           }

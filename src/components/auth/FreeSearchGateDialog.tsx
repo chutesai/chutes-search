@@ -24,12 +24,15 @@ export default function FreeSearchGateDialog() {
   const body = `You’ve used ${count}/${limit} free searches today. Sign in with your Chutes account to continue searching.`;
 
   const onSignIn = useCallback(() => {
-    const returnTo =
-      typeof window !== 'undefined'
-        ? window.location.pathname + window.location.search
-        : '/';
+    if (typeof window === 'undefined') return;
+
+    const url = new URL(window.location.href);
+    if (freeSearchGate?.pendingQuery) {
+      url.searchParams.set('q', freeSearchGate.pendingQuery);
+    }
+    const returnTo = url.pathname + url.search;
     window.location.href = `/api/auth/login?returnTo=${encodeURIComponent(returnTo)}`;
-  }, []);
+  }, [freeSearchGate?.pendingQuery]);
 
   const onClose = useMemo(() => () => {}, []);
 

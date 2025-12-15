@@ -63,45 +63,59 @@ const handleEmitterEvents = async (
 ) => {
   let recievedMessage = '';
   let sources: any[] = [];
+  let closed = false;
+
+  const safeWrite = (payload: unknown) => {
+    if (closed) return;
+    try {
+      void writer.write(encoder.encode(JSON.stringify(payload) + '\n')).catch(() => {
+        closed = true;
+      });
+    } catch {
+      closed = true;
+    }
+  };
+
+  const safeClose = () => {
+    if (closed) return;
+    closed = true;
+    try {
+      void writer.close().catch(() => {});
+    } catch {
+      // ignore
+    }
+    stream.removeAllListeners('data');
+    stream.removeAllListeners('end');
+    stream.removeAllListeners('error');
+  };
 
   stream.on('data', (data) => {
     const parsedData = JSON.parse(data);
     if (parsedData.type === 'response') {
-      writer.write(
-        encoder.encode(
-          JSON.stringify({
-            type: 'message',
-            data: parsedData.data,
-            messageId: aiMessageId,
-          }) + '\n',
-        ),
-      );
+      safeWrite({
+        type: 'message',
+        data: parsedData.data,
+        messageId: aiMessageId,
+      });
 
       recievedMessage += parsedData.data;
     } else if (parsedData.type === 'sources') {
-      writer.write(
-        encoder.encode(
-          JSON.stringify({
-            type: 'sources',
-            data: parsedData.data,
-            messageId: aiMessageId,
-          }) + '\n',
-        ),
-      );
+      safeWrite({
+        type: 'sources',
+        data: parsedData.data,
+        messageId: aiMessageId,
+      });
 
       sources = parsedData.data;
     }
   });
   stream.on('end', () => {
-    writer.write(
-      encoder.encode(
-        JSON.stringify({
-          type: 'messageEnd',
-          messageId: aiMessageId,
-        }) + '\n',
-      ),
-    );
-    writer.close();
+    if (closed) return;
+    safeWrite({
+      type: 'messageEnd',
+      messageId: aiMessageId,
+    });
+    safeClose();
 
     db.insert(messagesSchema)
       .values({
@@ -118,15 +132,9 @@ const handleEmitterEvents = async (
   });
   stream.on('error', (data) => {
     const parsedData = JSON.parse(data);
-    writer.write(
-      encoder.encode(
-        JSON.stringify({
-          type: 'error',
-          data: parsedData.data,
-        }),
-      ),
-    );
-    writer.close();
+    if (closed) return;
+    safeWrite({ type: 'error', data: parsedData.data });
+    safeClose();
   });
 };
 
@@ -271,15 +279,13 @@ export const POST = async (req: Request) => {
     let embedding = embeddingModel.model;
 
     if (body.chatModel?.provider === 'custom_openai') {
-      const useUserToken = Boolean(authSession?.accessToken);
+      const hasInvoke = Boolean(
+        authSession?.scope?.split(' ').includes('chutes:invoke'),
+      );
+      const useUserToken = Boolean(authSession?.accessToken && hasInvoke);
 
-      const baseURL = useUserToken
-        ? process.env.CHUTES_OAUTH_API_URL || 'https://idp.chutes.ai/v1'
-        : getCustomOpenaiApiUrl();
+      const baseURL = getCustomOpenaiApiUrl();
       const apiKey = useUserToken ? authSession!.accessToken : getCustomOpenaiApiKey();
-      const defaultHeaders = useUserToken
-        ? { Host: process.env.CHUTES_OAUTH_HOST || 'llm.chutes.ai' }
-        : undefined;
 
       llm = new ChatOpenAI({
         apiKey,
@@ -288,7 +294,6 @@ export const POST = async (req: Request) => {
         maxRetries: 1,
         configuration: {
           baseURL,
-          ...(defaultHeaders ? { defaultHeaders } : {}),
         },
       }) as unknown as BaseChatModel;
     } else if (chatModelProvider && chatModel) {
