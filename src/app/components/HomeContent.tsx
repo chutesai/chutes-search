@@ -3,7 +3,6 @@
 import ChatWindow from '@/components/ChatWindow';
 import { ChatProvider } from '@/lib/hooks/useChat';
 import { Suspense } from 'react';
-import Header from './Header';
 
 const HomeContent = () => {
   return (
@@ -11,7 +10,6 @@ const HomeContent = () => {
       <Suspense>
         <ChatProvider>
           <div>
-            <Header />
             <ChatWindow />
           </div>
         </ChatProvider>
@@ -21,6 +19,5 @@ const HomeContent = () => {
 };
 
 export default HomeContent;
-
 
 

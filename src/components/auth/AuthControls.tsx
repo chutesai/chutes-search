@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { LogIn, LogOut } from 'lucide-react';
 
@@ -65,22 +64,22 @@ export default function AuthControls() {
                 : 'Signed in, but missing chutes:invoke permission'}
             </p>
           </div>
-          <Link
+          <a
             href={logoutHref}
             className="inline-flex items-center gap-2 rounded-lg border border-light-200 dark:border-dark-200 px-3 py-2 text-sm hover:bg-light-200 dark:hover:bg-dark-200 transition-colors"
           >
             <LogOut size={16} />
             Sign out
-          </Link>
+          </a>
         </div>
       ) : (
-        <Link
+        <a
           href={loginHref}
           className="inline-flex items-center gap-2 rounded-lg bg-[#24A0ED] px-3 py-2 text-sm text-white hover:opacity-90 transition-opacity w-fit"
         >
           <LogIn size={16} />
           Sign in with Chutes
-        </Link>
+        </a>
       )}
     </div>
   );

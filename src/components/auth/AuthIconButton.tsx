@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { LogIn, LogOut } from 'lucide-react';
 
@@ -41,12 +40,12 @@ export default function AuthIconButton() {
   const Icon = me?.user ? LogOut : LogIn;
 
   return (
-    <Link
+    <a
       href={href}
       title={title}
       className="relative flex flex-row items-center justify-center cursor-pointer hover:bg-black/10 dark:hover:bg-white/10 duration-150 transition w-full py-2 rounded-lg text-black/70 dark:text-white/70"
     >
       <Icon />
-    </Link>
+    </a>
   );
 }

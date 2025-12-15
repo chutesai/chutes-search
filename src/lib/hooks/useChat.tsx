@@ -40,7 +40,6 @@ type ChatContext = {
 
   freeSearchGate: {
     open: boolean;
-    mode: 'warn' | 'block';
     count: number;
     limit: number;
   };
@@ -313,7 +312,7 @@ export const chatContext = createContext<ChatContext>({
   setFiles: () => {},
   setFocusMode: () => {},
   setOptimizationMode: () => {},
-  freeSearchGate: { open: false, mode: 'block', count: 0, limit: FREE_SEARCH_LIMIT },
+  freeSearchGate: { open: false, count: 0, limit: FREE_SEARCH_LIMIT },
   closeFreeSearchGate: () => {},
 });
 
@@ -385,7 +384,6 @@ export const ChatProvider = ({
 
   const [freeSearchGate, setFreeSearchGate] = useState<ChatContext['freeSearchGate']>({
     open: false,
-    mode: 'block',
     count: 0,
     limit: FREE_SEARCH_LIMIT,
   });
@@ -492,22 +490,13 @@ export const ChatProvider = ({
           if (current.count >= FREE_SEARCH_LIMIT) {
             setFreeSearchGate({
               open: true,
-              mode: 'block',
               count: current.count,
               limit: FREE_SEARCH_LIMIT,
             });
             return;
           }
 
-          const next = incrementFreeSearchState(localStorage);
-          if (next.count === FREE_SEARCH_LIMIT) {
-            setFreeSearchGate({
-              open: true,
-              mode: 'warn',
-              count: next.count,
-              limit: FREE_SEARCH_LIMIT,
-            });
-          }
+          incrementFreeSearchState(localStorage);
         } catch {
           // If localStorage is unavailable, default to allowing the request.
         }

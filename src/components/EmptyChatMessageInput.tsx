@@ -6,7 +6,11 @@ import Optimization from './MessageInputActions/Optimization';
 import Attach from './MessageInputActions/Attach';
 import { useChat } from '@/lib/hooks/useChat';
 
-const EmptyChatMessageInput = () => {
+const EmptyChatMessageInput = ({
+  onFocusChange,
+}: {
+  onFocusChange?: (focused: boolean) => void;
+}) => {
   const { sendMessage } = useChat();
 
   /* const [copilotEnabled, setCopilotEnabled] = useState(false); */
@@ -31,12 +35,32 @@ const EmptyChatMessageInput = () => {
 
     document.addEventListener('keydown', handleKeyDown);
 
-    inputRef.current?.focus();
+    const textarea = inputRef.current;
+    const handleFocus = () => {
+      onFocusChange?.(true);
+      setTimeout(() => {
+        textarea?.scrollIntoView({ block: 'center' });
+      }, 50);
+    };
+    const handleBlur = () => onFocusChange?.(false);
+
+    textarea?.addEventListener('focus', handleFocus);
+    textarea?.addEventListener('blur', handleBlur);
+
+    const isCoarsePointer =
+      typeof window !== 'undefined' &&
+      window.matchMedia &&
+      window.matchMedia('(pointer: coarse)').matches;
+    if (!isCoarsePointer) {
+      inputRef.current?.focus();
+    }
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
+      textarea?.removeEventListener('focus', handleFocus);
+      textarea?.removeEventListener('blur', handleBlur);
     };
-  }, []);
+  }, [onFocusChange]);
 
   return (
     <form

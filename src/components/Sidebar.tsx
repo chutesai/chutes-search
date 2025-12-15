@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useSelectedLayoutSegments } from 'next/navigation';
 import React, { type ReactNode } from 'react';
 import Layout from './Layout';
-import AuthIconButton from '@/components/auth/AuthIconButton';
+import UserAvatarMenu from '@/components/auth/UserAvatarMenu';
 
 const VerticalIconContainer = ({ children }: { children: ReactNode }) => {
   return (
@@ -66,7 +66,7 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
           </VerticalIconContainer>
 
           <div className="flex flex-col items-center gap-y-3 w-full">
-            <AuthIconButton />
+            <UserAvatarMenu />
             <Link
               href="/settings"
               className={cn(

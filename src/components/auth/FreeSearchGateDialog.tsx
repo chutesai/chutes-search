@@ -12,25 +12,16 @@ import {
 import { Fragment, useCallback, useMemo } from 'react';
 import { Lock, LogIn } from 'lucide-react';
 import { useChat } from '@/lib/hooks/useChat';
-import { cn } from '@/lib/utils';
 
 export default function FreeSearchGateDialog() {
-  const { freeSearchGate, closeFreeSearchGate } = useChat();
+  const { freeSearchGate } = useChat();
 
   const isOpen = Boolean(freeSearchGate?.open);
-  const mode = freeSearchGate?.mode || 'block';
   const count = freeSearchGate?.count ?? 0;
   const limit = freeSearchGate?.limit ?? 3;
 
-  const title =
-    mode === 'warn'
-      ? 'Last free search today'
-      : 'Sign in to keep searching';
-
-  const body =
-    mode === 'warn'
-      ? `You’ve used ${count}/${limit} free searches today. Sign in with your Chutes account to continue searching without limits.`
-      : `You’ve reached ${limit}/${limit} free searches today. Sign in with your Chutes account to keep searching.`;
+  const title = 'Sign in to keep searching';
+  const body = `You’ve used ${count}/${limit} free searches today. Sign in with your Chutes account to continue searching.`;
 
   const onSignIn = useCallback(() => {
     const returnTo =
@@ -40,12 +31,7 @@ export default function FreeSearchGateDialog() {
     window.location.href = `/api/auth/login?returnTo=${encodeURIComponent(returnTo)}`;
   }, []);
 
-  const closeAllowed = mode !== 'block';
-
-  const onClose = useMemo(
-    () => (closeAllowed ? closeFreeSearchGate : () => {}),
-    [closeAllowed, closeFreeSearchGate],
-  );
+  const onClose = useMemo(() => () => {}, []);
 
   return (
     <Transition appear show={isOpen} as={Fragment}>
@@ -74,26 +60,10 @@ export default function FreeSearchGateDialog() {
                     <Description className="mt-1 text-sm text-black/70 dark:text-white/70">
                       {body}
                     </Description>
-                    <p className="mt-3 text-xs text-black/60 dark:text-white/60">
-                      Signing in also enables “Bring your own chute” — inference runs via your
-                      Chutes account instead of the app’s shared key.
-                    </p>
                   </div>
                 </div>
 
                 <div className="mt-6 flex items-center justify-end gap-3">
-                  {mode === 'warn' && (
-                    <button
-                      onClick={closeFreeSearchGate}
-                      className={cn(
-                        'rounded-lg px-3 py-2 text-sm border transition-colors',
-                        'border-light-200 dark:border-dark-200 text-black/70 dark:text-white/70',
-                        'hover:bg-light-secondary dark:hover:bg-dark-secondary',
-                      )}
-                    >
-                      Not now
-                    </button>
-                  )}
                   <button
                     onClick={onSignIn}
                     className="inline-flex items-center gap-2 rounded-lg bg-[#24A0ED] px-3 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
@@ -110,4 +80,3 @@ export default function FreeSearchGateDialog() {
     </Transition>
   );
 }
-

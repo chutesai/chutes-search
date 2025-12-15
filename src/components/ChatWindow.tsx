@@ -28,7 +28,7 @@ const ChatWindow = () => {
   const { hasError, isReady, notFound, messages } = useChat();
   if (hasError) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen">
+      <div className="flex flex-col items-center justify-center min-h-[100dvh]">
         <p className="dark:text-white/70 text-black/70 text-sm">
           Failed to connect to the server. Please try again later.
         </p>
@@ -53,7 +53,7 @@ const ChatWindow = () => {
       </div>
     )
   ) : (
-    <div className="flex flex-row items-center justify-center min-h-screen">
+    <div className="flex flex-row items-center justify-center min-h-[100dvh]">
       <svg
         aria-hidden="true"
         className="w-8 h-8 text-light-200 fill-light-secondary dark:text-[#202020] animate-spin dark:fill-[#ffffff3b]"

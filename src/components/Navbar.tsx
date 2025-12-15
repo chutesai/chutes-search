@@ -11,6 +11,7 @@ import {
 } from '@headlessui/react';
 import jsPDF from 'jspdf';
 import { useChat } from '@/lib/hooks/useChat';
+import UserAvatarMenu from '@/components/auth/UserAvatarMenu';
 
 const downloadFile = (filename: string, content: string, type: string) => {
   const blob = new Blob([content], { type });
@@ -204,6 +205,7 @@ const Navbar = () => {
           </Transition>
         </Popover>
         <DeleteChat redirect chatId={chatId!} chats={[]} setChats={() => {}} />
+        <UserAvatarMenu />
       </div>
     </div>
   );
