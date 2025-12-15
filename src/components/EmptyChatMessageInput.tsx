@@ -35,22 +35,27 @@ const EmptyChatMessageInput = ({
 
     document.addEventListener('keydown', handleKeyDown);
 
+    const isCoarsePointer =
+      typeof window !== 'undefined' &&
+      window.matchMedia &&
+      window.matchMedia('(pointer: coarse)').matches;
+
     const textarea = inputRef.current;
     const handleFocus = () => {
+      if (!isCoarsePointer) return;
       onFocusChange?.(true);
       setTimeout(() => {
         textarea?.scrollIntoView({ block: 'center' });
       }, 50);
     };
-    const handleBlur = () => onFocusChange?.(false);
+    const handleBlur = () => {
+      if (!isCoarsePointer) return;
+      onFocusChange?.(false);
+    };
 
     textarea?.addEventListener('focus', handleFocus);
     textarea?.addEventListener('blur', handleBlur);
 
-    const isCoarsePointer =
-      typeof window !== 'undefined' &&
-      window.matchMedia &&
-      window.matchMedia('(pointer: coarse)').matches;
     if (!isCoarsePointer) {
       inputRef.current?.focus();
     }
