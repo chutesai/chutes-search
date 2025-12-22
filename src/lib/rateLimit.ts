@@ -117,3 +117,4 @@ export async function getRateLimitInfo(ipAddress: string): Promise<{
     freeSearchesUsed: used,
   };
 }
+

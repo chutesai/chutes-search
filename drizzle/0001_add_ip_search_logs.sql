@@ -7,3 +7,4 @@ CREATE TABLE IF NOT EXISTS `ip_search_logs` (
 );
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS `ip_date_idx` ON `ip_search_logs` (`ip_address`, `search_date`);
+
