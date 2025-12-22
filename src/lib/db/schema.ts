@@ -47,3 +47,11 @@ export const chats = sqliteTable('chats', {
     .$type<File[]>()
     .default(sql`'[]'`),
 });
+
+// IP-based rate limiting for free search queries
+export const ipSearchLogs = sqliteTable('ip_search_logs', {
+  id: integer('id').primaryKey(),
+  ipAddress: text('ip_address').notNull(),
+  searchDate: text('search_date').notNull(), // Format: YYYY-MM-DD
+  searchCount: integer('search_count').notNull().default(0),
+});

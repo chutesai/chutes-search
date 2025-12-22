@@ -15,7 +15,7 @@ const OptimizationModes = [
     title: 'Speed',
     description: 'Prioritize speed and get the quickest possible answer.',
     icon: <Zap size={20} className="text-[#FF9800]" />,
-    model: 'Alibaba-NLP/Tongyi-DeepResearch-30B-A3B',
+    model: 'openai/gpt-oss-20b',
   },
   {
     key: 'balanced', // keep identifier as 'balanced' but label it as Quality
