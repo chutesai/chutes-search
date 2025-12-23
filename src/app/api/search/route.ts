@@ -44,8 +44,15 @@ interface ChatRequestBody {
 }
 
 export const POST = async (req: Request) => {
+  const requestStartTime = Date.now();
+  const logTiming = (step: string) => {
+    console.log(`[search] ${new Date().toISOString()} | +${Date.now() - requestStartTime}ms | ${step}`);
+  };
+  
   try {
+    logTiming('Request received');
     const body: ChatRequestBody = await req.json();
+    logTiming('Body parsed');
 
     if (!body.focusMode || !body.query) {
       return Response.json(
@@ -93,10 +100,12 @@ export const POST = async (req: Request) => {
         : new AIMessage({ content: msg[1] });
     });
 
+    logTiming('Starting to load model providers');
     const [chatModelProviders, embeddingModelProviders] = await Promise.all([
       getAvailableChatModelProviders(),
       getAvailableEmbeddingModelProviders(),
     ]);
+    logTiming('Model providers loaded');
 
     let chatModelProvider =
       body.chatModel?.provider || Object.keys(chatModelProviders)[0];
@@ -181,6 +190,7 @@ export const POST = async (req: Request) => {
       return Response.json({ message: 'Invalid focus mode' }, { status: 400 });
     }
 
+    logTiming(`Starting search with focusMode=${body.focusMode}, optimizationMode=${body.optimizationMode}, query="${body.query.substring(0, 50)}..."`);
     const emitter = await searchHandler.searchAndAnswer(
       body.query,
       history,
@@ -190,6 +200,7 @@ export const POST = async (req: Request) => {
       [],
       body.systemInstructions || '',
     );
+    logTiming('Search handler returned emitter');
 
     if (!body.stream) {
       return new Promise(

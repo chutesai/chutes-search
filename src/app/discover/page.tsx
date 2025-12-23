@@ -1,7 +1,7 @@
 'use client';
 
 import { Search } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -40,15 +40,116 @@ const topics: { key: string; display: string }[] = [
   },
 ];
 
+// Helper to get a safe image URL
+const getSafeImageUrl = (thumbnail: string): string => {
+  try {
+    const url = new URL(thumbnail);
+    return url.origin + url.pathname + (url.searchParams.get('id') ? `?id=${url.searchParams.get('id')}` : '');
+  } catch {
+    return thumbnail;
+  }
+};
+
+// Helper to get favicon URL from article URL
+const getFaviconUrl = (articleUrl: string): string => {
+  try {
+    const url = new URL(articleUrl);
+    return `https://www.google.com/s2/favicons?domain=${url.hostname}&sz=128`;
+  } catch {
+    return '';
+  }
+};
+
+// Image component with fallback chain: thumbnail -> favicon -> placeholder
+const ArticleImage = ({ item }: { item: Discover }) => {
+  const [imgSrc, setImgSrc] = useState<string | null>(item.thumbnail ? getSafeImageUrl(item.thumbnail) : null);
+  const [fallbackAttempted, setFallbackAttempted] = useState(false);
+  const [showPlaceholder, setShowPlaceholder] = useState(!item.thumbnail);
+  const [isSmallIcon, setIsSmallIcon] = useState(false);
+
+  const handleError = useCallback(() => {
+    if (!fallbackAttempted && item.url) {
+      // Try favicon as fallback
+      const faviconUrl = getFaviconUrl(item.url);
+      if (faviconUrl) {
+        setImgSrc(faviconUrl);
+        setFallbackAttempted(true);
+        setIsSmallIcon(true);
+      } else {
+        setShowPlaceholder(true);
+      }
+    } else {
+      setShowPlaceholder(true);
+    }
+  }, [item.url, fallbackAttempted]);
+
+  const handleLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.target as HTMLImageElement;
+    const isSmall = img.naturalWidth < 100 || img.naturalHeight < 100;
+    const isIcon = item.thumbnail?.includes('favicon') || item.thumbnail?.includes('icon') || fallbackAttempted;
+    setIsSmallIcon(isSmall || isIcon);
+  }, [item.thumbnail, fallbackAttempted]);
+
+  if (showPlaceholder) {
+    return (
+      <div className="w-full aspect-video bg-light-tertiary dark:bg-dark-tertiary flex items-center justify-center">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="48"
+          height="48"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="text-black/30 dark:text-white/30"
+        >
+          <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+          <polyline points="14,2 14,8 20,8" />
+          <line x1="16" y1="13" x2="8" y2="13" />
+          <line x1="16" y1="17" x2="8" y2="17" />
+          <line x1="10" y1="9" x2="8" y2="9" />
+        </svg>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full aspect-video bg-light-tertiary dark:bg-dark-tertiary flex items-center justify-center overflow-hidden">
+      <img
+        className={isSmallIcon ? 'w-12 h-12 object-contain' : 'w-full h-full object-cover'}
+        src={imgSrc || ''}
+        alt={item.title}
+        onLoad={handleLoad}
+        onError={handleError}
+      />
+    </div>
+  );
+};
+
 const Page = () => {
   const [discover, setDiscover] = useState<Discover[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTopic, setActiveTopic] = useState<string>(topics[0].key);
   const latestFetchId = useRef(0);
+  const cacheRef = useRef<Record<string, Discover[]>>({});
+  const prefetchedRef = useRef<Set<string>>(new Set());
 
-  const fetchArticles = async (topic: string) => {
-    const requestId = ++latestFetchId.current;
-    setLoading(true);
+  const fetchArticles = useCallback(async (topic: string, isPrefetch = false) => {
+    // Check cache first
+    if (cacheRef.current[topic]) {
+      if (!isPrefetch) {
+        setDiscover(cacheRef.current[topic]);
+        setLoading(false);
+      }
+      return;
+    }
+
+    const requestId = isPrefetch ? 0 : ++latestFetchId.current;
+    if (!isPrefetch) {
+      setLoading(true);
+    }
 
     let blogs: Discover[] = [];
     let success = false;
@@ -109,7 +210,12 @@ const Page = () => {
       }
     }
 
-    if (latestFetchId.current === requestId) {
+    // Cache the results
+    if (success && blogs.length > 0) {
+      cacheRef.current[topic] = blogs;
+    }
+
+    if (!isPrefetch && latestFetchId.current === requestId) {
       if (success) {
         setDiscover(blogs);
       } else {
@@ -118,11 +224,35 @@ const Page = () => {
       }
       setLoading(false);
     }
-  };
+  }, []);
 
+  // Pre-fetch all categories on mount
+  useEffect(() => {
+    // Fetch active topic first
+    fetchArticles(activeTopic);
+    
+    // Then prefetch other topics in background with delays to avoid rate limiting
+    const prefetchOthers = async () => {
+      for (const topic of topics) {
+        if (topic.key !== activeTopic && !prefetchedRef.current.has(topic.key)) {
+          prefetchedRef.current.add(topic.key);
+          // Add small delay between prefetch requests to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 500));
+          fetchArticles(topic.key, true);
+        }
+      }
+    };
+    
+    // Start prefetching after a short delay to prioritize main content
+    const timer = setTimeout(prefetchOthers, 1000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount - intentionally empty deps
+
+  // Handle topic change
   useEffect(() => {
     fetchArticles(activeTopic);
-  }, [activeTopic]);
+  }, [activeTopic, fetchArticles]);
 
   return (
     <>
@@ -181,61 +311,7 @@ const Page = () => {
                   className="max-w-sm rounded-lg overflow-hidden bg-light-secondary dark:bg-dark-secondary hover:-translate-y-[1px] transition duration-200"
                   target="_blank"
                 >
-                  {item.thumbnail ? (
-                    <div className="w-full aspect-video bg-light-tertiary dark:bg-dark-tertiary flex items-center justify-center overflow-hidden">
-                      <img
-                        className="max-w-full max-h-full object-contain"
-                        src={
-                          new URL(item.thumbnail).origin +
-                          new URL(item.thumbnail).pathname +
-                          `?id=${new URL(item.thumbnail).searchParams.get('id')}`
-                        }
-                        alt={item.title}
-                        onLoad={(e) => {
-                          const img = e.target as HTMLImageElement;
-                          const isSmall = img.naturalWidth < 100 || img.naturalHeight < 100;
-                          const isIcon = item.thumbnail?.includes('favicon') || item.thumbnail?.includes('icon');
-
-                          if (isSmall || isIcon) {
-                            // Small images or icons: center them without stretching
-                            img.className = 'w-12 h-12 object-contain';
-                          } else {
-                            // Large images: cover the full area
-                            img.className = 'w-full h-full object-cover';
-                          }
-                        }}
-                        onError={(e) => {
-                          // Hide the entire image container when image fails to load
-                          const img = e.target as HTMLImageElement;
-                          const container = img.closest('.aspect-video') as HTMLElement;
-                          if (container) {
-                            container.style.display = 'none';
-                          }
-                        }}
-                      />
-                    </div>
-                  ) : (
-                    <div className="w-full aspect-video bg-light-tertiary dark:bg-dark-tertiary flex items-center justify-center">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="48"
-                        height="48"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="text-black/30 dark:text-white/30"
-                      >
-                        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-                        <polyline points="14,2 14,8 20,8" />
-                        <line x1="16" y1="13" x2="8" y2="13" />
-                        <line x1="16" y1="17" x2="8" y2="17" />
-                        <line x1="10" y1="9" x2="8" y2="9" />
-                      </svg>
-                    </div>
-                  )}
+                  <ArticleImage item={item} />
                   <div className="px-6 py-4">
                     <div className="font-bold text-lg mb-2">
                       {item.title.slice(0, 100)}...

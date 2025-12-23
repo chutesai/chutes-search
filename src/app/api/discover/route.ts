@@ -212,74 +212,150 @@ export const GET = async (req: Request) => {
     let data: { title: string; url: string; content?: string; thumbnail?: string }[] = [];
 
     if (mode === 'normal') {
-      const seenUrls = new Set();
-      const allResults = [];
+      const seenUrls = new Set<string>();
+      const siteSpecificResults: any[] = [];
+      const dynamicResults: any[] = [];
 
-      // First, get results from a diverse selection of trusted sites (limit to 8 for performance)
-      const selectedSites = selectedTopic.links.slice(0, 8); // Use first 8 sites for diversity
+      // NEW STRATEGY: 1/3 from specific trusted sites, 2/3 from dynamic Serper news searches
+      const TOTAL_ARTICLES = 15;
+      const SITE_SPECIFIC_COUNT = Math.floor(TOTAL_ARTICLES / 3); // ~5 articles
+      const DYNAMIC_COUNT = TOTAL_ARTICLES - SITE_SPECIFIC_COUNT; // ~10 articles
+
+      console.log(`[discover] Target: ${SITE_SPECIFIC_COUNT} site-specific + ${DYNAMIC_COUNT} dynamic = ${TOTAL_ARTICLES} total`);
+
+      // PART 1: Get articles from 3-4 specific trusted sites (1/3 of total)
+      const selectedSites = selectedTopic.links
+        .sort(() => Math.random() - 0.5) // Randomize which sites we pick
+        .slice(0, 4);
       console.log(`[discover] Fetching from ${selectedSites.length} selected sites: ${selectedSites.join(', ')}`);
 
       for (const link of selectedSites) {
+        if (siteSpecificResults.length >= SITE_SPECIFIC_COUNT * 2) break; // Get extra to allow for filtering
         try {
-          // Use a random query from the topic's query array for variety
           const randomQuery = selectedTopic.query[Math.floor(Math.random() * selectedTopic.query.length)];
           const result = await rateLimitedSearchSerper(`${randomQuery} site:${link}`);
-          allResults.push(...result.results);
-          console.log(`[discover] Got ${result.results.length} results from ${link} using query: "${randomQuery}"`);
+          siteSpecificResults.push(...result.results.slice(0, 3)); // Take up to 3 per site
+          console.log(`[discover] Got ${result.results.length} results from ${link}`);
         } catch (err) {
           console.warn(`[discover] Failed to fetch from ${link}:`, err);
-          // Continue with other requests even if one fails
         }
       }
 
-      // Then, get broader results for more variety (always include some for diversity)
-      if (selectedTopic.broadSearch) {
-        console.log(`[discover] Fetching broader results for topic ${topic} with query: ${selectedTopic.broadSearch}`);
-        try {
-          const broadResult = await rateLimitedSearchSerper(selectedTopic.broadSearch);
-          console.log(`[discover] Broader search returned ${broadResult.results.length} results`);
+      // PART 2: Get dynamic results using diverse news queries (2/3 of total)
+      // Use multiple different search queries to get diverse sources
+      const dynamicQueries = [
+        ...selectedTopic.query.map(q => `${q} news`),
+        `latest ${selectedTopic.query[0]}`,
+        `${selectedTopic.query[0]} today`,
+        `breaking ${selectedTopic.query[0]}`,
+      ];
 
-          // Take broad results to ensure variety, but prioritize quality
-          const broadResults = broadResult.results.slice(0, 15);
-          console.log(`[discover] Broader result domains:`, broadResults.map(r => {
+      // Shuffle and pick a few queries
+      const selectedQueries = dynamicQueries
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 3);
+
+      console.log(`[discover] Fetching dynamic results with queries: ${selectedQueries.join(', ')}`);
+
+      for (const query of selectedQueries) {
+        if (dynamicResults.length >= DYNAMIC_COUNT * 2) break; // Get extra to allow for filtering
+        try {
+          const result = await rateLimitedSearchSerper(query);
+          dynamicResults.push(...result.results);
+          console.log(`[discover] Dynamic search "${query}" returned ${result.results.length} results`);
+          
+          // Log the domains we're getting for transparency
+          const domains = result.results.slice(0, 5).map((r: any) => {
             try {
               return new URL(r.url).hostname.replace('www.', '');
             } catch {
               return 'invalid-url';
             }
-          }));
-
-          allResults.push(...broadResults);
-          console.log(`[discover] Added ${broadResults.length} broader results for ${topic}`);
+          });
+          console.log(`[discover] Dynamic domains sample: ${domains.join(', ')}`);
         } catch (err) {
-          console.warn(`[discover] Failed to fetch broad search for ${topic}:`, err);
+          console.warn(`[discover] Failed dynamic search for "${query}":`, err);
         }
       }
 
-      // Separate site-specific and broader results for better variety
-      const siteSpecificResults = allResults.slice(0, allResults.length - 15); // First N results are from specific sites
-      const broaderResults = allResults.slice(-15); // Last 15 results are from broader search
+      // Also do the broad search for additional variety
+      if (selectedTopic.broadSearch && dynamicResults.length < DYNAMIC_COUNT) {
+        console.log(`[discover] Fetching broader results for topic ${topic}`);
+        try {
+          const broadResult = await rateLimitedSearchSerper(selectedTopic.broadSearch);
+          dynamicResults.push(...broadResult.results);
+          console.log(`[discover] Broad search returned ${broadResult.results.length} results`);
+        } catch (err) {
+          console.warn(`[discover] Failed broad search for ${topic}:`, err);
+        }
+      }
 
-      // Filter duplicates but be more lenient with broader results to ensure variety
+      // Filter duplicates from site-specific results
       const filteredSiteResults = siteSpecificResults.filter((item) => {
         const url = item.url?.toLowerCase().trim();
-        if (seenUrls.has(url)) return false;
+        if (!url || seenUrls.has(url)) return false;
         seenUrls.add(url);
         return true;
+      }).slice(0, SITE_SPECIFIC_COUNT);
+
+      // Filter duplicates from dynamic results, also exclude sites we already got from site-specific
+      const siteSpecificDomains = new Set(
+        filteredSiteResults.map((item) => {
+          try {
+            return new URL(item.url).hostname.replace('www.', '');
+          } catch {
+            return '';
+          }
+        })
+      );
+
+      const filteredDynamicResults = dynamicResults.filter((item) => {
+        const url = item.url?.toLowerCase().trim();
+        if (!url || seenUrls.has(url)) return false;
+        
+        // Encourage diversity by not taking too many from same domain
+        try {
+          const domain = new URL(url).hostname.replace('www.', '');
+          // Allow max 2 articles from same domain in dynamic results
+          const sameDomainCount = [...seenUrls].filter(u => {
+            try {
+              return new URL(u).hostname.replace('www.', '') === domain;
+            } catch {
+              return false;
+            }
+          }).length;
+          if (sameDomainCount >= 2) return false;
+        } catch {
+          // If URL parsing fails, skip it
+          return false;
+        }
+        
+        seenUrls.add(url);
+        return true;
+      }).slice(0, DYNAMIC_COUNT);
+
+      // Combine results: interleave site-specific and dynamic for variety
+      data = [];
+      const maxLen = Math.max(filteredSiteResults.length, filteredDynamicResults.length);
+      for (let i = 0; i < maxLen; i++) {
+        if (i < filteredDynamicResults.length) data.push(filteredDynamicResults[i]);
+        if (i < filteredDynamicResults.length && i + 1 < filteredDynamicResults.length) {
+          data.push(filteredDynamicResults[++i]); // Add 2 dynamic for every 1 site-specific
+        }
+        if (i < filteredSiteResults.length) data.push(filteredSiteResults[i]);
+      }
+
+      console.log(`[discover] Final mix: ${filteredSiteResults.length} site-specific + ${filteredDynamicResults.length} dynamic = ${data.length} total`);
+      
+      // Log domain distribution for transparency
+      const domainCounts: Record<string, number> = {};
+      data.forEach(item => {
+        try {
+          const domain = new URL(item.url).hostname.replace('www.', '');
+          domainCounts[domain] = (domainCounts[domain] || 0) + 1;
+        } catch {}
       });
-
-      const filteredBroaderResults = broaderResults.filter((item) => {
-          const url = item.url?.toLowerCase().trim();
-          if (seenUrls.has(url)) return false;
-          seenUrls.add(url);
-          return true;
-      });
-
-      // Combine results with preference for variety: take site results + broader results
-      data = [...filteredSiteResults, ...filteredBroaderResults]
-        .sort(() => Math.random() - 0.5);
-
-      console.log(`[discover] Final variety: ${filteredSiteResults.length} site-specific + ${filteredBroaderResults.length} broader results = ${data.length} total`);
+      console.log(`[discover] Domain distribution:`, domainCounts);
 
       // If no results from Serper, add mock data for testing
       if (data.length === 0) {

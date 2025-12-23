@@ -35,6 +35,11 @@ export const runWebSearch = async (
   activeEngines: string[] = [],
   overrides?: SearchOverrides,
 ): Promise<SearchRunResult> => {
+  const startTime = Date.now();
+  const log = (msg: string) => console.log(`[webSearch] ${new Date().toISOString()} | +${Date.now() - startTime}ms | ${msg}`);
+  
+  log(`Starting web search for: "${query.substring(0, 50)}..."`);
+  
   const searxngSearch = overrides?.searchSearxngFn ?? searchSearxng;
   const serperSearch = overrides?.searchSerperFn ?? searchSerper;
 
@@ -42,13 +47,16 @@ export const runWebSearch = async (
   let searxError: string | undefined;
 
   try {
+    log('Trying SearxNG...');
     const searxngRes = await searxngSearch(query, {
       engines: activeEngines.length > 0 ? activeEngines : undefined,
     });
+    log(`SearxNG returned ${searxngRes?.results?.length || 0} results`);
 
     searxSuggestions = searxngRes?.suggestions ?? [];
 
     if (Array.isArray(searxngRes?.results) && searxngRes.results.length > 0) {
+      log('Using SearxNG results');
       return {
         engine: 'searxng',
         results: normalizeSearxngResults(searxngRes.results),
@@ -56,6 +64,7 @@ export const runWebSearch = async (
       };
     }
   } catch (err: any) {
+    log(`SearxNG failed: ${err?.message ?? 'unknown error'}`);
     if (!overrides?.searchSearxngFn) {
       console.warn(
         '[search] searxng lookup failed, falling back to serper',
@@ -69,7 +78,10 @@ export const runWebSearch = async (
         : err?.message ?? 'SearxNG search failed.';
   }
 
+  log('Falling back to Serper...');
   const serperRes = await serperSearch(query);
+  log(`Serper returned ${serperRes?.results?.length || 0} results`);
+  
   const serperSuggestions = serperRes?.suggestions ?? [];
   const serperResults = Array.isArray(serperRes?.results)
     ? serperRes.results
@@ -77,6 +89,7 @@ export const runWebSearch = async (
 
   const error = serperRes?.error || searxError;
 
+  log(`Web search complete, returning ${serperResults.length} results`);
   return {
     engine: 'serper',
     results: serperResults,

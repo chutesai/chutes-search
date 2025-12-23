@@ -25,6 +25,14 @@ import eventEmitter from 'events';
 import { StreamEvent } from '@langchain/core/tracers/log_stream';
 import { runWebSearch } from './runWebSearch';
 
+// Timing utility for performance debugging
+const createTimer = (prefix: string) => {
+  const start = Date.now();
+  return (step: string) => {
+    console.log(`[${prefix}] ${new Date().toISOString()} | +${Date.now() - start}ms | ${step}`);
+  };
+};
+
 export interface MetaSearchAgentType {
   searchAndAnswer: (
     message: string,
@@ -68,6 +76,9 @@ class MetaSearchAgent implements MetaSearchAgentType {
       llm,
       this.strParser,
       RunnableLambda.from(async (input: string) => {
+        const timer = createTimer('retriever');
+        timer('Starting query analysis');
+        
         const linksOutputParser = new LineListOutputParser({
           key: 'links',
         });
@@ -81,18 +92,24 @@ class MetaSearchAgent implements MetaSearchAgentType {
           ? await questionOutputParser.parse(input)
           : input;
 
+        timer(`Parsed query: "${question.substring(0, 50)}...", links: ${links.length}`);
+
         if (question === 'not_needed') {
+          timer('Query not needed, returning empty');
           return { query: '', docs: [] };
         }
 
         if (links.length > 0) {
+          timer(`Processing ${links.length} links`);
           if (question.length === 0) {
             question = 'summarize';
           }
 
           let docs: Document[] = [];
 
+          timer('Fetching documents from links');
           const linkDocs = await getDocumentsFromLinks({ links });
+          timer(`Got ${linkDocs.length} documents from links`);
 
           const docGroups: Document[] = [];
 
@@ -126,6 +143,7 @@ class MetaSearchAgent implements MetaSearchAgentType {
             }
           });
 
+          timer(`Summarizing ${docGroups.length} document groups`);
           await Promise.all(
             docGroups.map(async (doc) => {
               const res = await llm.invoke(`
@@ -201,11 +219,14 @@ class MetaSearchAgent implements MetaSearchAgentType {
             }),
           );
 
+          timer('Document summarization complete');
           return { query: question, docs: docs };
         } else {
           question = question.replace(/<think>.*?<\/think>/g, '');
 
+          timer(`Starting web search for: "${question.substring(0, 50)}..."`);
           const res = await runWebSearch(question, this.config.activeEngines);
+          timer(`Web search complete: ${res.results?.length || 0} results, engine: ${res.engine}`);
 
           if (res.error && (res.results?.length ?? 0) === 0) {
             throw new Error(res.error);
@@ -237,6 +258,7 @@ class MetaSearchAgent implements MetaSearchAgentType {
                     }),
                 );
 
+          timer(`Created ${documents.length} document objects`);
           return { query: question, docs: documents };
         }
       }),
@@ -257,6 +279,9 @@ class MetaSearchAgent implements MetaSearchAgentType {
         chat_history: (input: BasicChainInput) => input.chat_history,
         date: () => new Date().toISOString(),
         context: RunnableLambda.from(async (input: BasicChainInput) => {
+          const timer = createTimer('answering');
+          timer('Starting context retrieval');
+          
           const processedHistory = formatChatHistoryAsString(
             input.chat_history,
           );
@@ -265,18 +290,22 @@ class MetaSearchAgent implements MetaSearchAgentType {
           let query = input.query;
 
           if (this.config.searchWeb) {
+            timer('Creating search retriever chain');
             const searchRetrieverChain =
               await this.createSearchRetrieverChain(llm);
 
+            timer('Invoking search retriever chain (includes LLM query analysis + web search)');
             const searchRetrieverResult = await searchRetrieverChain.invoke({
               chat_history: processedHistory,
               query,
             });
+            timer(`Search retriever complete: ${searchRetrieverResult.docs?.length || 0} docs`);
 
             query = searchRetrieverResult.query;
             docs = searchRetrieverResult.docs;
           }
 
+          timer(`Starting rerank with ${docs?.length || 0} docs, mode: ${optimizationMode}`);
           const sortedDocs = await this.rerankDocs(
             query,
             docs ?? [],
@@ -284,6 +313,7 @@ class MetaSearchAgent implements MetaSearchAgentType {
             embeddings,
             optimizationMode,
           );
+          timer(`Rerank complete: ${sortedDocs.length} docs after filtering`);
 
           return sortedDocs;
         })

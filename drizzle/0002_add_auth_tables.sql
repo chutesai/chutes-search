@@ -27,3 +27,4 @@ CREATE TABLE IF NOT EXISTS `auth_sessions` (
 -- Also add sessionId and userId columns to chats if they don't exist
 -- SQLite doesn't support IF NOT EXISTS for ALTER TABLE, so we use a workaround
 -- These columns may already exist from db:push
+
