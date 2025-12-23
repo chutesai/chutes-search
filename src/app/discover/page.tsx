@@ -40,9 +40,52 @@ const topics: { key: string; display: string }[] = [
   },
 ];
 
-// Helper to get a safe image URL
-const getSafeImageUrl = (thumbnail: string): string => {
+// Helper to get the domain from a URL
+const getDomain = (url: string): string => {
   try {
+    return new URL(url).hostname.replace('www.', '').toLowerCase();
+  } catch {
+    return '';
+  }
+};
+
+// Check if thumbnail URL is from a CDN/proxy that doesn't match the article domain
+const isMismatchedCdnImage = (thumbnailUrl: string, articleUrl: string): boolean => {
+  const thumbDomain = getDomain(thumbnailUrl);
+  const articleDomain = getDomain(articleUrl);
+  
+  if (!thumbDomain || !articleDomain) return false;
+  
+  // List of known CDN/proxy domains that cache images from other sites
+  const cdnProxyDomains = [
+    'yimg.com',        // Yahoo image CDN
+    's.yimg.com',
+    'media.zenfs.com', // Yahoo/Zenfs
+    'bing.com',
+    'googleusercontent.com',
+    'gstatic.com',
+    'cloudfront.net',
+    'akamaihd.net',
+    'imgur.com',
+    'imgix.net',
+  ];
+  
+  // Check if thumbnail is from a CDN that doesn't match the article
+  const isFromCdn = cdnProxyDomains.some(cdn => thumbDomain.includes(cdn));
+  const domainMismatch = !thumbDomain.includes(articleDomain) && !articleDomain.includes(thumbDomain);
+  
+  return isFromCdn && domainMismatch;
+};
+
+// Helper to get a safe image URL, or null if it's a mismatched CDN image
+const getSafeImageUrl = (thumbnail: string, articleUrl: string): string | null => {
+  try {
+    // If thumbnail is from a CDN that doesn't match the article, skip it
+    if (isMismatchedCdnImage(thumbnail, articleUrl)) {
+      console.log(`[ArticleImage] Skipping mismatched CDN image: ${thumbnail} for article: ${articleUrl}`);
+      return null;
+    }
+    
     const url = new URL(thumbnail);
     return url.origin + url.pathname + (url.searchParams.get('id') ? `?id=${url.searchParams.get('id')}` : '');
   } catch {
@@ -60,12 +103,29 @@ const getFaviconUrl = (articleUrl: string): string => {
   }
 };
 
-// Image component with fallback chain: thumbnail -> favicon -> placeholder
+// Image component with fallback chain: thumbnail (if matching domain) -> favicon -> placeholder
 const ArticleImage = ({ item }: { item: Discover }) => {
-  const [imgSrc, setImgSrc] = useState<string | null>(item.thumbnail ? getSafeImageUrl(item.thumbnail) : null);
-  const [fallbackAttempted, setFallbackAttempted] = useState(false);
-  const [showPlaceholder, setShowPlaceholder] = useState(!item.thumbnail);
-  const [isSmallIcon, setIsSmallIcon] = useState(false);
+  // Only use thumbnail if it's not from a mismatched CDN
+  const validThumbnail = item.thumbnail ? getSafeImageUrl(item.thumbnail, item.url) : null;
+  
+  const [imgSrc, setImgSrc] = useState<string | null>(validThumbnail);
+  const [fallbackAttempted, setFallbackAttempted] = useState(!validThumbnail && !!item.thumbnail); // Already tried if thumbnail was rejected
+  const [showPlaceholder, setShowPlaceholder] = useState(false);
+  const [isSmallIcon, setIsSmallIcon] = useState(!validThumbnail); // Start as icon if using favicon
+
+  // If no valid thumbnail, start with favicon
+  useEffect(() => {
+    if (!validThumbnail && item.url) {
+      const faviconUrl = getFaviconUrl(item.url);
+      if (faviconUrl) {
+        setImgSrc(faviconUrl);
+        setFallbackAttempted(true);
+        setIsSmallIcon(true);
+      } else {
+        setShowPlaceholder(true);
+      }
+    }
+  }, [validThumbnail, item.url]);
 
   const handleError = useCallback(() => {
     if (!fallbackAttempted && item.url) {
