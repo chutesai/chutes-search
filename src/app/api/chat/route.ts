@@ -218,7 +218,11 @@ const handleHistorySave = async (
 };
 
 export const POST = async (req: Request) => {
+  const requestStart = Date.now();
+  const log = (step: string) => console.log(`[chat] ${new Date().toISOString()} | +${Date.now() - requestStart}ms | ${step}`);
+  
   try {
+    log('Request received');
     const cookieStore = await cookies();
     let sessionId = cookieStore.get(ANON_SESSION_COOKIE_NAME)?.value;
     if (!sessionId) {
@@ -286,10 +290,12 @@ export const POST = async (req: Request) => {
       await incrementIpSearchCount(clientIp);
     }
 
+    log('Auth check complete, loading model providers');
     const [chatModelProviders, embeddingModelProviders] = await Promise.all([
       getAvailableChatModelProviders(),
       getAvailableEmbeddingModelProviders(),
     ]);
+    log('Model providers loaded');
 
     const chatModelProvider =
       chatModelProviders[
@@ -372,6 +378,7 @@ export const POST = async (req: Request) => {
       );
     }
 
+    log(`Starting searchAndAnswer with focusMode=${body.focusMode}, optimizationMode=${body.optimizationMode}`);
     const stream = await handler.searchAndAnswer(
       message.content,
       history,
@@ -381,6 +388,7 @@ export const POST = async (req: Request) => {
       body.files,
       body.systemInstructions,
     );
+    log('searchAndAnswer returned emitter, starting stream');
 
     const responseStream = new TransformStream();
     const writer = responseStream.writable.getWriter();

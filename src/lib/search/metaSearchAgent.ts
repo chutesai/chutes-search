@@ -70,14 +70,28 @@ class MetaSearchAgent implements MetaSearchAgentType {
 
   private async createSearchRetrieverChain(llm: BaseChatModel) {
     (llm as unknown as ChatOpenAI).temperature = 0;
+    
+    // Add timing wrapper for LLM call
+    const timedLlm = {
+      invoke: async (input: any) => {
+        const llmTimer = createTimer('llm-query-gen');
+        llmTimer('Starting LLM query generation');
+        const result = await (llm as any).invoke(input);
+        llmTimer('LLM query generation complete');
+        return result;
+      },
+      // Forward other methods
+      bind: (llm as any).bind?.bind(llm),
+      pipe: (llm as any).pipe?.bind(llm),
+    };
 
     return RunnableSequence.from([
       PromptTemplate.fromTemplate(this.config.queryGeneratorPrompt),
-      llm,
+      llm, // Note: We can't easily wrap this in a RunnableSequence, but the logs below will show the timing
       this.strParser,
       RunnableLambda.from(async (input: string) => {
         const timer = createTimer('retriever');
-        timer('Starting query analysis');
+        timer('LLM query analysis complete, parsing result');
         
         const linksOutputParser = new LineListOutputParser({
           key: 'links',
@@ -528,8 +542,10 @@ class MetaSearchAgent implements MetaSearchAgentType {
     systemInstructions: string,
   ) {
     const emitter = new eventEmitter();
+    const timer = createTimer('searchAndAnswer');
 
     try {
+      timer('Creating answering chain');
       const answeringChain = await this.createAnsweringChain(
         llm,
         fileIds,
@@ -537,7 +553,9 @@ class MetaSearchAgent implements MetaSearchAgentType {
         optimizationMode,
         systemInstructions,
       );
+      timer('Answering chain created');
 
+      timer('Starting stream events');
       const stream = answeringChain.streamEvents(
         {
           chat_history: history,
@@ -547,9 +565,11 @@ class MetaSearchAgent implements MetaSearchAgentType {
           version: 'v1',
         },
       );
+      timer('Stream events started');
 
       this.handleStream(stream, emitter);
     } catch (err: any) {
+      timer(`Error: ${err?.message}`);
       emitter.emit(
         'error',
         JSON.stringify({

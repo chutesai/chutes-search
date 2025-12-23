@@ -629,6 +629,14 @@ export const ChatProvider = ({
 
     const messageIndex = messages.findIndex((m) => m.messageId === messageId);
 
+    // Client-side timing for debugging
+    const searchStart = Date.now();
+    const logTiming = (step: string) => {
+      console.log(`[search-timing] +${Date.now() - searchStart}ms | ${step}`);
+    };
+    
+    logTiming('Sending request to /api/chat');
+
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: {
@@ -660,16 +668,29 @@ export const ChatProvider = ({
       }),
     });
 
+    logTiming(`Response received: ${res.status} ${res.statusText}`);
+
     if (!res.body) throw new Error('No response body');
 
     const reader = res.body?.getReader();
     const decoder = new TextDecoder('utf-8');
 
     let partialChunk = '';
+    let firstChunkReceived = false;
+    let sourcesReceived = false;
+    let firstMessageReceived = false;
 
     while (true) {
       const { value, done } = await reader.read();
-      if (done) break;
+      if (done) {
+        logTiming('Stream complete');
+        break;
+      }
+
+      if (!firstChunkReceived) {
+        logTiming('First chunk received from stream');
+        firstChunkReceived = true;
+      }
 
       partialChunk += decoder.decode(value, { stream: true });
 
@@ -678,6 +699,17 @@ export const ChatProvider = ({
         for (const msg of messages) {
           if (!msg.trim()) continue;
           const json = JSON.parse(msg);
+          
+          // Log timing for key events
+          if (json.type === 'sources' && !sourcesReceived) {
+            logTiming('Sources received from LLM');
+            sourcesReceived = true;
+          }
+          if (json.type === 'message' && !firstMessageReceived) {
+            logTiming('First response token received');
+            firstMessageReceived = true;
+          }
+          
           messageHandler(json);
         }
         partialChunk = '';
