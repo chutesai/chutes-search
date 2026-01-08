@@ -11,7 +11,7 @@ const EmptyChatMessageInput = ({
 }: {
   onFocusChange?: (focused: boolean) => void;
 }) => {
-  const { sendMessage } = useChat();
+  const { sendMessage, focusMode } = useChat();
 
   /* const [copilotEnabled, setCopilotEnabled] = useState(false); */
   const [message, setMessage] = useState('');
@@ -93,11 +93,10 @@ const EmptyChatMessageInput = ({
           placeholder="Ask anything..."
         />
         <div className="flex flex-row items-center justify-between mt-4">
-          <div className="flex flex-row items-center space-x-2 lg:space-x-4">
-            {/* Focus and Attach icons hidden as requested */}
-            {/* <Focus /> */}
-            {/* <Attach showText /> */}
-            <span className="text-xs text-black/50 dark:text-white/50">
+          <div className="flex flex-row flex-wrap items-center gap-2">
+            <Focus />
+            <Attach showText />
+            <span className="hidden sm:inline text-xs text-black/50 dark:text-white/50">
               Start typing to search
             </span>
           </div>
@@ -111,6 +110,11 @@ const EmptyChatMessageInput = ({
             </button>
           </div>
         </div>
+        {focusMode === 'deepResearch' && (
+          <div className="mt-3 rounded-lg border border-[#24A0ED]/30 bg-[#24A0ED]/10 px-3 py-2 text-xs text-[#0b66a8] dark:text-[#9fd3ff]">
+            Deep research uses a live browser to visit sources. Expect longer runtimes for richer answers.
+          </div>
+        )}
       </div>
     </form>
   );

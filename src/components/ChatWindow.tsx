@@ -16,6 +16,13 @@ export type Message = {
   role: 'user' | 'assistant';
   suggestions?: string[];
   sources?: Document[];
+  progress?: {
+    id: string;
+    label: string;
+    status: 'pending' | 'running' | 'complete' | 'error';
+    detail?: string;
+    percent?: number;
+  }[];
 };
 
 export interface File {

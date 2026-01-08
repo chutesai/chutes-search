@@ -2,13 +2,13 @@ import { cn } from '@/lib/utils';
 import { ArrowUp } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import TextareaAutosize from 'react-textarea-autosize';
-import Attach from './MessageInputActions/Attach';
-import { File } from './ChatWindow';
 import AttachSmall from './MessageInputActions/AttachSmall';
+import Focus from './MessageInputActions/Focus';
+import Optimization from './MessageInputActions/Optimization';
 import { useChat } from '@/lib/hooks/useChat';
 
 const MessageInput = () => {
-  const { loading, sendMessage } = useChat();
+  const { loading, sendMessage, focusMode } = useChat();
 
   const [message, setMessage] = useState('');
   const [textareaRows, setTextareaRows] = useState(1);
@@ -62,12 +62,17 @@ const MessageInput = () => {
         }
       }}
       className={cn(
-        'bg-light-secondary dark:bg-dark-secondary p-4 flex items-center overflow-hidden border border-light-200 dark:border-dark-200',
+        'bg-light-secondary dark:bg-dark-secondary p-4 flex items-center border border-light-200 dark:border-dark-200',
         mode === 'multi' ? 'flex-col rounded-lg' : 'flex-row rounded-full',
       )}
     >
-      {/* AttachSmall hidden as requested for follow-up mode */}
-      {/* {mode === 'single' && <AttachSmall />} */}
+      {mode === 'single' && (
+        <div className="flex flex-row items-center gap-1 pr-1">
+          <Focus compact align="left" />
+          <Optimization compact align="left" />
+          <AttachSmall />
+        </div>
+      )}
       <TextareaAutosize
         ref={inputRef}
         value={message}
@@ -90,8 +95,11 @@ const MessageInput = () => {
       )}
       {mode === 'multi' && (
         <div className="flex flex-row items-center justify-between w-full pt-2">
-          {/* AttachSmall hidden as requested for follow-up mode */}
-          {/* <AttachSmall /> */}
+          <div className="flex flex-row items-center gap-1">
+            <Focus compact align="left" />
+            <Optimization compact align="left" />
+            <AttachSmall />
+          </div>
           <div className="flex flex-row items-center space-x-4">
             <button
               disabled={message.trim().length === 0 || loading}
@@ -100,6 +108,11 @@ const MessageInput = () => {
               <ArrowUp className="bg-background" size={17} />
             </button>
           </div>
+        </div>
+      )}
+      {focusMode === 'deepResearch' && mode === 'multi' && (
+        <div className="mt-2 text-xs text-[#24A0ED]">
+          Deep research can take longer while we browse sources.
         </div>
       )}
     </form>

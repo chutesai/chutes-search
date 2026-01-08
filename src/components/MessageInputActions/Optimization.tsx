@@ -1,4 +1,4 @@
-import { ChevronDown, Sliders, Star, Zap } from 'lucide-react';
+import { ChevronDown, Star, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   Popover,
@@ -31,27 +31,46 @@ const OptimizationModes = [
   },
 ];
 
-const Optimization = () => {
+const Optimization = ({
+  compact = false,
+  align = 'right',
+}: {
+  compact?: boolean;
+  align?: 'left' | 'right';
+}) => {
   const { optimizationMode, setOptimizationMode } = useChat();
 
   return (
-    <Popover className="relative w-full max-w-[15rem] md:max-w-md lg:max-w-lg">
+    <Popover
+      className={cn(
+        'relative',
+        compact ? 'w-auto' : 'w-full max-w-[15rem] md:max-w-md lg:max-w-lg',
+      )}
+    >
       <PopoverButton
         type="button"
-        className="p-2 text-black/50 dark:text-white/50 rounded-xl hover:bg-light-secondary dark:hover:bg-dark-secondary active:scale-95 transition duration-200 hover:text-black dark:hover:text-white"
+        aria-label={`Response mode: ${OptimizationModes.find((mode) => mode.key === optimizationMode)?.title ?? 'Speed'}`}
+        className={cn(
+          'text-black/50 dark:text-white/50 rounded-xl hover:bg-light-secondary dark:hover:bg-dark-secondary active:scale-95 transition duration-200 hover:text-black dark:hover:text-white',
+          compact ? 'p-2' : 'p-2',
+        )}
       >
         <div className="flex flex-row items-center space-x-1">
           {
             OptimizationModes.find((mode) => mode.key === optimizationMode)
               ?.icon
           }
-          <p className="text-xs font-medium">
-            {
-              OptimizationModes.find((mode) => mode.key === optimizationMode)
-                ?.title
-            }
-          </p>
-          <ChevronDown size={20} />
+          {!compact && (
+            <>
+              <p className="text-xs font-medium">
+                {
+                  OptimizationModes.find((mode) => mode.key === optimizationMode)
+                    ?.title
+                }
+              </p>
+              <ChevronDown size={20} />
+            </>
+          )}
         </div>
       </PopoverButton>
       <Transition
@@ -63,7 +82,12 @@ const Optimization = () => {
         leaveFrom="opacity-100 translate-y-0"
         leaveTo="opacity-0 translate-y-1"
       >
-        <PopoverPanel className="absolute z-10 w-64 md:w-[250px] right-0">
+        <PopoverPanel
+          className={cn(
+            'absolute z-10 w-64 md:w-[250px]',
+            align === 'left' ? 'left-0' : 'right-0',
+          )}
+        >
           <div className="flex flex-col gap-2 bg-light-primary dark:bg-dark-primary border rounded-lg border-light-200 dark:border-dark-200 w-full p-4 max-h-[200px] md:max-h-none overflow-y-auto">
             {OptimizationModes.map((mode, i) => (
               <PopoverButton

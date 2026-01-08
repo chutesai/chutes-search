@@ -2,6 +2,7 @@ import {
   BadgePercent,
   ChevronDown,
   Globe,
+  Microscope,
   Pencil,
   ScanEye,
   SwatchBook,
@@ -23,6 +24,12 @@ const focusModes = [
     title: 'All',
     description: 'Searches across all of the internet',
     icon: <Globe size={20} />,
+  },
+  {
+    key: 'deepResearch',
+    title: 'Deep Research',
+    description: 'Playwright-powered, multi-source investigations',
+    icon: <Microscope size={20} />,
   },
   {
     key: 'academicSearch',
@@ -56,27 +63,48 @@ const focusModes = [
   },
 ];
 
-const Focus = () => {
+const Focus = ({
+  compact = false,
+  align = 'left',
+}: {
+  compact?: boolean;
+  align?: 'left' | 'right';
+}) => {
   const { focusMode, setFocusMode } = useChat();
 
   return (
-    <Popover className="relative w-full max-w-[15rem] md:max-w-md lg:max-w-lg mt-[6.5px]">
+    <Popover
+      className={cn(
+        'relative',
+        compact ? 'w-auto' : 'w-full max-w-[15rem] md:max-w-md lg:max-w-lg mt-[6.5px]',
+      )}
+    >
       <PopoverButton
         type="button"
-        className=" text-black/50 dark:text-white/50 rounded-xl hover:bg-light-secondary dark:hover:bg-dark-secondary active:scale-95 transition duration-200 hover:text-black dark:hover:text-white"
+        aria-label={`Focus mode: ${focusModes.find((mode) => mode.key === focusMode)?.title ?? 'All'}`}
+        className={cn(
+          'text-black/50 dark:text-white/50 rounded-xl hover:bg-light-secondary dark:hover:bg-dark-secondary active:scale-95 transition duration-200 hover:text-black dark:hover:text-white',
+          compact ? 'p-2' : '',
+        )}
       >
         {focusMode !== 'webSearch' ? (
           <div className="flex flex-row items-center space-x-1">
             {focusModes.find((mode) => mode.key === focusMode)?.icon}
-            <p className="text-xs font-medium hidden lg:block">
-              {focusModes.find((mode) => mode.key === focusMode)?.title}
-            </p>
-            <ChevronDown size={20} className="-translate-x-1" />
+            {!compact && (
+              <>
+                <p className="text-xs font-medium hidden lg:block">
+                  {focusModes.find((mode) => mode.key === focusMode)?.title}
+                </p>
+                <ChevronDown size={20} className="-translate-x-1" />
+              </>
+            )}
           </div>
         ) : (
           <div className="flex flex-row items-center space-x-1">
             <ScanEye size={20} />
-            <p className="text-xs font-medium hidden lg:block">Focus</p>
+            {!compact && (
+              <p className="text-xs font-medium hidden lg:block">Focus</p>
+            )}
           </div>
         )}
       </PopoverButton>
@@ -89,7 +117,12 @@ const Focus = () => {
         leaveFrom="opacity-100 translate-y-0"
         leaveTo="opacity-0 translate-y-1"
       >
-        <PopoverPanel className="absolute z-10 w-64 md:w-[500px] left-0">
+        <PopoverPanel
+          className={cn(
+            'absolute z-10 w-64 md:w-[500px]',
+            align === 'right' ? 'right-0' : 'left-0',
+          )}
+        >
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 bg-light-primary dark:bg-dark-primary border rounded-lg border-light-200 dark:border-dark-200 w-full p-4 max-h-[200px] md:max-h-none overflow-y-auto">
             {focusModes.map((mode, i) => (
               <PopoverButton

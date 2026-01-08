@@ -16,6 +16,10 @@ import {
   youtubeSearchResponsePrompt,
   youtubeSearchRetrieverPrompt,
 } from './youtubeSearch';
+import {
+  deepResearchResponsePrompt,
+  deepResearchRetrieverPrompt,
+} from './deepResearch';
 
 const prompts = {
   webSearchResponsePrompt,
@@ -29,6 +33,8 @@ const prompts = {
   writingAssistantPrompt,
   youtubeSearchResponsePrompt,
   youtubeSearchRetrieverPrompt,
+  deepResearchResponsePrompt,
+  deepResearchRetrieverPrompt,
 };
 
 export default prompts;

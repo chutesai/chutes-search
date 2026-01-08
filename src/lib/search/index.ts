@@ -1,7 +1,8 @@
-import MetaSearchAgent from '@/lib/search/metaSearchAgent';
+import MetaSearchAgent, { MetaSearchAgentType } from '@/lib/search/metaSearchAgent';
 import prompts from '../prompts';
+import DeepResearchAgent from './deepResearchAgent';
 
-export const searchHandlers: Record<string, MetaSearchAgent> = {
+export const searchHandlers: Record<string, MetaSearchAgentType> = {
   webSearch: new MetaSearchAgent({
     activeEngines: [],
     queryGeneratorPrompt: prompts.webSearchRetrieverPrompt,
@@ -56,4 +57,5 @@ export const searchHandlers: Record<string, MetaSearchAgent> = {
     searchWeb: true,
     summarizer: false,
   }),
+  deepResearch: new DeepResearchAgent(),
 };

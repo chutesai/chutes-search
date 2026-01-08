@@ -113,6 +113,12 @@ const handleEmitterEvents = async (
       });
 
       sources = parsedData.data;
+    } else if (parsedData.type === 'progress') {
+      safeWrite({
+        type: 'progress',
+        data: parsedData.data,
+        messageId: aiMessageId,
+      });
     }
   });
   stream.on('end', () => {

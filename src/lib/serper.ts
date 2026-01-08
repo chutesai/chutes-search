@@ -46,15 +46,12 @@ export const searchSerper = async (query: string): Promise<SerperResponse> => {
       .map((s: any) => s?.query)
       .filter(Boolean);
 
-    let results = organic.map((r: any) => {
-      console.log(`[serper] Full article data:`, JSON.stringify(r, null, 2));
-      return {
-        title: r.title,
-        url: r.link,
-        content: r.snippet,
-        thumbnail: r.imageUrl || r.image || r.thumbnail || r.imageUrl2,
-      };
-    });
+    const results = organic.map((r: any) => ({
+      title: r.title,
+      url: r.link,
+      content: r.snippet,
+      thumbnail: r.imageUrl || r.image || r.thumbnail || r.imageUrl2,
+    }));
 
     if ((!results || results.length === 0) && res.data?.knowledgeGraph) {
       const kg = res.data.knowledgeGraph;

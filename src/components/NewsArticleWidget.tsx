@@ -39,6 +39,11 @@ const NewsArticleWidget = () => {
       .then((res) => res.json())
       .then((data) => {
         const articles = (data.blogs || []).filter((a: Article) => a.title && a.url);
+        if (articles.length === 0) {
+          setError(true);
+          setLoading(false);
+          return;
+        }
         const selected = articles[Math.floor(Math.random() * articles.length)];
         setArticle(selected);
         if (selected?.thumbnail) {

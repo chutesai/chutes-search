@@ -35,34 +35,38 @@ const WeatherWidget = () => {
       }) => void,
     ) => {
       if (navigator.geolocation) {
-        const result = await navigator.permissions.query({
-          name: 'geolocation',
-        });
-
-        if (result.state === 'granted') {
-          navigator.geolocation.getCurrentPosition(async (position) => {
-            const res = await fetch(
-              `https://api-bdc.io/data/reverse-geocode-client?latitude=${position.coords.latitude}&longitude=${position.coords.longitude}&localityLanguage=en`,
-              {
-                method: 'GET',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-              },
-            );
-
-            const data = await res.json();
-
-            callback({
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude,
-              city: data.locality,
-            });
+        try {
+          const result = await navigator.permissions.query({
+            name: 'geolocation',
           });
-        } else if (result.state === 'prompt') {
-          callback(await getApproxLocation());
-          navigator.geolocation.getCurrentPosition((position) => {});
-        } else if (result.state === 'denied') {
+
+          if (result.state === 'granted') {
+            navigator.geolocation.getCurrentPosition(async (position) => {
+              const res = await fetch(
+                `https://api-bdc.io/data/reverse-geocode-client?latitude=${position.coords.latitude}&longitude=${position.coords.longitude}&localityLanguage=en`,
+                {
+                  method: 'GET',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                },
+              );
+
+              const data = await res.json();
+
+              callback({
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+                city: data.locality,
+              });
+            });
+          } else if (result.state === 'prompt') {
+            callback(await getApproxLocation());
+            navigator.geolocation.getCurrentPosition((position) => {});
+          } else if (result.state === 'denied') {
+            callback(await getApproxLocation());
+          }
+        } catch {
           callback(await getApproxLocation());
         }
       } else {
@@ -112,7 +116,7 @@ const WeatherWidget = () => {
   return (
     <div
       className={`bg-light-secondary dark:bg-dark-secondary rounded-xl border border-light-200 dark:border-dark-200 shadow-sm flex flex-row items-center w-full h-24 min-h-[96px] max-h-[96px] px-3 py-2 gap-3 transition-colors duration-200 ${
-        loading ? 'cursor-not-allowed opacity-75' : 'cursor-pointer hover:bg-light-tertiary dark:hover:bg-dark-tertiary'
+        loading ? 'cursor-not-allowed opacity-75' : 'cursor-pointer hover:bg-light-100 dark:hover:bg-dark-100'
       }`}
       onClick={handleWeatherClick}
       title={loading ? 'Loading weather data...' : `Click to search for weather and news in ${data.location}`}

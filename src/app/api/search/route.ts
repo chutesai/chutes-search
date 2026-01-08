@@ -218,6 +218,8 @@ export const POST = async (req: Request) => {
                 message += parsedData.data;
               } else if (parsedData.type === 'sources') {
                 sources = parsedData.data;
+              } else if (parsedData.type === 'progress') {
+                // Progress updates are ignored for non-streaming responses.
               }
             } catch (error) {
               reject(
@@ -293,6 +295,15 @@ export const POST = async (req: Request) => {
                   JSON.stringify({
                     type: 'sources',
                     data: sources,
+                  }) + '\n',
+                ),
+              );
+            } else if (parsedData.type === 'progress') {
+              controller.enqueue(
+                encoder.encode(
+                  JSON.stringify({
+                    type: 'progress',
+                    data: parsedData.data,
                   }) + '\n',
                 ),
               );

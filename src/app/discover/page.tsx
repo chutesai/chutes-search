@@ -152,7 +152,7 @@ const ArticleImage = ({ item }: { item: Discover }) => {
 
   if (showPlaceholder) {
     return (
-      <div className="w-full aspect-video bg-light-tertiary dark:bg-dark-tertiary flex items-center justify-center">
+      <div className="w-full aspect-video bg-light-100 dark:bg-dark-100 flex items-center justify-center">
         <svg
           xmlns="http://www.w3.org/2000/svg"
           width="48"
@@ -176,7 +176,7 @@ const ArticleImage = ({ item }: { item: Discover }) => {
   }
 
   return (
-    <div className="w-full aspect-video bg-light-tertiary dark:bg-dark-tertiary flex items-center justify-center overflow-hidden">
+    <div className="w-full aspect-video bg-light-100 dark:bg-dark-100 flex items-center justify-center overflow-hidden">
       <img
         className={isSmallIcon ? 'w-12 h-12 object-contain' : 'w-full h-full object-cover'}
         src={imgSrc || ''}

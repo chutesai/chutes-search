@@ -275,7 +275,7 @@ const loadMessages = async (
 
   console.debug(new Date(), 'app:messages_loaded');
 
-  document.title = messages[0].content;
+  document.title = `${messages[0].content} - Chutes Search`;
 
   const files = data.chat.files.map((file: any) => {
     return {
@@ -533,6 +533,56 @@ export const ChatProvider = ({
         return;
       }
 
+      if (data.type === 'progress') {
+        type ProgressItem = NonNullable<Message['progress']>[number];
+        const progressUpdate = data.data as ProgressItem;
+
+        const mergeProgress = (
+          current: NonNullable<Message['progress']> = [],
+          update: ProgressItem,
+        ) => {
+          const next = [...current];
+          const index = next.findIndex((item) => item.id === update.id);
+          if (index >= 0) {
+            next[index] = { ...next[index], ...update };
+          } else {
+            next.push(update);
+          }
+          return next;
+        };
+
+        if (!added) {
+          setMessages((prevMessages) => [
+            ...prevMessages,
+            {
+              content: '',
+              messageId: data.messageId,
+              chatId: chatId!,
+              role: 'assistant',
+              sources: sources,
+              progress: [progressUpdate],
+              createdAt: new Date(),
+            },
+          ]);
+          added = true;
+        }
+
+        setMessages((prev) =>
+          prev.map((message) => {
+            if (message.messageId === data.messageId) {
+              return {
+                ...message,
+                progress: mergeProgress(message.progress, progressUpdate),
+              };
+            }
+            return message;
+          }),
+        );
+
+        setMessageAppeared(true);
+        return;
+      }
+
       if (data.type === 'sources') {
         sources = data.data;
         if (!added) {
@@ -549,6 +599,14 @@ export const ChatProvider = ({
           ]);
           added = true;
         }
+        setMessages((prev) =>
+          prev.map((message) => {
+            if (message.messageId === data.messageId) {
+              return { ...message, sources: sources };
+            }
+            return message;
+          }),
+        );
         setMessageAppeared(true);
       }
 

@@ -70,20 +70,6 @@ class MetaSearchAgent implements MetaSearchAgentType {
 
   private async createSearchRetrieverChain(llm: BaseChatModel) {
     (llm as unknown as ChatOpenAI).temperature = 0;
-    
-    // Add timing wrapper for LLM call
-    const timedLlm = {
-      invoke: async (input: any) => {
-        const llmTimer = createTimer('llm-query-gen');
-        llmTimer('Starting LLM query generation');
-        const result = await (llm as any).invoke(input);
-        llmTimer('LLM query generation complete');
-        return result;
-      },
-      // Forward other methods
-      bind: (llm as any).bind?.bind(llm),
-      pipe: (llm as any).pipe?.bind(llm),
-    };
 
     return RunnableSequence.from([
       PromptTemplate.fromTemplate(this.config.queryGeneratorPrompt),

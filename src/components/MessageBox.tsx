@@ -19,6 +19,7 @@ import SearchImages from './SearchImages';
 import ThinkBox from './ThinkBox';
 import { useChat } from '@/lib/hooks/useChat';
 import { TTSPlayer } from '@/app/components/TTSPlayer';
+import DeepResearchProgress from './DeepResearchProgress';
 
 const ThinkTagProcessor = ({
   children,
@@ -165,6 +166,9 @@ const MessageBox = ({
                   Answer
                 </h3>
               </div>
+              {message.progress && message.progress.length > 0 && (
+                <DeepResearchProgress progress={message.progress} />
+              )}
 
               <Markdown
                 className={cn(
@@ -231,11 +235,13 @@ const MessageBox = ({
             </div>
           </div>
           <div className="lg:sticky lg:top-20 flex flex-col items-center space-y-3 w-full lg:w-3/12 z-30 h-full pb-4">
-            <SearchImages
-              query={history[messageIndex - 1].content}
-              chatHistory={history.slice(0, messageIndex - 1)}
-              messageId={message.messageId}
-            />
+            {history[messageIndex - 1]?.content && (
+              <SearchImages
+                query={history[messageIndex - 1].content}
+                chatHistory={history.slice(0, messageIndex - 1)}
+                messageId={message.messageId}
+              />
+            )}
             {/* SearchVideos functionality temporarily disabled */}
             {/* <SearchVideos
               chatHistory={history.slice(0, messageIndex - 1)}
