@@ -47,6 +47,10 @@ Using SearxNG to stay current and fully open source, Perplexica ensures you alwa
 
 Want to know more about its architecture and how it works? You can read it [here](https://github.com/ItzCrazyKns/Perplexica/tree/master/docs/architecture/README.md).
 
+## Chutes deployment notes
+
+- Deep Research relies on Sandy sandboxes. Production uses `https://sandy.65.109.64.180.nip.io` (old Sandy host is deprecated).
+
 ## Preview
 
 ![video-preview](.assets/perplexica-preview.gif)
