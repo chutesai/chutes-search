@@ -112,11 +112,16 @@ const buildResearchScript = () => {
     '    await new Promise((resolve) => {',
     '      let totalHeight = 0;',
     '      const distance = 400;',
+    '      const maxIterations = 25;',
+    '      const maxDuration = 12000;',
+    '      const start = Date.now();',
+    '      let iterations = 0;',
     '      const timer = setInterval(() => {',
     '        const scrollHeight = document.body.scrollHeight;',
     '        window.scrollBy(0, distance);',
     '        totalHeight += distance;',
-    '        if (totalHeight >= scrollHeight) {',
+    '        iterations += 1;',
+    '        if (totalHeight >= scrollHeight || iterations >= maxIterations || Date.now() - start > maxDuration) {',
     '          clearInterval(timer);',
     '          resolve(undefined);',
     '        }',
@@ -454,6 +459,40 @@ export const runDeepResearchCollector = async (
 
     const sandbox = await createSandbox();
     sandboxId = sandbox.sandboxId;
+    if (!sandboxId) {
+      throw new Error('Sandbox creation failed');
+    }
+    const activeSandboxId = sandboxId;
+
+    const workingDir = '/workspace/deep-research';
+    const cacheDir = `${workingDir}/.cache`;
+    const playwrightEnv = {
+      PLAYWRIGHT_BROWSERS_PATH: `${cacheDir}/ms-playwright`,
+      XDG_CACHE_HOME: cacheDir,
+      HOME: '/workspace',
+    };
+    const scriptPath = `${workingDir}/deep-research-runner.mjs`;
+    const inputPath = `${workingDir}/input.json`;
+    const outputPath = `${workingDir}/output.json`;
+
+    const warmupAttempts = 4;
+    for (let attempt = 1; attempt <= warmupAttempts; attempt += 1) {
+      try {
+        onProgress({
+          id: 'sandbox',
+          label: 'Preparing sandbox',
+          status: 'running',
+          detail: `Warming up (${attempt}/${warmupAttempts})`,
+        });
+        await execInSandbox(sandboxId, 'true', {}, 20000);
+        break;
+      } catch (error) {
+        if (attempt === warmupAttempts) {
+          throw error;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
+      }
+    }
 
     onProgress({
       id: 'sandbox',
@@ -461,14 +500,9 @@ export const runDeepResearchCollector = async (
       status: 'complete',
     });
 
-    const workingDir = '/workspace/deep-research';
-    const scriptPath = `${workingDir}/deep-research-runner.mjs`;
-    const inputPath = `${workingDir}/input.json`;
-    const outputPath = `${workingDir}/output.json`;
-
     await execInSandbox(
       sandboxId,
-      `mkdir -p ${workingDir}`,
+      `mkdir -p ${workingDir} ${cacheDir}`,
       {},
       10000,
     );
@@ -477,7 +511,7 @@ export const runDeepResearchCollector = async (
       id: 'setup',
       label: 'Installing Playwright',
       status: 'running',
-      detail: 'First run can take a few minutes.',
+      detail: 'Installing browser dependencies.',
     });
 
     await execInSandbox(
@@ -494,12 +528,145 @@ export const runDeepResearchCollector = async (
       6 * 60 * 1000,
     );
 
-    await execInSandbox(
-      sandboxId,
-      `cd ${workingDir} && npx playwright install chromium --with-deps`,
-      {},
-      6 * 60 * 1000,
+    const attemptPlaywrightInstall = async (command: string) => {
+      return execInSandbox(
+        activeSandboxId,
+        `cd ${workingDir} && ${command}`,
+        playwrightEnv,
+        6 * 60 * 1000,
+      );
+    };
+
+    const depsPackages = [
+      'libnss3',
+      'libnspr4',
+      'libdbus-1-3',
+      'libatk1.0-0',
+      'libatk-bridge2.0-0',
+      'libcups2',
+      'libdrm2',
+      'libxkbcommon0',
+      'libatspi2.0-0',
+      'libxcomposite1',
+      'libxdamage1',
+      'libxfixes3',
+      'libxrandr2',
+      'libgbm1',
+      'libasound2',
+    ];
+
+    const aptEnv = {
+      ...playwrightEnv,
+      DEBIAN_FRONTEND: 'noninteractive',
+    };
+
+    const runDepsInstall = async () =>
+      execInSandbox(
+        activeSandboxId,
+        [
+          'apt-get -o Dpkg::Lock::Timeout=120 update',
+          `apt-get -o Dpkg::Lock::Timeout=120 install -y --no-install-recommends ${depsPackages.join(' ')}`,
+        ].join(' && '),
+        aptEnv,
+        10 * 60 * 1000,
+      );
+
+    const lockPattern = /lock-frontend|dpkg frontend lock|Unable to acquire the dpkg/i;
+    const depsInstallAttempts = 3;
+    let depsInstallResult = await runDepsInstall();
+
+    for (let attempt = 2; attempt <= depsInstallAttempts; attempt += 1) {
+      if (depsInstallResult.exitCode === 0) break;
+      const output = `${depsInstallResult.stdout || ''}\n${depsInstallResult.stderr || ''}`;
+      if (!lockPattern.test(output)) break;
+      await new Promise((resolve) => setTimeout(resolve, 20000 * attempt));
+      depsInstallResult = await runDepsInstall();
+    }
+
+    if (depsInstallResult.exitCode !== 0) {
+      onProgress({
+        id: 'setup',
+        label: 'Installing Playwright',
+        status: 'error',
+        detail: 'Playwright dependencies failed to install. Using search snippets instead.',
+      });
+      const fallbackSources = (searchResults.results || [])
+        .slice(0, options.maxSources)
+        .map((result) => ({
+          title: result.title || result.url,
+          url: result.url,
+          content: result.content || '',
+          description: result.content || '',
+          status: 'fallback',
+        }));
+      const docs = buildDocuments(fallbackSources);
+      return { docs, sources: fallbackSources };
+    }
+
+    onProgress({
+      id: 'setup',
+      label: 'Installing Playwright',
+      status: 'running',
+      detail: 'Downloading Chromium.',
+    });
+
+    const browserInstallResult = await attemptPlaywrightInstall(
+      'npx playwright install chromium',
     );
+
+    if (browserInstallResult.exitCode !== 0) {
+      onProgress({
+        id: 'setup',
+        label: 'Installing Playwright',
+        status: 'error',
+        detail: 'Playwright browser download failed. Using search snippets instead.',
+      });
+      const fallbackSources = (searchResults.results || [])
+        .slice(0, options.maxSources)
+        .map((result) => ({
+          title: result.title || result.url,
+          url: result.url,
+          content: result.content || '',
+          description: result.content || '',
+          status: 'fallback',
+        }));
+      const docs = buildDocuments(fallbackSources);
+      return { docs, sources: fallbackSources };
+    }
+
+    onProgress({
+      id: 'setup',
+      label: 'Installing Playwright',
+      status: 'running',
+      detail: 'Verifying browser launch.',
+    });
+
+    const verifyResult = await execInSandbox(
+      activeSandboxId,
+      `cd ${workingDir} && node -e "const { chromium } = require('playwright'); chromium.launch({ headless: true, args: ['--no-sandbox'] }).then(async b => { await b.close(); }).catch(err => { console.error(err.message); process.exit(1); })"`,
+      playwrightEnv,
+      120000,
+    );
+
+    if (verifyResult.exitCode !== 0) {
+      onProgress({
+        id: 'setup',
+        label: 'Installing Playwright',
+        status: 'error',
+        detail: 'Playwright browser launch failed. Using search snippets instead.',
+      });
+      const fallbackSources = (searchResults.results || [])
+        .slice(0, options.maxSources)
+        .map((result) => ({
+          title: result.title || result.url,
+          url: result.url,
+          content: result.content || '',
+          description: result.content || '',
+          status: 'fallback',
+        }));
+      const docs = buildDocuments(fallbackSources);
+      return { docs, sources: fallbackSources };
+    }
 
     onProgress({
       id: 'setup',
@@ -536,6 +703,7 @@ export const runDeepResearchCollector = async (
       sandboxCommand.outputFile,
       sandboxCommand.doneFile,
       sandboxCommand.pidFile,
+      playwrightEnv,
     );
 
     let offset = 0;
@@ -566,22 +734,18 @@ export const runDeepResearchCollector = async (
     }
 
     const exitCode = await getExitCode(sandboxId, sandboxCommand.doneFile);
-    if (exitCode !== 0) {
+
+    let outputRaw = '';
+    try {
+      outputRaw = await readSandboxFile(sandboxId, outputPath);
+    } catch {
       onProgress({
         id: 'crawl',
         label: 'Visiting sources',
         status: 'error',
-        detail: `Crawler exited with code ${exitCode}.`,
-      });
-    } else {
-      onProgress({
-        id: 'crawl',
-        label: 'Visiting sources',
-        status: 'complete',
+        detail: 'Crawler output was unavailable. Using fallback extracts.',
       });
     }
-
-    const outputRaw = await readSandboxFile(sandboxId, outputPath);
     let output: ResearchOutput = {
       query,
       collectedAt: new Date().toISOString(),
@@ -600,6 +764,24 @@ export const runDeepResearchCollector = async (
       });
     }
     sources = output.sources || [];
+
+    if (exitCode !== 0) {
+      onProgress({
+        id: 'crawl',
+        label: 'Visiting sources',
+        status: sources.length > 0 ? 'complete' : 'error',
+        detail:
+          sources.length > 0
+            ? 'Crawler returned partial results.'
+            : `Crawler exited with code ${exitCode}.`,
+      });
+    } else {
+      onProgress({
+        id: 'crawl',
+        label: 'Visiting sources',
+        status: 'complete',
+      });
+    }
     if (sources.length === 0 && (searchResults.results || []).length > 0) {
       sources = (searchResults.results || []).slice(0, options.maxSources).map((result) => ({
         title: result.title || result.url,
@@ -613,15 +795,11 @@ export const runDeepResearchCollector = async (
     let summarizedSources: { sources?: Array<{ url: string; summary?: string }> } | null = null;
     const agentApiKey = process.env.CHUTES_API_KEY;
     const agentModel = options.agentModel?.trim();
-    const isAnthropicModel = (model: string) =>
-      model.toLowerCase().includes('claude') || model.toLowerCase().includes('anthropic');
     const summarySkipReason = !agentApiKey
       ? 'Missing CHUTES_API_KEY'
       : !agentModel
         ? 'Missing SANDY_AGENT_MODEL'
-        : !isAnthropicModel(agentModel)
-          ? 'Claude model not configured'
-          : null;
+        : null;
 
     if (sources.length > 0 && summarySkipReason) {
       onProgress({
@@ -632,7 +810,7 @@ export const runDeepResearchCollector = async (
       });
     }
 
-    if (sources.length > 0 && agentApiKey && agentModel && isAnthropicModel(agentModel)) {
+    if (sources.length > 0 && agentApiKey && agentModel) {
       onProgress({
         id: 'analysis',
         label: 'Synthesizing notes',
@@ -673,11 +851,15 @@ export const runDeepResearchCollector = async (
         sources?: Array<{ url: string; summary?: string }>;
       } | null;
 
+      const summaryErrorDetail = agentOutput.includes('not found')
+        ? 'Agent model not available. Check SANDY_AGENT_MODEL.'
+        : 'Agent summary unavailable, using raw extracts.';
+
       onProgress({
         id: 'analysis',
         label: 'Synthesizing notes',
         status: summarizedSources ? 'complete' : 'error',
-        detail: summarizedSources ? undefined : 'Agent summary unavailable, using raw extracts.',
+        detail: summarizedSources ? undefined : summaryErrorDetail,
       });
     }
 
