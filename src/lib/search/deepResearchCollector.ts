@@ -339,6 +339,7 @@ const buildAgentPrompt = (query: string, sources: DeepResearchSource[]) => {
     'Return ONLY valid JSON with this shape:',
     '{ "sources": [{ "title": string, "url": string, "summary": string, "keyPoints": string[] }], "overallInsights": string[] }',
     'Keep each summary under 120 words. Keep keyPoints to 3-5 bullets.',
+    'Do not use tools or modify files. Do not include markdown fences.',
     '',
     `Query: ${query}`,
     '',
@@ -611,7 +612,27 @@ export const runDeepResearchCollector = async (
 
     let summarizedSources: { sources?: Array<{ url: string; summary?: string }> } | null = null;
     const agentApiKey = process.env.CHUTES_API_KEY;
-    if (sources.length > 0 && agentApiKey && options.agentModel) {
+    const agentModel = options.agentModel?.trim();
+    const isAnthropicModel = (model: string) =>
+      model.toLowerCase().includes('claude') || model.toLowerCase().includes('anthropic');
+    const summarySkipReason = !agentApiKey
+      ? 'Missing CHUTES_API_KEY'
+      : !agentModel
+        ? 'Missing SANDY_AGENT_MODEL'
+        : !isAnthropicModel(agentModel)
+          ? 'Claude model not configured'
+          : null;
+
+    if (sources.length > 0 && summarySkipReason) {
+      onProgress({
+        id: 'analysis',
+        label: 'Synthesizing notes',
+        status: 'complete',
+        detail: `Skipped: ${summarySkipReason}.`,
+      });
+    }
+
+    if (sources.length > 0 && agentApiKey && agentModel && isAnthropicModel(agentModel)) {
       onProgress({
         id: 'analysis',
         label: 'Synthesizing notes',
@@ -628,7 +649,7 @@ export const runDeepResearchCollector = async (
         '#!/bin/sh',
         'set -e',
         'PROMPT="$(cat ' + promptPath + ')"',
-        `claude -p --output-format text --no-session-persistence --model \"${options.agentModel}\" \"$PROMPT\" > ${agentOutputPath}`,
+        `claude -p --output-format text --no-session-persistence --model \"${agentModel}\" \"$PROMPT\" > ${agentOutputPath}`,
         '',
       ].join('\n');
       await writeSandboxFile(sandboxId, agentScriptPath, agentScript);
