@@ -466,8 +466,8 @@ export const runDeepResearchCollector = async (
 
     const workingDir = '/workspace/deep-research';
     const cacheDir = `${workingDir}/.cache`;
-    const playwrightEnv = {
-      PLAYWRIGHT_BROWSERS_PATH: `${cacheDir}/ms-playwright`,
+    const localBrowserPath = `${cacheDir}/ms-playwright`;
+    const basePlaywrightEnv = {
       XDG_CACHE_HOME: cacheDir,
       HOME: '/workspace',
     };
@@ -507,11 +507,42 @@ export const runDeepResearchCollector = async (
       10000,
     );
 
+    let usePreinstalledPlaywright = false;
+    let preinstalledBrowserPath = '';
+    try {
+      const envProbe = await execInSandbox(
+        sandboxId,
+        'printf "%s\\n%s\\n" "${SANDY_PLAYWRIGHT_READY:-}" "${SANDY_PLAYWRIGHT_BROWSERS_PATH:-}"',
+        {},
+        5000,
+      );
+      const [readyRaw, pathRaw] = envProbe.stdout.split('\n');
+      if (readyRaw?.trim() === '1' && pathRaw?.trim()) {
+        usePreinstalledPlaywright = true;
+        preinstalledBrowserPath = pathRaw.trim();
+      }
+    } catch {
+      // Ignore env probe failures and proceed with local installs.
+    }
+
+    const buildPlaywrightEnv = (browserPath: string, skipDownload: boolean) => ({
+      ...basePlaywrightEnv,
+      PLAYWRIGHT_BROWSERS_PATH: browserPath,
+      ...(skipDownload ? { PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1' } : {}),
+    });
+
+    let playwrightEnv = buildPlaywrightEnv(
+      usePreinstalledPlaywright ? preinstalledBrowserPath : localBrowserPath,
+      usePreinstalledPlaywright,
+    );
+
     onProgress({
       id: 'setup',
       label: 'Installing Playwright',
       status: 'running',
-      detail: 'Installing browser dependencies.',
+      detail: usePreinstalledPlaywright
+        ? 'Using preinstalled browser runtime.'
+        : 'Installing browser dependencies.',
     });
 
     await execInSandbox(
@@ -524,7 +555,7 @@ export const runDeepResearchCollector = async (
     await execInSandbox(
       sandboxId,
       `cd ${workingDir} && if ! node -e "require.resolve('playwright')" >/dev/null 2>&1; then npm install --no-audit --no-fund playwright@1.46.0; fi`,
-      {},
+      playwrightEnv,
       6 * 60 * 1000,
     );
 
@@ -556,7 +587,6 @@ export const runDeepResearchCollector = async (
     ];
 
     const aptEnv = {
-      ...playwrightEnv,
       DEBIAN_FRONTEND: 'noninteractive',
     };
 
@@ -567,72 +597,92 @@ export const runDeepResearchCollector = async (
           'apt-get -o Dpkg::Lock::Timeout=120 update',
           `apt-get -o Dpkg::Lock::Timeout=120 install -y --no-install-recommends ${depsPackages.join(' ')}`,
         ].join(' && '),
-        aptEnv,
+        { ...playwrightEnv, ...aptEnv },
         10 * 60 * 1000,
       );
 
     const lockPattern = /lock-frontend|dpkg frontend lock|Unable to acquire the dpkg/i;
     const depsInstallAttempts = 3;
-    let depsInstallResult = await runDepsInstall();
 
-    for (let attempt = 2; attempt <= depsInstallAttempts; attempt += 1) {
-      if (depsInstallResult.exitCode === 0) break;
-      const output = `${depsInstallResult.stdout || ''}\n${depsInstallResult.stderr || ''}`;
-      if (!lockPattern.test(output)) break;
-      await new Promise((resolve) => setTimeout(resolve, 20000 * attempt));
-      depsInstallResult = await runDepsInstall();
-    }
+    const installPlaywrightDependencies = async () => {
+      let depsInstallResult = await runDepsInstall();
 
-    if (depsInstallResult.exitCode !== 0) {
+      for (let attempt = 2; attempt <= depsInstallAttempts; attempt += 1) {
+        if (depsInstallResult.exitCode === 0) break;
+        const output = `${depsInstallResult.stdout || ''}\n${depsInstallResult.stderr || ''}`;
+        if (!lockPattern.test(output)) break;
+        await new Promise((resolve) => setTimeout(resolve, 20000 * attempt));
+        depsInstallResult = await runDepsInstall();
+      }
+
+      return depsInstallResult;
+    };
+
+    const installChromium = async () => {
       onProgress({
         id: 'setup',
         label: 'Installing Playwright',
-        status: 'error',
-        detail: 'Playwright dependencies failed to install. Using search snippets instead.',
+        status: 'running',
+        detail: 'Downloading Chromium.',
       });
-      const fallbackSources = (searchResults.results || [])
-        .slice(0, options.maxSources)
-        .map((result) => ({
-          title: result.title || result.url,
-          url: result.url,
-          content: result.content || '',
-          description: result.content || '',
-          status: 'fallback',
-        }));
-      const docs = buildDocuments(fallbackSources);
-      return { docs, sources: fallbackSources };
+
+      return attemptPlaywrightInstall('npx playwright install chromium');
+    };
+
+    let depsInstallResult = { exitCode: 0 } as { exitCode: number };
+    let browserInstallResult = { exitCode: 0 } as { exitCode: number };
+
+    if (!usePreinstalledPlaywright) {
+      depsInstallResult = await installPlaywrightDependencies();
+      if (depsInstallResult.exitCode !== 0) {
+        onProgress({
+          id: 'setup',
+          label: 'Installing Playwright',
+          status: 'error',
+          detail: 'Playwright dependencies failed to install. Using search snippets instead.',
+        });
+        const fallbackSources = (searchResults.results || [])
+          .slice(0, options.maxSources)
+          .map((result) => ({
+            title: result.title || result.url,
+            url: result.url,
+            content: result.content || '',
+            description: result.content || '',
+            status: 'fallback',
+          }));
+        const docs = buildDocuments(fallbackSources);
+        return { docs, sources: fallbackSources };
+      }
+
+      browserInstallResult = await installChromium();
+      if (browserInstallResult.exitCode !== 0) {
+        onProgress({
+          id: 'setup',
+          label: 'Installing Playwright',
+          status: 'error',
+          detail: 'Playwright browser download failed. Using search snippets instead.',
+        });
+        const fallbackSources = (searchResults.results || [])
+          .slice(0, options.maxSources)
+          .map((result) => ({
+            title: result.title || result.url,
+            url: result.url,
+            content: result.content || '',
+            description: result.content || '',
+            status: 'fallback',
+          }));
+        const docs = buildDocuments(fallbackSources);
+        return { docs, sources: fallbackSources };
+      }
     }
 
-    onProgress({
-      id: 'setup',
-      label: 'Installing Playwright',
-      status: 'running',
-      detail: 'Downloading Chromium.',
-    });
-
-    const browserInstallResult = await attemptPlaywrightInstall(
-      'npx playwright install chromium',
-    );
-
-    if (browserInstallResult.exitCode !== 0) {
-      onProgress({
-        id: 'setup',
-        label: 'Installing Playwright',
-        status: 'error',
-        detail: 'Playwright browser download failed. Using search snippets instead.',
-      });
-      const fallbackSources = (searchResults.results || [])
-        .slice(0, options.maxSources)
-        .map((result) => ({
-          title: result.title || result.url,
-          url: result.url,
-          content: result.content || '',
-          description: result.content || '',
-          status: 'fallback',
-        }));
-      const docs = buildDocuments(fallbackSources);
-      return { docs, sources: fallbackSources };
-    }
+    const verifyBrowserLaunch = async () =>
+      execInSandbox(
+        activeSandboxId,
+        `cd ${workingDir} && node -e "const { chromium } = require('playwright'); chromium.launch({ headless: true, args: ['--no-sandbox'] }).then(async b => { await b.close(); }).catch(err => { console.error(err.message); process.exit(1); })"`,
+        playwrightEnv,
+        120000,
+      );
 
     onProgress({
       id: 'setup',
@@ -641,12 +691,26 @@ export const runDeepResearchCollector = async (
       detail: 'Verifying browser launch.',
     });
 
-    const verifyResult = await execInSandbox(
-      activeSandboxId,
-      `cd ${workingDir} && node -e "const { chromium } = require('playwright'); chromium.launch({ headless: true, args: ['--no-sandbox'] }).then(async b => { await b.close(); }).catch(err => { console.error(err.message); process.exit(1); })"`,
-      playwrightEnv,
-      120000,
-    );
+    let verifyResult = await verifyBrowserLaunch();
+
+    if (verifyResult.exitCode !== 0 && usePreinstalledPlaywright) {
+      onProgress({
+        id: 'setup',
+        label: 'Installing Playwright',
+        status: 'running',
+        detail: 'Preinstalled browser failed. Downloading a local copy.',
+      });
+      usePreinstalledPlaywright = false;
+      playwrightEnv = buildPlaywrightEnv(localBrowserPath, false);
+
+      depsInstallResult = await installPlaywrightDependencies();
+      if (depsInstallResult.exitCode === 0) {
+        browserInstallResult = await installChromium();
+        if (browserInstallResult.exitCode === 0) {
+          verifyResult = await verifyBrowserLaunch();
+        }
+      }
+    }
 
     if (verifyResult.exitCode !== 0) {
       onProgress({
