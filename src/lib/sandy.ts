@@ -111,6 +111,10 @@ export const createSandbox = async (): Promise<SandySandbox> => {
     headers: {
       'Content-Type': 'application/json',
     },
+    body: JSON.stringify({
+      priority: 1,      // HIGH priority for user-facing search
+      preemptable: false // Don't preempt user sessions
+    }),
   });
 };
 
