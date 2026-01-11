@@ -1058,16 +1058,24 @@ export const runDeepResearchCollector = async (
       });
     }
     sources = output.sources || [];
+    const usedFallback =
+      sources.length === 0 && fallbackSources.length > 0;
+    if (usedFallback) {
+      sources = fallbackSources;
+    }
 
     if (exitCode !== 0) {
+      const detail =
+        sources.length > 0
+          ? usedFallback
+            ? 'Crawler failed, using search snippets.'
+            : 'Crawler returned partial results.'
+          : `Crawler exited with code ${exitCode}.`;
       onProgress({
         id: 'crawl',
         label: 'Crawling pages',
         status: sources.length > 0 ? 'complete' : 'error',
-        detail:
-          sources.length > 0
-            ? 'Crawler returned partial results.'
-            : `Crawler exited with code ${exitCode}.`,
+        detail,
       });
     } else {
       onProgress({
@@ -1075,9 +1083,6 @@ export const runDeepResearchCollector = async (
         label: 'Crawling pages',
         status: 'complete',
       });
-    }
-    if (sources.length === 0 && fallbackSources.length > 0) {
-      sources = fallbackSources;
     }
 
     let summarizedSources: { sources?: Array<{ url: string; summary?: string }> } | null = null;
