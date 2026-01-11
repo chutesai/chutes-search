@@ -3,16 +3,19 @@ import { ArrowUp } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import TextareaAutosize from 'react-textarea-autosize';
 import AttachSmall from './MessageInputActions/AttachSmall';
-import Focus from './MessageInputActions/Focus';
 import Optimization from './MessageInputActions/Optimization';
+import DeepResearchToggle from './MessageInputActions/DeepResearch';
 import { useChat } from '@/lib/hooks/useChat';
 
 const MessageInput = () => {
-  const { loading, sendMessage, focusMode } = useChat();
+  const { loading, sendMessage, focusMode, deepResearchMode } = useChat();
 
   const [message, setMessage] = useState('');
   const [textareaRows, setTextareaRows] = useState(1);
   const [mode, setMode] = useState<'multi' | 'single'>('single');
+  const isDeepResearch = focusMode === 'deepResearch';
+  const deepResearchLabel =
+    deepResearchMode === 'max' ? 'Deep Research MAX' : 'Deep Research light';
 
   useEffect(() => {
     if (textareaRows >= 2 && message && mode === 'single') {
@@ -68,7 +71,6 @@ const MessageInput = () => {
     >
       {mode === 'single' && (
         <div className="flex flex-row items-center gap-1 pr-1">
-          <Focus compact align="left" />
           <Optimization compact align="left" />
           <AttachSmall />
         </div>
@@ -85,6 +87,7 @@ const MessageInput = () => {
       />
       {mode === 'single' && (
         <div className="flex flex-row items-center space-x-4">
+          <DeepResearchToggle compact align="right" />
           <button
             disabled={message.trim().length === 0 || loading}
             className="bg-[#24A0ED] text-white disabled:text-black/50 dark:disabled:text-white/50 hover:bg-opacity-85 transition duration-100 disabled:bg-[#e0e0dc79] dark:disabled:bg-[#ececec21] rounded-full p-2"
@@ -96,11 +99,11 @@ const MessageInput = () => {
       {mode === 'multi' && (
         <div className="flex flex-row items-center justify-between w-full pt-2">
           <div className="flex flex-row items-center gap-1">
-            <Focus compact align="left" />
             <Optimization compact align="left" />
             <AttachSmall />
           </div>
           <div className="flex flex-row items-center space-x-4">
+            <DeepResearchToggle compact align="right" />
             <button
               disabled={message.trim().length === 0 || loading}
               className="bg-[#24A0ED] text-white text-black/50 dark:disabled:text-white/50 hover:bg-opacity-85 transition duration-100 disabled:bg-[#e0e0dc79] dark:disabled:bg-[#ececec21] rounded-full p-2"
@@ -110,9 +113,9 @@ const MessageInput = () => {
           </div>
         </div>
       )}
-      {focusMode === 'deepResearch' && mode === 'multi' && (
+      {isDeepResearch && mode === 'multi' && (
         <div className="mt-2 text-xs text-[#24A0ED]">
-          Deep research can take longer while we browse sources.
+          {deepResearchLabel} can take longer while we browse sources.
         </div>
       )}
     </form>

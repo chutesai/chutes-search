@@ -52,6 +52,7 @@ type Body = {
   message: Message;
   optimizationMode: 'speed' | 'balanced' | 'quality';
   focusMode: string;
+  deepResearchMode?: 'light' | 'max';
   history: Array<[string, string]>;
   files: Array<string>;
   chatModel: ChatModel;
@@ -393,6 +394,7 @@ export const POST = async (req: Request) => {
       body.optimizationMode,
       body.files,
       body.systemInstructions,
+      body.deepResearchMode,
     );
     log('searchAndAnswer returned emitter, starting stream');
 

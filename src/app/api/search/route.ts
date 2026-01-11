@@ -34,6 +34,7 @@ interface embeddingModel {
 interface ChatRequestBody {
   optimizationMode: 'speed' | 'balanced' | 'quality';
   focusMode: string;
+  deepResearchMode?: 'light' | 'max';
   chatModel?: chatModel;
   embeddingModel?: embeddingModel;
   query: string;
@@ -199,6 +200,7 @@ export const POST = async (req: Request) => {
       body.optimizationMode,
       [],
       body.systemInstructions || '',
+      body.deepResearchMode,
     );
     logTiming('Search handler returned emitter');
 

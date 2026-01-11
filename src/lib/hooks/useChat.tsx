@@ -19,6 +19,7 @@ type ChatContext = {
   files: File[];
   fileIds: string[];
   focusMode: string;
+  deepResearchMode: 'light' | 'max';
   chatId: string | undefined;
   optimizationMode: string;
   isMessagesLoaded: boolean;
@@ -29,6 +30,7 @@ type ChatContext = {
   hasError: boolean;
   setOptimizationMode: (mode: string) => void;
   setFocusMode: (mode: string) => void;
+  setDeepResearchMode: (mode: 'light' | 'max') => void;
   setFiles: (files: File[]) => void;
   setFileIds: (fileIds: string[]) => void;
   sendMessage: (
@@ -299,6 +301,7 @@ export const chatContext = createContext<ChatContext>({
   fileIds: [],
   files: [],
   focusMode: '',
+  deepResearchMode: 'light',
   hasError: false,
   isMessagesLoaded: false,
   isReady: false,
@@ -312,6 +315,7 @@ export const chatContext = createContext<ChatContext>({
   setFileIds: () => {},
   setFiles: () => {},
   setFocusMode: () => {},
+  setDeepResearchMode: () => {},
   setOptimizationMode: () => {},
   freeSearchGate: { open: false, count: 0, limit: FREE_SEARCH_LIMIT },
   closeFreeSearchGate: () => {},
@@ -341,6 +345,9 @@ export const ChatProvider = ({
 
   const [focusMode, setFocusMode] = useState('webSearch');
   const [optimizationMode, setOptimizationMode] = useState('speed');
+  const [deepResearchMode, setDeepResearchMode] = useState<'light' | 'max'>(
+    'light',
+  );
 
   const [isMessagesLoaded, setIsMessagesLoaded] = useState(false);
 
@@ -710,6 +717,7 @@ export const ChatProvider = ({
         chatId: chatId!,
         files: fileIds,
         focusMode: focusMode,
+        deepResearchMode: focusMode === 'deepResearch' ? deepResearchMode : undefined,
         optimizationMode: optimizationMode,
         history: rewrite
           ? chatHistory.slice(0, messageIndex === -1 ? undefined : messageIndex)
@@ -785,6 +793,7 @@ export const ChatProvider = ({
         files,
         fileIds,
         focusMode,
+        deepResearchMode,
         chatId,
         hasError,
         isMessagesLoaded,
@@ -796,6 +805,7 @@ export const ChatProvider = ({
         setFileIds,
         setFiles,
         setFocusMode,
+        setDeepResearchMode,
         setOptimizationMode,
         rewrite,
         sendMessage,

@@ -7,7 +7,11 @@ import { StringOutputParser } from '@langchain/core/output_parsers';
 import eventEmitter from 'events';
 import { Document } from '@langchain/core/documents';
 import { deepResearchResponsePrompt } from '@/lib/prompts/deepResearch';
-import { runDeepResearchCollector, DeepResearchProgress } from './deepResearchCollector';
+import {
+  runDeepResearchCollector,
+  DeepResearchProgress,
+  DeepResearchMode,
+} from './deepResearchCollector';
 import { runWebSearch } from './runWebSearch';
 
 const createTimer = (prefix: string) => {
@@ -31,7 +35,7 @@ const ensureProgressDefaults = (progress: DeepResearchProgress[]) => {
     { id: 'sandbox', label: 'Preparing sandbox' },
     { id: 'setup', label: 'Installing Playwright' },
     { id: 'browser', label: 'Launching browser' },
-    { id: 'crawl', label: 'Visiting sources' },
+    { id: 'crawl', label: 'Crawling pages' },
     { id: 'analysis', label: 'Synthesizing notes' },
     { id: 'finalize', label: 'Drafting report' },
     { id: 'cleanup', label: 'Cleaning up sandbox' },
@@ -61,6 +65,7 @@ class DeepResearchAgent {
     optimizationMode: 'speed' | 'balanced' | 'quality',
     _fileIds: string[],
     systemInstructions: string,
+    deepResearchMode: DeepResearchMode = 'light',
   ) {
     const emitter = new eventEmitter();
     const timer = createTimer('deepResearch');
@@ -85,6 +90,7 @@ class DeepResearchAgent {
           const collected = await runDeepResearchCollector(
             message,
             optimizationMode,
+            deepResearchMode,
             onProgress,
           );
           docs = collected.docs;
@@ -126,7 +132,13 @@ class DeepResearchAgent {
                   },
                 }),
             );
-        const limitedDocs = safeDocs.slice(0, 8);
+        const docLimitByMode = {
+          light: { speed: 8, balanced: 10, quality: 12 },
+          max: { speed: 12, balanced: 16, quality: 20 },
+        } as const;
+        const docLimit =
+          docLimitByMode[deepResearchMode]?.[optimizationMode] ?? 10;
+        const limitedDocs = safeDocs.slice(0, docLimit);
 
         emitter.emit(
           'data',

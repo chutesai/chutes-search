@@ -20,7 +20,7 @@ const OptimizationModes = [
   {
     key: 'balanced', // keep identifier as 'balanced' but label it as Quality
     title: 'Quality',
-    description: 'Find the right balance between speed and accuracy',
+    description: 'Highest possible quality and depth.',
     icon: (
       <Star
         size={16}

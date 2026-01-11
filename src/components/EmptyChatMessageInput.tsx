@@ -1,9 +1,9 @@
 import { ArrowRight } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import TextareaAutosize from 'react-textarea-autosize';
-import Focus from './MessageInputActions/Focus';
 import Optimization from './MessageInputActions/Optimization';
 import Attach from './MessageInputActions/Attach';
+import DeepResearchToggle from './MessageInputActions/DeepResearch';
 import { useChat } from '@/lib/hooks/useChat';
 
 const EmptyChatMessageInput = ({
@@ -11,10 +11,13 @@ const EmptyChatMessageInput = ({
 }: {
   onFocusChange?: (focused: boolean) => void;
 }) => {
-  const { sendMessage, focusMode } = useChat();
+  const { sendMessage, focusMode, deepResearchMode } = useChat();
 
   /* const [copilotEnabled, setCopilotEnabled] = useState(false); */
   const [message, setMessage] = useState('');
+  const isDeepResearch = focusMode === 'deepResearch';
+  const deepResearchLabel =
+    deepResearchMode === 'max' ? 'Deep Research MAX' : 'Deep Research light';
 
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -94,7 +97,6 @@ const EmptyChatMessageInput = ({
         />
         <div className="flex flex-row items-center justify-between mt-4">
           <div className="flex flex-row flex-wrap items-center gap-2">
-            <Focus />
             <Attach showText />
             <span className="hidden sm:inline text-xs text-black/50 dark:text-white/50">
               Start typing to search
@@ -102,6 +104,7 @@ const EmptyChatMessageInput = ({
           </div>
           <div className="flex flex-row items-center space-x-1 sm:space-x-4">
             <Optimization />
+            <DeepResearchToggle align="right" />
             <button
               disabled={message.trim().length === 0}
               className="bg-[#24A0ED] text-white disabled:text-black/50 dark:disabled:text-white/50 disabled:bg-[#e0e0dc] dark:disabled:bg-[#ececec21] hover:bg-opacity-85 transition duration-100 rounded-full p-2"
@@ -110,9 +113,10 @@ const EmptyChatMessageInput = ({
             </button>
           </div>
         </div>
-        {focusMode === 'deepResearch' && (
+        {isDeepResearch && (
           <div className="mt-3 rounded-lg border border-[#24A0ED]/30 bg-[#24A0ED]/10 px-3 py-2 text-xs text-[#0b66a8] dark:text-[#9fd3ff]">
-            Deep research uses a live browser to visit sources. Expect longer runtimes for richer answers.
+            {deepResearchLabel} uses a live browser to visit sources. Expect
+            longer runtimes for richer answers.
           </div>
         )}
       </div>

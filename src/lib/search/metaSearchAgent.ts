@@ -42,6 +42,7 @@ export interface MetaSearchAgentType {
     optimizationMode: 'speed' | 'balanced' | 'quality',
     fileIds: string[],
     systemInstructions: string,
+    deepResearchMode?: 'light' | 'max',
   ) => Promise<eventEmitter>;
 }
 
@@ -526,6 +527,7 @@ class MetaSearchAgent implements MetaSearchAgentType {
     optimizationMode: 'speed' | 'balanced' | 'quality',
     fileIds: string[],
     systemInstructions: string,
+    _deepResearchMode?: 'light' | 'max',
   ) {
     const emitter = new eventEmitter();
     const timer = createTimer('searchAndAnswer');
