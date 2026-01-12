@@ -741,10 +741,22 @@ export const ChatProvider = ({
     const reader = res.body?.getReader();
     const decoder = new TextDecoder('utf-8');
 
-    let partialChunk = '';
+    let buffer = '';
     let firstChunkReceived = false;
     let sourcesReceived = false;
     let firstMessageReceived = false;
+
+    const handleJson = (json: any) => {
+      if (json.type === 'sources' && !sourcesReceived) {
+        logTiming('Sources received from LLM');
+        sourcesReceived = true;
+      }
+      if (json.type === 'message' && !firstMessageReceived) {
+        logTiming('First response token received');
+        firstMessageReceived = true;
+      }
+      messageHandler(json);
+    };
 
     while (true) {
       const { value, done } = await reader.read();
@@ -758,29 +770,32 @@ export const ChatProvider = ({
         firstChunkReceived = true;
       }
 
-      partialChunk += decoder.decode(value, { stream: true });
+      buffer += decoder.decode(value, { stream: true });
 
-      try {
-        const messages = partialChunk.split('\n');
-        for (const msg of messages) {
-          if (!msg.trim()) continue;
-          const json = JSON.parse(msg);
-          
-          // Log timing for key events
-          if (json.type === 'sources' && !sourcesReceived) {
-            logTiming('Sources received from LLM');
-            sourcesReceived = true;
-          }
-          if (json.type === 'message' && !firstMessageReceived) {
-            logTiming('First response token received');
-            firstMessageReceived = true;
-          }
-          
-          messageHandler(json);
+      let newlineIndex = buffer.indexOf('\n');
+      while (newlineIndex >= 0) {
+        const line = buffer.slice(0, newlineIndex).trim();
+        buffer = buffer.slice(newlineIndex + 1);
+        newlineIndex = buffer.indexOf('\n');
+
+        if (!line) continue;
+        try {
+          const json = JSON.parse(line);
+          handleJson(json);
+        } catch (error) {
+          console.warn('Failed to parse stream line, skipping.', {
+            preview: line.slice(0, 200),
+          });
         }
-        partialChunk = '';
+      }
+    }
+
+    if (buffer.trim()) {
+      try {
+        const json = JSON.parse(buffer);
+        handleJson(json);
       } catch (error) {
-        console.warn('Incomplete JSON, waiting for next chunk...');
+        console.warn('Trailing stream data could not be parsed.');
       }
     }
   };
