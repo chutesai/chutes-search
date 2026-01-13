@@ -1,6 +1,5 @@
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { Embeddings } from '@langchain/core/embeddings';
-import { ChatOpenAI } from '@langchain/openai';
 import {
   getAvailableChatModelProviders,
   getAvailableEmbeddingModelProviders,
@@ -13,6 +12,7 @@ import {
   getCustomOpenaiModelName,
 } from '@/lib/config';
 import { searchHandlers } from '@/lib/search';
+import { buildChutesCandidates, LlmCandidate } from '@/lib/llm/fallbacks';
 import {
   getClientIp,
   checkIpRateLimit,
@@ -148,19 +148,46 @@ export const POST = async (req: Request) => {
       Object.keys(embeddingModelProviders[embeddingModelProvider])[0];
 
     let llm: BaseChatModel | undefined;
+    let llmCandidates: LlmCandidate[] | undefined;
     let embeddings: Embeddings | undefined;
 
-    if (body.chatModel?.provider === 'custom_openai') {
-      llm = new ChatOpenAI({
-        modelName: body.chatModel?.name || getCustomOpenaiModelName(),
-        apiKey: body.chatModel?.customOpenAIKey || getCustomOpenaiApiKey(),
-        temperature: 0.7,
-        maxRetries: 1,
-        configuration: {
-          baseURL:
-            body.chatModel?.customOpenAIBaseURL || getCustomOpenaiApiUrl(),
-        },
-      }) as unknown as BaseChatModel;
+    const isCustomOpenai =
+      body.chatModel?.provider === 'custom_openai' ||
+      chatModelProvider === 'custom_openai';
+
+    if (isCustomOpenai) {
+      const apiKey = body.chatModel?.customOpenAIKey || getCustomOpenaiApiKey();
+      const baseURL =
+        body.chatModel?.customOpenAIBaseURL || getCustomOpenaiApiUrl();
+      const primaryModelName =
+        body.chatModel?.name || chatModel || getCustomOpenaiModelName();
+      const fallbackModelNames = [
+        'openai/gpt-oss-120b-TEE',
+        'deepseek-ai/DeepSeek-V3',
+        'zai-org/GLM-4.7-TEE',
+        'deepseek-ai/DeepSeek-V3.2-TEE',
+      ];
+      const chutesCandidates = buildChutesCandidates({
+        modelNames: [primaryModelName, ...fallbackModelNames],
+        apiKey,
+        baseURL,
+      });
+      const deepResearchSummaryModels = [
+        'moonshotai/Kimi-K2-Thinking-TEE',
+        'deepseek-ai/DeepSeek-V3.2-TEE',
+        'zai-org/GLM-4.7-TEE',
+      ];
+      const useDeepResearchSummary =
+        body.focusMode === 'deepResearch' && body.deepResearchMode === 'max';
+
+      llmCandidates = useDeepResearchSummary
+        ? buildChutesCandidates({
+            modelNames: deepResearchSummaryModels,
+            apiKey,
+            baseURL,
+          })
+        : chutesCandidates;
+      llm = llmCandidates[0]?.model;
     } else if (
       chatModelProviders[chatModelProvider] &&
       chatModelProviders[chatModelProvider][chatModel]
@@ -201,6 +228,7 @@ export const POST = async (req: Request) => {
       [],
       body.systemInstructions || '',
       body.deepResearchMode,
+      llmCandidates,
     );
     logTiming('Search handler returned emitter');
 

@@ -13,6 +13,7 @@ import {
   DeepResearchMode,
 } from './deepResearchCollector';
 import { runWebSearch } from './runWebSearch';
+import { isRateLimitError, LlmCandidate } from '@/lib/llm/fallbacks';
 
 const createTimer = (prefix: string) => {
   const start = Date.now();
@@ -66,6 +67,7 @@ class DeepResearchAgent {
     _fileIds: string[],
     systemInstructions: string,
     deepResearchMode: DeepResearchMode = 'light',
+    llmCandidates?: LlmCandidate[],
   ) {
     const emitter = new eventEmitter();
     const timer = createTimer('deepResearch');
@@ -172,55 +174,90 @@ class DeepResearchAgent {
           status: 'running',
         });
 
-        const chain = RunnableSequence.from([
-          RunnableMap.from({
-            systemInstructions: () => systemInstructions,
-            query: (input: { query: string; chat_history: BaseMessage[] }) =>
-              input.query,
-            chat_history: (input: { query: string; chat_history: BaseMessage[] }) =>
-              input.chat_history,
-            date: () => new Date().toISOString(),
-            context: () => context,
-          }),
-          ChatPromptTemplate.fromMessages([
-            ['system', deepResearchResponsePrompt],
-            new MessagesPlaceholder('chat_history'),
-            ['user', '{query}'],
-          ]),
-          llm,
-          this.strParser,
-        ]).withConfig({
-          runName: 'DeepResearchResponseGenerator',
-        });
+        const summaryCandidates =
+          llmCandidates && llmCandidates.length > 0
+            ? llmCandidates
+            : [{ name: 'primary', model: llm }];
 
-        const stream = chain.streamEvents(
-          {
-            chat_history: history,
-            query: message,
-          },
-          { version: 'v1' },
-        );
+        for (let i = 0; i < summaryCandidates.length; i += 1) {
+          const candidate = summaryCandidates[i];
+          const state = { hasOutput: false, completed: false };
 
-        for await (const event of stream) {
-          if (
-            event.event === 'on_chain_stream' &&
-            event.name === 'DeepResearchResponseGenerator'
-          ) {
-            emitter.emit(
-              'data',
-              JSON.stringify({ type: 'response', data: event.data.chunk }),
-            );
-          }
-          if (
-            event.event === 'on_chain_end' &&
-            event.name === 'DeepResearchResponseGenerator'
-          ) {
-            emitProgress({
-              id: 'finalize',
-              label: 'Drafting report',
-              status: 'complete',
+          try {
+            const chain = RunnableSequence.from([
+              RunnableMap.from({
+                systemInstructions: () => systemInstructions,
+                query: (input: { query: string; chat_history: BaseMessage[] }) =>
+                  input.query,
+                chat_history: (input: { query: string; chat_history: BaseMessage[] }) =>
+                  input.chat_history,
+                date: () => new Date().toISOString(),
+                context: () => context,
+              }),
+              ChatPromptTemplate.fromMessages([
+                ['system', deepResearchResponsePrompt],
+                new MessagesPlaceholder('chat_history'),
+                ['user', '{query}'],
+              ]),
+              candidate.model,
+              this.strParser,
+            ]).withConfig({
+              runName: 'DeepResearchResponseGenerator',
             });
+
+            const stream = chain.streamEvents(
+              {
+                chat_history: history,
+                query: message,
+              },
+              { version: 'v1' },
+            );
+
+            for await (const event of stream) {
+              if (
+                event.event === 'on_chain_stream' &&
+                event.name === 'DeepResearchResponseGenerator'
+              ) {
+                emitter.emit(
+                  'data',
+                  JSON.stringify({ type: 'response', data: event.data.chunk }),
+                );
+                state.hasOutput = true;
+              }
+              if (
+                event.event === 'on_chain_end' &&
+                event.name === 'DeepResearchResponseGenerator'
+              ) {
+                state.completed = true;
+                emitProgress({
+                  id: 'finalize',
+                  label: 'Drafting report',
+                  status: 'complete',
+                });
+                break;
+              }
+            }
+
             emitter.emit('end');
+            return;
+          } catch (err: any) {
+            const canRetry =
+              isRateLimitError(err) &&
+              !state.hasOutput &&
+              i < summaryCandidates.length - 1;
+            if (canRetry) {
+              timer(
+                `Rate limited on ${candidate.name}, retrying with ${summaryCandidates[i + 1].name}`,
+              );
+              emitProgress({
+                id: 'finalize',
+                label: 'Drafting report',
+                status: 'running',
+                detail: `Rate limited on ${candidate.name}. Retrying.`,
+              });
+              continue;
+            }
+            throw err;
           }
         }
       } catch (err: any) {

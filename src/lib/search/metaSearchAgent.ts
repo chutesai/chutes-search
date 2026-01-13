@@ -24,6 +24,7 @@ import formatChatHistoryAsString from '../utils/formatHistory';
 import eventEmitter from 'events';
 import { StreamEvent } from '@langchain/core/tracers/log_stream';
 import { runWebSearch } from './runWebSearch';
+import { isRateLimitError, LlmCandidate } from '@/lib/llm/fallbacks';
 
 // Timing utility for performance debugging
 const createTimer = (prefix: string) => {
@@ -43,6 +44,7 @@ export interface MetaSearchAgentType {
     fileIds: string[],
     systemInstructions: string,
     deepResearchMode?: 'light' | 'max',
+    llmCandidates?: LlmCandidate[],
   ) => Promise<eventEmitter>;
 }
 
@@ -473,49 +475,33 @@ class MetaSearchAgent implements MetaSearchAgentType {
       .join('\n');
   }
 
-  private async handleStream(
+  private async streamChainEvents(
     stream: AsyncGenerator<StreamEvent, any, any>,
     emitter: eventEmitter,
+    state: { hasOutput: boolean; completed: boolean },
   ) {
-    let completed = false;
-    try {
-      for await (const event of stream) {
-        if (
-          event.event === 'on_chain_end' &&
-          event.name === 'FinalSourceRetriever'
-        ) {
-          emitter.emit(
-            'data',
-            JSON.stringify({ type: 'sources', data: event.data.output }),
-          );
-        }
-        if (
-          event.event === 'on_chain_stream' &&
-          event.name === 'FinalResponseGenerator'
-        ) {
-          emitter.emit(
-            'data',
-            JSON.stringify({ type: 'response', data: event.data.chunk }),
-          );
-        }
-        if (
-          event.event === 'on_chain_end' &&
-          event.name === 'FinalResponseGenerator'
-        ) {
-          completed = true;
-          emitter.emit('end');
-        }
+    for await (const event of stream) {
+      if (event.event === 'on_chain_end' && event.name === 'FinalSourceRetriever') {
+        emitter.emit(
+          'data',
+          JSON.stringify({ type: 'sources', data: event.data.output }),
+        );
+        state.hasOutput = true;
       }
-    } catch (err: any) {
-      emitter.emit(
-        'error',
-        JSON.stringify({
-          type: 'error',
-          data: err?.message || 'Search failed',
-        }),
-      );
-    } finally {
-      if (!completed) emitter.emit('end');
+      if (
+        event.event === 'on_chain_stream' &&
+        event.name === 'FinalResponseGenerator'
+      ) {
+        emitter.emit(
+          'data',
+          JSON.stringify({ type: 'response', data: event.data.chunk }),
+        );
+        state.hasOutput = true;
+      }
+      if (event.event === 'on_chain_end' && event.name === 'FinalResponseGenerator') {
+        state.completed = true;
+        return;
+      }
     }
   }
 
@@ -528,45 +514,73 @@ class MetaSearchAgent implements MetaSearchAgentType {
     fileIds: string[],
     systemInstructions: string,
     _deepResearchMode?: 'light' | 'max',
+    llmCandidates?: LlmCandidate[],
   ) {
     const emitter = new eventEmitter();
     const timer = createTimer('searchAndAnswer');
+    const candidates =
+      llmCandidates && llmCandidates.length > 0
+        ? llmCandidates
+        : [{ name: 'primary', model: llm }];
 
-    try {
-      timer('Creating answering chain');
-      const answeringChain = await this.createAnsweringChain(
-        llm,
-        fileIds,
-        embeddings,
-        optimizationMode,
-        systemInstructions,
-      );
-      timer('Answering chain created');
+    const run = async () => {
+      for (let i = 0; i < candidates.length; i += 1) {
+        const candidate = candidates[i];
+        const state = { hasOutput: false, completed: false };
 
-      timer('Starting stream events');
-      const stream = answeringChain.streamEvents(
-        {
-          chat_history: history,
-          query: message,
-        },
-        {
-          version: 'v1',
-        },
-      );
-      timer('Stream events started');
+        try {
+          timer(`Creating answering chain (${candidate.name})`);
+          const answeringChain = await this.createAnsweringChain(
+            candidate.model,
+            fileIds,
+            embeddings,
+            optimizationMode,
+            systemInstructions,
+          );
+          timer(`Answering chain created (${candidate.name})`);
 
-      this.handleStream(stream, emitter);
-    } catch (err: any) {
-      timer(`Error: ${err?.message}`);
-      emitter.emit(
-        'error',
-        JSON.stringify({
-          type: 'error',
-          data: err?.message || 'Search failed',
-        }),
-      );
-      process.nextTick(() => emitter.emit('end'));
-    }
+          timer(`Starting stream events (${candidate.name})`);
+          const stream = answeringChain.streamEvents(
+            {
+              chat_history: history,
+              query: message,
+            },
+            {
+              version: 'v1',
+            },
+          );
+          timer(`Stream events started (${candidate.name})`);
+
+          await this.streamChainEvents(stream, emitter, state);
+          emitter.emit('end');
+          return;
+        } catch (err: any) {
+          const canRetry =
+            isRateLimitError(err) &&
+            !state.hasOutput &&
+            i < candidates.length - 1;
+          if (canRetry) {
+            timer(
+              `Rate limited on ${candidate.name}, retrying with ${candidates[i + 1].name}`,
+            );
+            continue;
+          }
+
+          timer(`Error: ${err?.message}`);
+          emitter.emit(
+            'error',
+            JSON.stringify({
+              type: 'error',
+              data: err?.message || 'Search failed',
+            }),
+          );
+          emitter.emit('end');
+          return;
+        }
+      }
+    };
+
+    setImmediate(() => void run());
 
     return emitter;
   }

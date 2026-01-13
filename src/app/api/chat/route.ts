@@ -11,13 +11,13 @@ import { chats, messages as messagesSchema } from '@/lib/db/schema';
 import { and, eq, gt } from 'drizzle-orm';
 import { getFileDetails } from '@/lib/utils/files';
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
-import { ChatOpenAI } from '@langchain/openai';
 import {
   getCustomOpenaiApiKey,
   getCustomOpenaiApiUrl,
   getCustomOpenaiModelName,
 } from '@/lib/config';
 import { searchHandlers } from '@/lib/search';
+import { buildChutesCandidates, LlmCandidate } from '@/lib/llm/fallbacks';
 import {
   ANON_SESSION_COOKIE_NAME,
   AUTH_SESSION_COOKIE_NAME,
@@ -323,6 +323,7 @@ export const POST = async (req: Request) => {
       ];
 
     let llm: BaseChatModel | undefined;
+    let llmCandidates: LlmCandidate[] | undefined;
     let embedding = embeddingModel.model;
 
     if (body.chatModel?.provider === 'custom_openai') {
@@ -333,16 +334,35 @@ export const POST = async (req: Request) => {
 
       const baseURL = getCustomOpenaiApiUrl();
       const apiKey = useUserToken ? authSession!.accessToken : getCustomOpenaiApiKey();
-
-      llm = new ChatOpenAI({
+      const primaryModelName = body.chatModel?.name || getCustomOpenaiModelName();
+      const fallbackModelNames = [
+        'openai/gpt-oss-120b-TEE',
+        'deepseek-ai/DeepSeek-V3',
+        'zai-org/GLM-4.7-TEE',
+        'deepseek-ai/DeepSeek-V3.2-TEE',
+      ];
+      const chutesCandidates = buildChutesCandidates({
+        modelNames: [primaryModelName, ...fallbackModelNames],
         apiKey,
-        modelName: getCustomOpenaiModelName(),
-        temperature: 0.7,
-        maxRetries: 1,
-        configuration: {
-          baseURL,
-        },
-      }) as unknown as BaseChatModel;
+        baseURL,
+      });
+      const deepResearchSummaryModels = [
+        'moonshotai/Kimi-K2-Thinking-TEE',
+        'deepseek-ai/DeepSeek-V3.2-TEE',
+        'zai-org/GLM-4.7-TEE',
+      ];
+      const useDeepResearchSummary =
+        body.focusMode === 'deepResearch' && body.deepResearchMode === 'max';
+
+      llmCandidates = useDeepResearchSummary
+        ? buildChutesCandidates({
+            modelNames: deepResearchSummaryModels,
+            apiKey,
+            baseURL,
+          })
+        : chutesCandidates;
+
+      llm = llmCandidates[0]?.model;
     } else if (chatModelProvider && chatModel) {
       llm = chatModel.model;
     }
@@ -395,6 +415,7 @@ export const POST = async (req: Request) => {
       body.files,
       body.systemInstructions,
       body.deepResearchMode,
+      llmCandidates,
     );
     log('searchAndAnswer returned emitter, starting stream');
 

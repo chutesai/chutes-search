@@ -1,7 +1,6 @@
 const assert = require('node:assert');
 const { test } = require('node:test');
 const MetaSearchAgent = require('./metaSearchAgent').default;
-const EventEmitter = require('events');
 
 const baseConfig = {
   searchWeb: false,
@@ -13,19 +12,31 @@ const baseConfig = {
   activeEngines: [],
 };
 
-test('handleStream emits error and end when stream throws', async () => {
+test('searchAndAnswer emits error and end when stream throws', async () => {
   const agent = new MetaSearchAgent(baseConfig);
-  const emitter = new EventEmitter();
   const events = [];
 
-  emitter.on('error', (d) => events.push(['error', d]));
-  emitter.on('end', () => events.push(['end']));
+  agent.createAnsweringChain = async () => ({
+    streamEvents: () =>
+      (async function* () {
+        throw new Error('boom');
+      })(),
+  });
 
-  const throwingStream = (async function* () {
-    throw new Error('boom');
-  })();
+  const streamEmitter = await agent.searchAndAnswer(
+    'test',
+    [],
+    {},
+    {},
+    'speed',
+    [],
+    '',
+  );
 
-  await agent.handleStream(throwingStream, emitter);
+  streamEmitter.on('error', (d) => events.push(['error', d]));
+  streamEmitter.on('end', () => events.push(['end']));
+
+  await new Promise((resolve) => streamEmitter.on('end', resolve));
 
   assert.deepEqual(events, [
     [
