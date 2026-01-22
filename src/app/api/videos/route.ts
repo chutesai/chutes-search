@@ -54,6 +54,9 @@ export const POST = async (req: Request) => {
         temperature: 0.7,
         configuration: {
           baseURL: getCustomOpenaiApiUrl(),
+          defaultHeaders: {
+            'X-Identifier': 'chutes-search',
+          },
         },
       }) as unknown as BaseChatModel;
     } else if (chatModelProvider && chatModel) {

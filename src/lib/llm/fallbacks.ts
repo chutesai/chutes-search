@@ -38,6 +38,9 @@ export const buildChutesCandidates = ({
       maxRetries,
       configuration: {
         baseURL,
+        defaultHeaders: {
+          'X-Identifier': 'chutes-search',
+        },
       },
     }) as unknown as BaseChatModel,
   }));

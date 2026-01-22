@@ -124,6 +124,9 @@ export const getAvailableChatModelProviders = async () => {
               maxRetries: 1,
               configuration: {
                 baseURL: customOpenAiApiUrl,
+                defaultHeaders: {
+                  'X-Identifier': 'chutes-search',
+                },
               },
             }) as unknown as BaseChatModel,
           },
