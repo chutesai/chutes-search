@@ -1087,7 +1087,15 @@ export const runDeepResearchCollector = async (
 
     let summarizedSources: { sources?: Array<{ url: string; summary?: string }> } | null = null;
     const agentApiKey = process.env.CHUTES_API_KEY;
-    const agentModel = options.agentModel?.trim();
+    const agentRouterUrl =
+      process.env.SANDY_AGENT_API_BASE_URL ||
+      process.env.SANDY_AGENT_ROUTER_URL ||
+      process.env.JANUS_ROUTER_URL;
+    const agentModel = (options.agentModel?.trim() ||
+      (agentRouterUrl ? 'janus-router' : '')) as string;
+    const agentSystemPrompt =
+      process.env.SANDY_AGENT_SYSTEM_PROMPT ||
+      process.env.JANUS_SYSTEM_PROMPT;
     const summarySkipReason = !agentApiKey
       ? 'Missing CHUTES_API_KEY'
       : !agentModel
@@ -1118,21 +1126,32 @@ export const runDeepResearchCollector = async (
       const promptPath = `${workingDir}/agent-prompt.txt`;
       const agentOutputPath = `${workingDir}/agent-output.txt`;
       const agentScriptPath = `${workingDir}/run-agent.sh`;
+      const systemPromptPath = agentSystemPrompt
+        ? `${workingDir}/agent-system-prompt.txt`
+        : null;
 
       await writeSandboxFile(sandboxId, promptPath, agentPrompt);
+      if (systemPromptPath && agentSystemPrompt) {
+        await writeSandboxFile(sandboxId, systemPromptPath, agentSystemPrompt);
+      }
       const agentScript = [
         '#!/bin/sh',
         'set -e',
         'PROMPT="$(cat ' + promptPath + ')"',
-        `claude -p --output-format text --no-session-persistence --model "${agentModel}" "$PROMPT" > ${agentOutputPath}`,
+        `claude -p --output-format text --no-session-persistence --model "${agentModel}" ${
+          systemPromptPath ? `--append-system-prompt-file "${systemPromptPath}" ` : ''
+        }"$PROMPT" > ${agentOutputPath}`,
         '',
       ].join('\n');
       await writeSandboxFile(sandboxId, agentScriptPath, agentScript);
+      const normalizedRouterUrl = agentRouterUrl
+        ? agentRouterUrl.replace(/\/+$/, '').replace(/\/v1$/, '')
+        : null;
       await execInSandbox(
         sandboxId,
         `chmod +x ${agentScriptPath} && ${agentScriptPath}`,
         {
-          ANTHROPIC_BASE_URL: 'https://claude.chutes.ai',
+          ANTHROPIC_BASE_URL: normalizedRouterUrl || 'https://claude.chutes.ai',
           ANTHROPIC_AUTH_TOKEN: agentApiKey,
           ANTHROPIC_API_KEY: agentApiKey,
           API_TIMEOUT_MS: '600000',
