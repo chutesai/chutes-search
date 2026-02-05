@@ -305,9 +305,10 @@ export const POST = async (req: Request) => {
     log('Model providers loaded');
 
     // Determine model based on optimization mode (if using Chutes/custom_openai)
-    // Note: Avoid TEE models - they return reasoning_content instead of content
+    // Note: Avoid TEE models (reasoning_content instead of content) and
+    // models that don't work with structured prompts (openai/gpt-oss-20b returns null content)
     const optimizationModels: Record<string, string> = {
-      'speed': 'openai/gpt-oss-20b',
+      'speed': 'unsloth/Mistral-Nemo-Instruct-2407',
       'balanced': 'deepseek-ai/DeepSeek-V3',
       'quality': 'deepseek-ai/DeepSeek-V3'
     };
@@ -352,22 +353,22 @@ export const POST = async (req: Request) => {
       const primaryModelName = optimizedModelName || body.chatModel?.name || getCustomOpenaiModelName();
       log(`Using model: ${primaryModelName} (optimizationMode: ${body.optimizationMode})`);
 
+      // Fallback models - avoid TEE models and models that don't work with structured prompts
       const fallbackModelNames = [
-        'openai/gpt-oss-120b-TEE',
         'deepseek-ai/DeepSeek-V3',
-        'zai-org/GLM-4.7-TEE',
-        'deepseek-ai/DeepSeek-V3.2-TEE',
+        'Qwen/Qwen2.5-72B-Instruct',
+        'NousResearch/Hermes-4-70B',
       ];
       const chutesCandidates = buildChutesCandidates({
         modelNames: [primaryModelName, ...fallbackModelNames],
         apiKey,
         baseURL,
       });
+      // Deep research summary models - use high-quality non-TEE models
       const deepResearchSummaryModels = [
-        'moonshotai/Kimi-K2.5-TEE',
-        'deepseek-ai/DeepSeek-V3.2-TEE',
-        'deepseek-ai/DeepSeek-V3.2-TEE',
-        'zai-org/GLM-4.7-TEE',
+        'deepseek-ai/DeepSeek-V3',
+        'Qwen/Qwen2.5-72B-Instruct',
+        'NousResearch/Hermes-4-70B',
       ];
       const useDeepResearchSummary =
         body.focusMode === 'deepResearch' && body.deepResearchMode === 'max';

@@ -116,9 +116,11 @@ export const POST = async (req: Request) => {
 
     // Override model based on optimization mode
     if (body.optimizationMode) {
+      // Note: Avoid TEE models (reasoning_content instead of content) and
+      // models that don't work with structured prompts (openai/gpt-oss-20b returns null content)
       const optimizationModels: Record<string, { provider: string; model: string }> = {
-        // GPT-OSS 20B: Fast and efficient model for speed mode
-        'speed': { provider: 'custom_openai', model: 'openai/gpt-oss-20b' },
+        // Mistral-Nemo: Fast and efficient model that works with structured prompts
+        'speed': { provider: 'custom_openai', model: 'unsloth/Mistral-Nemo-Instruct-2407' },
         'balanced': { provider: 'custom_openai', model: 'deepseek-ai/DeepSeek-V3' },
         // DeepSeek-V3: High quality model (non-TEE for proper response handling)
         'quality': { provider: 'custom_openai', model: 'deepseek-ai/DeepSeek-V3' }
@@ -167,11 +169,12 @@ export const POST = async (req: Request) => {
         body.chatModel?.customOpenAIBaseURL || getCustomOpenaiApiUrl();
       const primaryModelName =
         body.chatModel?.name || chatModel || getCustomOpenaiModelName();
-      // Use non-TEE models for fallbacks (TEE models return reasoning_content instead of content)
+      // Use non-TEE models for fallbacks that work with structured prompts
+      // Note: openai/gpt-oss-20b returns null content for structured prompts, so avoid it
       const fallbackModelNames = [
         'deepseek-ai/DeepSeek-V3',
         'Qwen/Qwen2.5-72B-Instruct',
-        'openai/gpt-oss-20b',
+        'NousResearch/Hermes-4-70B',
       ];
       const chutesCandidates = buildChutesCandidates({
         modelNames: [primaryModelName, ...fallbackModelNames],
