@@ -305,12 +305,11 @@ export const POST = async (req: Request) => {
     log('Model providers loaded');
 
     // Determine model based on optimization mode (if using Chutes/custom_openai)
+    // Note: Avoid TEE models - they return reasoning_content instead of content
     const optimizationModels: Record<string, string> = {
-      // GPT-OSS 20B: Fast and efficient model for speed mode
       'speed': 'openai/gpt-oss-20b',
-      'balanced': 'deepseek-ai/DeepSeek-V3.1',
-      // Kimi K2.5 TEE: Most powerful model for quality mode
-      'quality': 'moonshotai/Kimi-K2.5-TEE'
+      'balanced': 'deepseek-ai/DeepSeek-V3',
+      'quality': 'deepseek-ai/DeepSeek-V3'
     };
 
     const isChutesProvider = body.chatModel?.provider === 'custom_openai' || !body.chatModel?.provider;

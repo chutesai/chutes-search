@@ -119,9 +119,9 @@ export const POST = async (req: Request) => {
       const optimizationModels: Record<string, { provider: string; model: string }> = {
         // GPT-OSS 20B: Fast and efficient model for speed mode
         'speed': { provider: 'custom_openai', model: 'openai/gpt-oss-20b' },
-        'balanced': { provider: 'custom_openai', model: 'deepseek-ai/DeepSeek-V3.1' },
-        // Kimi K2.5 TEE: Most powerful model for quality mode
-        'quality': { provider: 'custom_openai', model: 'moonshotai/Kimi-K2.5-TEE' }
+        'balanced': { provider: 'custom_openai', model: 'deepseek-ai/DeepSeek-V3' },
+        // DeepSeek-V3: High quality model (non-TEE for proper response handling)
+        'quality': { provider: 'custom_openai', model: 'deepseek-ai/DeepSeek-V3' }
       };
 
       const optimizedModel = optimizationModels[body.optimizationMode];
@@ -167,21 +167,22 @@ export const POST = async (req: Request) => {
         body.chatModel?.customOpenAIBaseURL || getCustomOpenaiApiUrl();
       const primaryModelName =
         body.chatModel?.name || chatModel || getCustomOpenaiModelName();
+      // Use non-TEE models for fallbacks (TEE models return reasoning_content instead of content)
       const fallbackModelNames = [
-        'openai/gpt-oss-120b-TEE',
         'deepseek-ai/DeepSeek-V3',
-        'zai-org/GLM-4.7-TEE',
-        'deepseek-ai/DeepSeek-V3.2-TEE',
+        'Qwen/Qwen2.5-72B-Instruct',
+        'openai/gpt-oss-20b',
       ];
       const chutesCandidates = buildChutesCandidates({
         modelNames: [primaryModelName, ...fallbackModelNames],
         apiKey,
         baseURL,
       });
+      // Use non-TEE models for deep research (TEE models have different response format)
       const deepResearchSummaryModels = [
-        'moonshotai/Kimi-K2.5-TEE',
-        'deepseek-ai/DeepSeek-V3.2-TEE',
-        'zai-org/GLM-4.7-TEE',
+        'deepseek-ai/DeepSeek-V3',
+        'Qwen/Qwen2.5-72B-Instruct',
+        'NousResearch/Hermes-4-70B',
       ];
       const useDeepResearchSummary =
         body.focusMode === 'deepResearch' && body.deepResearchMode === 'max';
