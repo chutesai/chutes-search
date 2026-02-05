@@ -3,6 +3,7 @@ import { runWebSearch } from './runWebSearch';
 import {
   createSandbox,
   execInSandbox,
+  getSandboxStatus,
   readSandboxFile,
   terminateSandbox,
   writeSandboxFile,
@@ -727,7 +728,7 @@ export const runDeepResearchCollector = async (
     const inputPath = `${workingDir}/input.json`;
     const outputPath = `${workingDir}/output.json`;
 
-    const warmupAttempts = 4;
+    const warmupAttempts = 5;
     for (let attempt = 1; attempt <= warmupAttempts; attempt += 1) {
       try {
         onProgress({
@@ -736,13 +737,26 @@ export const runDeepResearchCollector = async (
           status: 'running',
           detail: `Warming up (${attempt}/${warmupAttempts})`,
         });
-        await execInSandbox(sandboxId, 'true', {}, 20000);
-        break;
-      } catch (error) {
-        if (attempt === warmupAttempts) {
-          throw error;
+        // First check sandbox health via API
+        const { healthy } = await getSandboxStatus(sandboxId);
+        if (!healthy && attempt < warmupAttempts) {
+          throw new Error('Sandbox not ready yet');
         }
-        await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
+        // Then verify we can execute commands
+        await execInSandbox(sandboxId, 'true', {}, 30000);
+        break;
+      } catch (error: any) {
+        const is502 = error?.message?.includes('502') || error?.message?.includes('Upstream error');
+        if (attempt === warmupAttempts) {
+          const errorMsg = is502
+            ? 'Sandy sandbox is not responding (502). The server may be under heavy load.'
+            : error?.message || 'Unknown error';
+          throw new Error(`Sandbox warmup failed: ${errorMsg}`);
+        }
+        // Exponential backoff with jitter
+        const baseDelay = 2000 * attempt;
+        const jitter = Math.random() * 500;
+        await new Promise((resolve) => setTimeout(resolve, baseDelay + jitter));
       }
     }
 

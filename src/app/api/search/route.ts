@@ -117,17 +117,23 @@ export const POST = async (req: Request) => {
     // Override model based on optimization mode
     if (body.optimizationMode) {
       const optimizationModels: Record<string, { provider: string; model: string }> = {
-        // Use fastest model for speed mode (~6.7x faster than DeepSeek-V3.1)
+        // GPT-OSS 20B: Fast and efficient model for speed mode
         'speed': { provider: 'custom_openai', model: 'openai/gpt-oss-20b' },
         'balanced': { provider: 'custom_openai', model: 'deepseek-ai/DeepSeek-V3.1' },
-        'quality': { provider: 'custom_openai', model: 'deepseek-ai/DeepSeek-V3.1' }
+        // Kimi K2.5 TEE: Most powerful model for quality mode
+        'quality': { provider: 'custom_openai', model: 'moonshotai/Kimi-K2.5-TEE' }
       };
 
       const optimizedModel = optimizationModels[body.optimizationMode];
       if (optimizedModel) {
-        // Check if the optimized model provider exists
-        if (chatModelProviders[optimizedModel.provider]) {
-          // Check if the specific model exists in that provider
+        // For custom_openai (Chutes), we can use any model directly without checking the provider map
+        // since Chutes dynamically supports all available models
+        if (optimizedModel.provider === 'custom_openai') {
+          chatModelProvider = optimizedModel.provider;
+          chatModel = optimizedModel.model;
+          console.log(`Using optimized model for ${body.optimizationMode}: ${optimizedModel.model}`);
+        } else if (chatModelProviders[optimizedModel.provider]) {
+          // For other providers, check if the specific model exists
           if (chatModelProviders[optimizedModel.provider][optimizedModel.model]) {
             chatModelProvider = optimizedModel.provider;
             chatModel = optimizedModel.model;
@@ -173,7 +179,7 @@ export const POST = async (req: Request) => {
         baseURL,
       });
       const deepResearchSummaryModels = [
-        'moonshotai/Kimi-K2-Thinking-TEE',
+        'moonshotai/Kimi-K2.5-TEE',
         'deepseek-ai/DeepSeek-V3.2-TEE',
         'zai-org/GLM-4.7-TEE',
       ];

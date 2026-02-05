@@ -1,8 +1,8 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
-const DEFAULT_RETRY_COUNT = 2;
-const DEFAULT_RETRY_DELAY_MS = 1000;
+const DEFAULT_RETRY_COUNT = 3;        // Increased for better 502 handling
+const DEFAULT_RETRY_DELAY_MS = 1500;  // Slightly longer initial delay
 
 export type SandySandbox = {
   sandboxId: string;
@@ -39,9 +39,14 @@ const parseJsonResponse = async <T>(response: Response): Promise<T> => {
   return JSON.parse(text) as T;
 };
 
-const shouldRetry = (status?: number) => {
+const shouldRetry = (status?: number, errorText?: string) => {
   if (!status) return true;
+  // Always retry 5xx errors (server errors, including 502 Bad Gateway)
   if (status >= 500) return true;
+  // Retry 429 rate limit errors
+  if (status === 429) return true;
+  // Check error text for known transient errors
+  if (errorText?.includes('Upstream error')) return true;
   return false;
 };
 
@@ -81,8 +86,9 @@ export const sandyRequest = async <T>(
         const error = new Error(
           `Sandy API error ${response.status}: ${errorText || response.statusText}`,
         );
-        if (attempt < retries && shouldRetry(response.status)) {
+        if (attempt < retries && shouldRetry(response.status, errorText)) {
           lastError = error;
+          console.log(`[Sandy] Retrying request to ${path} (attempt ${attempt + 1}/${retries + 1}, status ${response.status})`);
           await sleep(retryDelayMs * Math.pow(2, attempt));
           continue;
         }
@@ -112,10 +118,25 @@ export const createSandbox = async (): Promise<SandySandbox> => {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      priority: 1,      // HIGH priority for user-facing search
-      preemptable: false // Don't preempt user sessions
+      priority: 1,         // HIGH priority for user-facing search
+      preemptable: false,  // Don't preempt user sessions
+      flavor: 'agent-ready', // Use agent-ready flavor for Playwright/browser support
     }),
+  }, {
+    retries: 4,  // Extra retries for sandbox creation (502 errors common during startup)
+    retryDelayMs: 2000,
   });
+};
+
+export const getSandboxStatus = async (sandboxId: string): Promise<{ status: string; healthy: boolean }> => {
+  try {
+    const result = await sandyRequest<{ sandboxId: string; status?: string }>(`/api/sandboxes/${sandboxId}`, {
+      method: 'GET',
+    }, { retries: 1, retryDelayMs: 500 });
+    return { status: result.status || 'unknown', healthy: !!result.sandboxId };
+  } catch {
+    return { status: 'error', healthy: false };
+  }
 };
 
 export const terminateSandbox = async (sandboxId: string): Promise<void> => {

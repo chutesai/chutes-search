@@ -304,6 +304,20 @@ export const POST = async (req: Request) => {
     ]);
     log('Model providers loaded');
 
+    // Determine model based on optimization mode (if using Chutes/custom_openai)
+    const optimizationModels: Record<string, string> = {
+      // GPT-OSS 20B: Fast and efficient model for speed mode
+      'speed': 'openai/gpt-oss-20b',
+      'balanced': 'deepseek-ai/DeepSeek-V3.1',
+      // Kimi K2.5 TEE: Most powerful model for quality mode
+      'quality': 'moonshotai/Kimi-K2.5-TEE'
+    };
+
+    const isChutesProvider = body.chatModel?.provider === 'custom_openai' || !body.chatModel?.provider;
+    const optimizedModelName = isChutesProvider && body.optimizationMode
+      ? optimizationModels[body.optimizationMode]
+      : null;
+
     const chatModelProvider =
       chatModelProviders[
         body.chatModel?.provider || Object.keys(chatModelProviders)[0]
@@ -326,7 +340,8 @@ export const POST = async (req: Request) => {
     let llmCandidates: LlmCandidate[] | undefined;
     let embedding = embeddingModel.model;
 
-    if (body.chatModel?.provider === 'custom_openai') {
+    // Use Chutes for custom_openai provider or when optimization mode is set
+    if (body.chatModel?.provider === 'custom_openai' || (isChutesProvider && optimizedModelName)) {
       const hasInvoke = Boolean(
         authSession?.scope?.split(' ').includes('chutes:invoke'),
       );
@@ -334,7 +349,10 @@ export const POST = async (req: Request) => {
 
       const baseURL = getCustomOpenaiApiUrl();
       const apiKey = useUserToken ? authSession!.accessToken : getCustomOpenaiApiKey();
-      const primaryModelName = body.chatModel?.name || getCustomOpenaiModelName();
+      // Use optimization mode model if available, otherwise use the requested model
+      const primaryModelName = optimizedModelName || body.chatModel?.name || getCustomOpenaiModelName();
+      log(`Using model: ${primaryModelName} (optimizationMode: ${body.optimizationMode})`);
+
       const fallbackModelNames = [
         'openai/gpt-oss-120b-TEE',
         'deepseek-ai/DeepSeek-V3',
@@ -347,7 +365,8 @@ export const POST = async (req: Request) => {
         baseURL,
       });
       const deepResearchSummaryModels = [
-        'moonshotai/Kimi-K2-Thinking-TEE',
+        'moonshotai/Kimi-K2.5-TEE',
+        'deepseek-ai/DeepSeek-V3.2-TEE',
         'deepseek-ai/DeepSeek-V3.2-TEE',
         'zai-org/GLM-4.7-TEE',
       ];
