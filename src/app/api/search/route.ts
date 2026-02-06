@@ -143,14 +143,11 @@ export const POST = async (req: Request) => {
 
     // Override model based on optimization mode
     if (body.optimizationMode) {
-      // Note: Avoid TEE models (reasoning_content instead of content) and
-      // models that don't work with structured prompts (openai/gpt-oss-20b returns null content)
+      // Note: Some models may have different response formats; keep fallbacks configured.
       const optimizationModels: Record<string, { provider: string; model: string }> = {
-        // Mistral-Nemo: Fast and efficient model that works with structured prompts
-        'speed': { provider: 'custom_openai', model: 'unsloth/Mistral-Nemo-Instruct-2407' },
-        'balanced': { provider: 'custom_openai', model: 'deepseek-ai/DeepSeek-V3' },
-        // DeepSeek-V3: High quality model (non-TEE for proper response handling)
-        'quality': { provider: 'custom_openai', model: 'deepseek-ai/DeepSeek-V3' }
+        'speed': { provider: 'custom_openai', model: 'Qwen/Qwen3-Next-80B-A3B-Instruct' },
+        'balanced': { provider: 'custom_openai', model: 'moonshotai/Kimi-K2.5-TEE' },
+        'quality': { provider: 'custom_openai', model: 'moonshotai/Kimi-K2.5-TEE' },
       };
 
       const optimizedModel = optimizationModels[body.optimizationMode];
@@ -196,8 +193,7 @@ export const POST = async (req: Request) => {
         body.chatModel?.customOpenAIBaseURL || getCustomOpenaiApiUrl();
       const primaryModelName =
         body.chatModel?.name || chatModel || getCustomOpenaiModelName();
-      // Use non-TEE models for fallbacks that work with structured prompts
-      // Note: openai/gpt-oss-20b returns null content for structured prompts, so avoid it
+      // Fallback models - prefer models that work reliably with structured prompts.
       const fallbackModelNames = [
         'deepseek-ai/DeepSeek-V3',
         'Qwen/Qwen2.5-72B-Instruct',
@@ -208,7 +204,7 @@ export const POST = async (req: Request) => {
         apiKey,
         baseURL,
       });
-      // Use non-TEE models for deep research (TEE models have different response format)
+      // Deep research MAX summary models - keep a stable set of high-quality fallbacks.
       const deepResearchSummaryModels = [
         'deepseek-ai/DeepSeek-V3',
         'Qwen/Qwen2.5-72B-Instruct',

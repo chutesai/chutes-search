@@ -15,7 +15,7 @@ const OptimizationModes = [
     title: 'Speed',
     description: 'Prioritize speed and get the quickest possible answer.',
     icon: <Zap size={20} className="text-[#FF9800]" />,
-    model: 'openai/gpt-oss-20b',
+    model: 'Qwen/Qwen3-Next-80B-A3B-Instruct',
   },
   {
     key: 'balanced', // keep identifier as 'balanced' but label it as Quality
@@ -27,7 +27,7 @@ const OptimizationModes = [
         className="text-[#2196F3] dark:text-[#BBDEFB] fill-[#BBDEFB] dark:fill-[#2196F3]"
       />
     ),
-    model: 'deepseek-ai/DeepSeek-V3.1',
+    model: 'moonshotai/Kimi-K2.5-TEE',
   },
 ];
 

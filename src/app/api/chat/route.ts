@@ -318,13 +318,12 @@ export const POST = async (req: Request) => {
     ]);
     log('Model providers loaded');
 
-    // Determine model based on optimization mode (if using Chutes/custom_openai)
-    // Note: Avoid TEE models (reasoning_content instead of content) and
-    // models that don't work with structured prompts (openai/gpt-oss-20b returns null content)
+    // Determine model based on optimization mode (if using Chutes/custom_openai).
+    // Note: Some models may have different response formats; keep fallbacks configured.
     const optimizationModels: Record<string, string> = {
-      'speed': 'unsloth/Mistral-Nemo-Instruct-2407',
-      'balanced': 'deepseek-ai/DeepSeek-V3',
-      'quality': 'deepseek-ai/DeepSeek-V3'
+      'speed': 'Qwen/Qwen3-Next-80B-A3B-Instruct',
+      'balanced': 'moonshotai/Kimi-K2.5-TEE',
+      'quality': 'moonshotai/Kimi-K2.5-TEE',
     };
 
     const isChutesProvider = body.chatModel?.provider === 'custom_openai' || !body.chatModel?.provider;
@@ -369,7 +368,7 @@ export const POST = async (req: Request) => {
       const primaryModelName = optimizedModelName || body.chatModel?.name || getCustomOpenaiModelName();
       log(`Using model: ${primaryModelName} (optimizationMode: ${body.optimizationMode})`);
 
-      // Fallback models - avoid TEE models and models that don't work with structured prompts
+      // Fallback models - prefer models that work reliably with structured prompts.
       const fallbackModelNames = [
         'deepseek-ai/DeepSeek-V3',
         'Qwen/Qwen2.5-72B-Instruct',
@@ -380,7 +379,7 @@ export const POST = async (req: Request) => {
         apiKey,
         baseURL,
       });
-      // Deep research summary models - use high-quality non-TEE models
+      // Deep research MAX summary models - keep a stable set of high-quality fallbacks.
       const deepResearchSummaryModels = [
         'deepseek-ai/DeepSeek-V3',
         'Qwen/Qwen2.5-72B-Instruct',
