@@ -1414,18 +1414,16 @@ export const runDeepResearchCollector = async (
     const agentSystemPrompt =
       process.env.SANDY_AGENT_SYSTEM_PROMPT ||
       process.env.JANUS_SYSTEM_PROMPT;
-    const summarySkipReason = !agentApiKey
-      ? 'Missing CHUTES_API_KEY'
-      : !agentModel
-        ? 'Missing SANDY_AGENT_MODEL'
-        : null;
+    // If no summarizer is configured, keep the progress UI user-facing (no env var names).
+    const summarySkipDetail =
+      !agentApiKey || !agentModel ? 'Using raw extracts.' : null;
 
-    if (sources.length > 0 && summarySkipReason) {
+    if (sources.length > 0 && summarySkipDetail) {
       onProgress({
         id: 'analysis',
         label: 'Synthesizing notes',
         status: 'complete',
-        detail: `Skipped: ${summarySkipReason}.`,
+        detail: summarySkipDetail,
       });
     }
 
@@ -1491,8 +1489,8 @@ export const runDeepResearchCollector = async (
         if (agentRun.exitCode !== 0) {
           const combined = `${agentRun.stdout || ''}\n${agentRun.stderr || ''}`.trim();
           const detail = combined.includes('not found')
-            ? 'Agent model not available. Check SANDY_AGENT_MODEL.'
-            : 'Agent summary unavailable, using raw extracts.';
+            ? 'Summary model not available, using raw extracts.'
+            : 'Summary unavailable, using raw extracts.';
 
           if (correlationId) {
             logEvent({
@@ -1533,8 +1531,8 @@ export const runDeepResearchCollector = async (
           } | null;
 
           const summaryErrorDetail = agentOutput.includes('not found')
-            ? 'Agent model not available. Check SANDY_AGENT_MODEL.'
-            : 'Agent summary unavailable, using raw extracts.';
+            ? 'Summary model not available, using raw extracts.'
+            : 'Summary unavailable, using raw extracts.';
 
           if (!summarizedSources && correlationId) {
             logEvent({
