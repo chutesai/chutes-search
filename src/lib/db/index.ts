@@ -107,6 +107,28 @@ function ensureTablesExist() {
       CREATE INDEX IF NOT EXISTS ip_date_idx ON ip_search_logs (ip_address, search_date)
     `);
 
+    // Create anonymized event_logs table
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS event_logs (
+        id INTEGER PRIMARY KEY NOT NULL,
+        createdAt TEXT NOT NULL,
+        level TEXT NOT NULL,
+        event TEXT NOT NULL,
+        correlationId TEXT,
+        metadata TEXT
+      )
+    `);
+
+    sqlite.exec(`
+      CREATE INDEX IF NOT EXISTS event_logs_createdAt_idx ON event_logs (createdAt)
+    `);
+    sqlite.exec(`
+      CREATE INDEX IF NOT EXISTS event_logs_event_idx ON event_logs (event)
+    `);
+    sqlite.exec(`
+      CREATE INDEX IF NOT EXISTS event_logs_correlation_idx ON event_logs (correlationId)
+    `);
+
     console.log('[db] Ensured all tables exist');
   } catch (err) {
     console.error('[db] Error ensuring tables exist:', err);

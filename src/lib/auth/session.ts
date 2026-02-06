@@ -25,6 +25,8 @@ export type AuthSession = {
   tokenType: string | null;
 };
 
+const SESSION_LIFETIME_SECONDS = 30 * 24 * 60 * 60;
+
 function nowSeconds() {
   return Math.floor(Date.now() / 1000);
 }
@@ -63,7 +65,6 @@ export async function createAuthSession(params: {
 }): Promise<string> {
   const secret = getChutesAuthSecret();
   const sessionId = crypto.randomBytes(32).toString('hex');
-  const sessionLifetimeSeconds = 30 * 24 * 60 * 60;
 
   await upsertUserFromUserInfo(params.userInfo);
 
@@ -78,7 +79,7 @@ export async function createAuthSession(params: {
       id: sessionId,
       userId: params.userInfo.sub,
       createdAt: new Date().toISOString(),
-      expiresAt: nowSeconds() + sessionLifetimeSeconds,
+      expiresAt: nowSeconds() + SESSION_LIFETIME_SECONDS,
       accessTokenEnc: sealString(params.token.access_token, secret),
       refreshTokenEnc: params.token.refresh_token
         ? sealString(params.token.refresh_token, secret)
@@ -107,6 +108,20 @@ export async function getAuthSessionById(
   if (row.expiresAt < nowSeconds()) {
     await deleteAuthSession(sessionId);
     return null;
+  }
+
+  // Sliding expiration: keep sessions alive for 30 days after last successful usage.
+  const now = nowSeconds();
+  const remaining = row.expiresAt - now;
+  // Avoid writing on every request; bump expiry when less than ~29 days remain.
+  const refreshWindow = SESSION_LIFETIME_SECONDS - 24 * 60 * 60;
+  if (remaining < refreshWindow) {
+    const nextExpiresAt = now + SESSION_LIFETIME_SECONDS;
+    await db
+      .update(authSessions)
+      .set({ expiresAt: nextExpiresAt })
+      .where(eq(authSessions.id, sessionId))
+      .execute();
   }
 
   const user = await db.query.users.findFirst({ where: eq(users.id, row.userId) });
@@ -185,7 +200,8 @@ export async function refreshAuthSessionIfNeeded(
       return updated;
     }
   } catch (err) {
-    await deleteAuthSession(sessionId);
-    return null;
+    // Do not force sign-out on transient refresh failures. Callers should be
+    // prepared to fall back when the access token is expired.
+    return session;
   }
 }

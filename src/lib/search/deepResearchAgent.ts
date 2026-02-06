@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { Embeddings } from '@langchain/core/embeddings';
 import { BaseMessage } from '@langchain/core/messages';
@@ -14,6 +15,7 @@ import {
 } from './deepResearchCollector';
 import { runWebSearch } from './runWebSearch';
 import { isRateLimitError, LlmCandidate } from '@/lib/llm/fallbacks';
+import { anonymizeLogText, logEvent, serializeError } from '@/lib/eventLog';
 
 const createTimer = (prefix: string) => {
   const start = Date.now();
@@ -34,7 +36,7 @@ const ensureProgressDefaults = (progress: DeepResearchProgress[]) => {
   const baseline = [
     { id: 'search', label: 'Finding sources' },
     { id: 'sandbox', label: 'Preparing sandbox' },
-    { id: 'setup', label: 'Installing Playwright' },
+    { id: 'setup', label: 'Installing Browser' },
     { id: 'browser', label: 'Launching browser' },
     { id: 'crawl', label: 'Crawling pages' },
     { id: 'analysis', label: 'Synthesizing notes' },
@@ -71,10 +73,33 @@ class DeepResearchAgent {
   ) {
     const emitter = new eventEmitter();
     const timer = createTimer('deepResearch');
+    const runId = crypto.randomBytes(16).toString('hex');
 
     const run = async () => {
       const emitProgress = (progress: DeepResearchProgress) => {
         emitter.emit('data', JSON.stringify({ type: 'progress', data: progress }));
+      };
+
+      logEvent({
+        level: 'info',
+        event: 'deep_research.start',
+        correlationId: runId,
+        metadata: { mode: deepResearchMode, optimizationMode },
+      });
+
+      const logProgressEvent = (progress: DeepResearchProgress) => {
+        // Keep logs useful but low-volume. Record completion and errors, not every tick.
+        if (progress.status === 'running' || progress.status === 'pending') return;
+        logEvent({
+          level: progress.status === 'error' ? 'error' : 'info',
+          event: `deep_research.progress.${progress.id}`,
+          correlationId: runId,
+          metadata: {
+            status: progress.status,
+            percent: progress.percent,
+            detail: progress.detail ? anonymizeLogText(progress.detail) : undefined,
+          },
+        });
       };
 
       ensureProgressDefaults([]).forEach((progress) => emitProgress(progress));
@@ -83,6 +108,7 @@ class DeepResearchAgent {
         timer('Starting deep research collection');
         const onProgress = (progress: DeepResearchProgress) => {
           emitProgress(progress);
+          logProgressEvent(progress);
         };
 
         let docs: Document[] = [];
@@ -94,15 +120,27 @@ class DeepResearchAgent {
             optimizationMode,
             deepResearchMode,
             onProgress,
+            { correlationId: runId },
           );
           docs = collected.docs;
           sources = collected.sources;
         } catch (error: any) {
+          logEvent({
+            level: 'error',
+            event: 'deep_research.collector_error',
+            correlationId: runId,
+            metadata: { error: serializeError(error) },
+          });
+          const rawMessage = error?.message ? String(error.message) : '';
+          const userFacingDetail = rawMessage.includes('Sandy API error')
+            ? 'Sandbox service error. Falling back to standard search.'
+            : rawMessage ||
+              'Deep research failed. Falling back to standard search.';
           emitProgress({
             id: 'sandbox',
             label: 'Preparing sandbox',
             status: 'error',
-            detail: error?.message || 'Deep research failed. Falling back to standard search.',
+            detail: userFacingDetail,
           });
           const fallback = await runWebSearch(message, []);
           docs = (fallback.results || []).map(
@@ -142,6 +180,13 @@ class DeepResearchAgent {
           docLimitByMode[deepResearchMode]?.[optimizationMode] ?? 10;
         const limitedDocs = safeDocs.slice(0, docLimit);
 
+        logEvent({
+          level: 'info',
+          event: 'deep_research.sources_ready',
+          correlationId: runId,
+          metadata: { docs: limitedDocs.length, mode: deepResearchMode },
+        });
+
         emitter.emit(
           'data',
           JSON.stringify({ type: 'sources', data: limitedDocs }),
@@ -162,6 +207,11 @@ class DeepResearchAgent {
             }),
           );
           emitter.emit('end');
+          logEvent({
+            level: 'warn',
+            event: 'deep_research.no_sources',
+            correlationId: runId,
+          });
           return;
         }
 
@@ -239,6 +289,11 @@ class DeepResearchAgent {
             }
 
             emitter.emit('end');
+            logEvent({
+              level: 'info',
+              event: 'deep_research.complete',
+              correlationId: runId,
+            });
             return;
           } catch (err: any) {
             const canRetry =
@@ -255,6 +310,12 @@ class DeepResearchAgent {
                 status: 'running',
                 detail: `Rate limited on ${candidate.name}. Retrying.`,
               });
+              logEvent({
+                level: 'warn',
+                event: 'deep_research.rate_limited_retry',
+                correlationId: runId,
+                metadata: { candidate: candidate.name, next: summaryCandidates[i + 1]?.name },
+              });
               continue;
             }
             throw err;
@@ -262,6 +323,12 @@ class DeepResearchAgent {
         }
       } catch (err: any) {
         timer(`Error: ${err?.message}`);
+        logEvent({
+          level: 'error',
+          event: 'deep_research.error',
+          correlationId: runId,
+          metadata: { error: serializeError(err) },
+        });
         emitter.emit(
           'error',
           JSON.stringify({

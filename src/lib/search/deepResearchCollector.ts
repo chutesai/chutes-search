@@ -1,5 +1,6 @@
 import { Document } from '@langchain/core/documents';
 import { runWebSearch } from './runWebSearch';
+import { anonymizeLogText, logEvent, serializeError } from '@/lib/eventLog';
 import {
   createSandbox,
   execInSandbox,
@@ -42,6 +43,7 @@ type DeepResearchOptions = {
 };
 
 type ResearchInput = {
+  runId: string;
   query: string;
   sources: { title: string; url: string }[];
   maxChars: number;
@@ -54,6 +56,7 @@ type ResearchInput = {
 };
 
 type ResearchOutput = {
+  runId?: string;
   query: string;
   collectedAt: string;
   sources: DeepResearchSource[];
@@ -66,6 +69,10 @@ type SandboxCommand = {
   outputFile: string;
   doneFile: string;
   pidFile: string;
+};
+
+type CollectorLogContext = {
+  correlationId?: string;
 };
 
 const DEFAULT_MAX_DURATION_MS = 8 * 60 * 1000;
@@ -263,98 +270,116 @@ const buildResearchScript = () => {
     '    queue.push({ url: normalized, depth, rootHost, seedTitle });',
     '  };',
     '',
-    '  for (const source of sources) {',
-    '    const normalized = normalizeUrl(source.url);',
-    '    if (!normalized) continue;',
-    '    const rootHost = getHostname(normalized);',
-    '    enqueue(normalized, 0, rootHost, source.title || "");',
-    '  }',
-    '',
-    '  logProgress({ stage: "browser", status: "running", message: "Launching browser" });',
-    '  const browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });',
-    '  const context = await browser.newContext({',
-    '    userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",',
-    '    viewport: { width: 1365, height: 768 },',
-    '  });',
-    '  const page = await context.newPage();',
-    '  await page.route(/.*/, (route) => {',
-    '    const type = route.request().resourceType();',
-    '    if (["image", "media", "font"].includes(type)) {',
-    '      route.abort();',
-    '      return;',
-    '    }',
-    '    route.continue();',
-    '  });',
-    '  logProgress({ stage: "browser", status: "complete", message: "Browser ready" });',
-    '',
-    '  while (queue.length > 0 && results.length < maxPages) {',
-    '    if (Date.now() - startTime > totalTimeoutMs) {',
-    '      errors.push("Time limit reached before visiting all pages.");',
-    '      break;',
-    '    }',
-    '    const current = queue.shift();',
-    '    if (!current) break;',
-    '    const host = getHostname(current.url);',
-    '    if (!host) continue;',
-    '    const hostCount = hostCounts.get(host) || 0;',
-    '    if (hostCount >= maxPagesPerHost) {',
-    '      continue;',
-    '    }',
-    '    hostCounts.set(host, hostCount + 1);',
-    '    const step = results.length + 1;',
-    '    logProgress({ stage: "crawl", status: "running", current: step, total: maxPages, url: current.url });',
-    '    try {',
-    '      await page.goto(current.url, { waitUntil: "domcontentloaded", timeout: timeoutMs });',
-    '      await page.waitForTimeout(1200);',
-    '      await autoScroll(page);',
-    '      const { title, description, bodyText } = await extractContent(page);',
-    '      results.push({',
-    '        title: cleanText(title || current.seedTitle || current.url),',
-    '        url: current.url,',
-    '        description: cleanText(description),',
-    '        content: truncateText(cleanText(bodyText), maxChars),',
-    '        status: "ok",',
-    '      });',
-    '',
-    '      if (current.depth < maxDepth && results.length < maxPages) {',
-    '        const rawLinks = await extractLinks(page);',
-    '        const uniqueLinks = Array.from(new Set(rawLinks));',
-    '        const filteredLinks = uniqueLinks',
-    '          .map((link) => normalizeUrl(link))',
-    '          .filter((link) => link && isSameHost(link, current.rootHost) && !isSkippableUrl(link));',
-    '        const remainingSlots = maxPages - (results.length + queue.length);',
-    '        const maxNewLinks = Math.min(maxLinksPerPage, remainingSlots);',
-    '        for (let i = 0; i < filteredLinks.length && i < maxNewLinks; i += 1) {',
-    '          enqueue(filteredLinks[i], current.depth + 1, current.rootHost, title);',
-    '        }',
-    '      }',
-    '    } catch (err) {',
-    '      const message = err && err.message ? err.message : String(err);',
-    '      errors.push(`${current.url}: ${message}`);',
-    '      results.push({',
-    '        title: current.seedTitle || current.url,',
-    '        url: current.url,',
-    '        content: "",',
-    '        status: "error",',
-    '        error: message,',
-    '      });',
-    '    }',
-    '  }',
-    '',
-    '  await page.close();',
-    '  await context.close();',
-    '  await browser.close();',
-    '',
-    '  logProgress({ stage: "crawl", status: "complete", message: "Crawl complete" });',
-    '',
-    '  const output = {',
-    '    query: input.query || "",',
-    '    collectedAt: new Date().toISOString(),',
-    '    sources: results,',
-    '    errors,',
-    '  };',
-    '  await fs.writeFile(outputPath, JSON.stringify(output, null, 2), "utf-8");',
-    '};',
+	    '  for (const source of sources) {',
+	    '    const normalized = normalizeUrl(source.url);',
+	    '    if (!normalized) continue;',
+	    '    const rootHost = getHostname(normalized);',
+	    '    enqueue(normalized, 0, rootHost, source.title || "");',
+	    '  }',
+	    '',
+	    '  let browser;',
+	    '  let context;',
+	    '  let page;',
+	    '',
+	    '  try {',
+	    '    logProgress({ stage: "browser", status: "running", message: "Launching browser" });',
+	    '    browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });',
+	    '    context = await browser.newContext({',
+	    '      userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",',
+	    '      viewport: { width: 1365, height: 768 },',
+	    '    });',
+	    '    page = await context.newPage();',
+	    '    await page.route(/.*/, (route) => {',
+	    '      const type = route.request().resourceType();',
+	    '      if (["image", "media", "font"].includes(type)) {',
+	    '        route.abort();',
+	    '        return;',
+	    '      }',
+	    '      route.continue();',
+	    '    });',
+	    '    logProgress({ stage: "browser", status: "complete", message: "Browser ready" });',
+	    '',
+	    '    while (queue.length > 0 && results.length < maxPages) {',
+	    '      if (Date.now() - startTime > totalTimeoutMs) {',
+	    '        errors.push("Time limit reached before visiting all pages.");',
+	    '        break;',
+	    '      }',
+	    '      const current = queue.shift();',
+	    '      if (!current) break;',
+	    '      const host = getHostname(current.url);',
+	    '      if (!host) continue;',
+	    '      const hostCount = hostCounts.get(host) || 0;',
+	    '      if (hostCount >= maxPagesPerHost) {',
+	    '        continue;',
+	    '      }',
+	    '      hostCounts.set(host, hostCount + 1);',
+	    '      const step = results.length + 1;',
+	    '      logProgress({ stage: "crawl", status: "running", current: step, total: maxPages, url: current.url });',
+	    '      try {',
+	    '        await page.goto(current.url, { waitUntil: "domcontentloaded", timeout: timeoutMs });',
+	    '        await page.waitForTimeout(1200);',
+	    '        await autoScroll(page);',
+	    '        const { title, description, bodyText } = await extractContent(page);',
+	    '        results.push({',
+	    '          title: cleanText(title || current.seedTitle || current.url),',
+	    '          url: current.url,',
+	    '          description: cleanText(description),',
+	    '          content: truncateText(cleanText(bodyText), maxChars),',
+	    '          status: "ok",',
+	    '        });',
+	    '',
+	    '        if (current.depth < maxDepth && results.length < maxPages) {',
+	    '          const rawLinks = await extractLinks(page);',
+	    '          const uniqueLinks = Array.from(new Set(rawLinks));',
+	    '          const filteredLinks = uniqueLinks',
+	    '            .map((link) => normalizeUrl(link))',
+	    '            .filter((link) => link && isSameHost(link, current.rootHost) && !isSkippableUrl(link));',
+	    '          const remainingSlots = maxPages - (results.length + queue.length);',
+	    '          const maxNewLinks = Math.min(maxLinksPerPage, remainingSlots);',
+	    '          for (let i = 0; i < filteredLinks.length && i < maxNewLinks; i += 1) {',
+	    '            enqueue(filteredLinks[i], current.depth + 1, current.rootHost, title);',
+	    '          }',
+	    '        }',
+	    '      } catch (err) {',
+	    '        const message = err && err.message ? err.message : String(err);',
+	    '        errors.push(`${current.url}: ${message}`);',
+	    '        results.push({',
+	    '          title: current.seedTitle || current.url,',
+	    '          url: current.url,',
+	    '          content: "",',
+	    '          status: "error",',
+	    '          error: message,',
+	    '        });',
+	    '      }',
+	    '    }',
+	    '  } catch (err) {',
+	    '    const message = err && err.message ? err.message : String(err);',
+	    '    errors.push(message);',
+	    '  } finally {',
+	    '    const safeClose = async (name, fn) => {',
+	    '      try {',
+	    '        await fn();',
+	    '      } catch (err) {',
+	    '        const message = err && err.message ? err.message : String(err);',
+	    '        errors.push(`${name}: ${message}`);',
+	    '      }',
+	    '    };',
+	    '    if (page) await safeClose("page.close", () => page.close());',
+	    '    if (context) await safeClose("context.close", () => context.close());',
+	    '    if (browser) await safeClose("browser.close", () => browser.close());',
+	    '  }',
+	    '',
+	    '  logProgress({ stage: "crawl", status: "complete", message: "Crawl complete" });',
+	    '',
+	    '  const output = {',
+	    '    runId: input.runId || "",',
+	    '    query: input.query || "",',
+	    '    collectedAt: new Date().toISOString(),',
+	    '    sources: results,',
+	    '    errors,',
+	    '  };',
+	    '  await fs.writeFile(outputPath, JSON.stringify(output, null, 2), "utf-8");',
+	    '};',
     '',
     'run().catch((err) => {',
     '  const message = err && err.message ? err.message : String(err);',
@@ -383,8 +408,18 @@ const startBackgroundCommand = async (
   env: Record<string, string> = {},
 ) => {
   const safeCommand = command.replace(/'/g, "'\\''");
-  const run = `rm -f ${doneFile}; nohup sh -c '${safeCommand}; echo $? > ${doneFile}' > ${outputFile} 2>&1 & echo $! > ${pidFile}`;
-  await execInSandbox(sandboxId, run, env, 10000);
+  // Use `test -s ${doneFile}` to detect completion, so we can keep the file
+  // empty while running and avoid relying on `rm` (which can fail under heavy load).
+  const run = `nohup sh -c ': > ${doneFile}; ${safeCommand}; echo $? > ${doneFile}' > ${outputFile} 2>&1 & echo $! > ${pidFile}`;
+  const result = await execInSandbox(sandboxId, run, env, 10000);
+  if (result.exitCode !== 0) {
+    const combined = `${result.stdout || ''}\n${result.stderr || ''}`.trim();
+    throw new Error(
+      combined
+        ? `Failed to start crawler process: ${combined}`
+        : 'Failed to start crawler process',
+    );
+  }
 };
 
 const readOutputFromOffset = async (
@@ -407,7 +442,7 @@ const readOutputFromOffset = async (
 const isProcessRunning = async (sandboxId: string, doneFile: string) => {
   const result = await execInSandbox(
     sandboxId,
-    `test -f ${doneFile} && echo "done" || echo "running"`,
+    `test -s ${doneFile} && echo "done" || echo "running"`,
     {},
     5000,
   );
@@ -556,7 +591,9 @@ export const runDeepResearchCollector = async (
   optimizationMode: 'speed' | 'balanced' | 'quality',
   deepResearchMode: DeepResearchMode,
   onProgress: ProgressHandler,
+  ctx: CollectorLogContext = {},
 ): Promise<{ docs: Document[]; sources: DeepResearchSource[] }> => {
+  const correlationId = ctx.correlationId;
   const modeDefaults = {
     light: {
       maxSources: 10,
@@ -621,7 +658,7 @@ export const runDeepResearchCollector = async (
     maxPagesPerHost: scaleInt(base.maxPagesPerHost, 3),
     relatedQueries: Math.max(0, Math.round(base.relatedQueries * scale)),
     summaryLimit: scaleInt(base.summaryLimit, 6),
-    agentModel: process.env.SANDY_AGENT_MODEL || process.env.CHUTES_MODEL_NAME,
+    agentModel: process.env.SANDY_AGENT_MODEL,
   };
 
   if (options.maxPages < options.maxSources) {
@@ -804,7 +841,7 @@ export const runDeepResearchCollector = async (
 
     onProgress({
       id: 'setup',
-      label: 'Installing Playwright',
+      label: 'Installing Browser',
       status: 'running',
       detail: usePreinstalledPlaywright
         ? 'Using preinstalled browser runtime.'
@@ -887,7 +924,7 @@ export const runDeepResearchCollector = async (
     const installChromium = async () => {
       onProgress({
         id: 'setup',
-        label: 'Installing Playwright',
+        label: 'Installing Browser',
         status: 'running',
         detail: 'Downloading Chromium.',
       });
@@ -903,9 +940,10 @@ export const runDeepResearchCollector = async (
       if (depsInstallResult.exitCode !== 0) {
         onProgress({
           id: 'setup',
-          label: 'Installing Playwright',
+          label: 'Installing Browser',
           status: 'error',
-          detail: 'Playwright dependencies failed to install. Using search snippets instead.',
+          detail:
+            'Browser dependencies failed to install. Using search snippets instead.',
         });
         const docs = buildDocuments(fallbackSources);
         return { docs, sources: fallbackSources };
@@ -915,9 +953,9 @@ export const runDeepResearchCollector = async (
       if (browserInstallResult.exitCode !== 0) {
         onProgress({
           id: 'setup',
-          label: 'Installing Playwright',
+          label: 'Installing Browser',
           status: 'error',
-          detail: 'Playwright browser download failed. Using search snippets instead.',
+          detail: 'Browser download failed. Using search snippets instead.',
         });
         const docs = buildDocuments(fallbackSources);
         return { docs, sources: fallbackSources };
@@ -934,7 +972,7 @@ export const runDeepResearchCollector = async (
 
     onProgress({
       id: 'setup',
-      label: 'Installing Playwright',
+      label: 'Installing Browser',
       status: 'running',
       detail: 'Verifying browser launch.',
     });
@@ -944,7 +982,7 @@ export const runDeepResearchCollector = async (
     if (verifyResult.exitCode !== 0 && usePreinstalledPlaywright) {
       onProgress({
         id: 'setup',
-        label: 'Installing Playwright',
+        label: 'Installing Browser',
         status: 'running',
         detail: 'Preinstalled browser failed. Downloading a local copy.',
       });
@@ -963,9 +1001,9 @@ export const runDeepResearchCollector = async (
     if (verifyResult.exitCode !== 0) {
       onProgress({
         id: 'setup',
-        label: 'Installing Playwright',
+        label: 'Installing Browser',
         status: 'error',
-        detail: 'Playwright browser launch failed. Using search snippets instead.',
+        detail: 'Browser launch failed. Using search snippets instead.',
       });
       const docs = buildDocuments(fallbackSources);
       return { docs, sources: fallbackSources };
@@ -973,11 +1011,16 @@ export const runDeepResearchCollector = async (
 
     onProgress({
       id: 'setup',
-      label: 'Installing Playwright',
+      label: 'Installing Browser',
       status: 'complete',
     });
 
+    const collectorRunId =
+      correlationId ??
+      `collector_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
     const input: ResearchInput = {
+      runId: collectorRunId,
       query,
       sources: rankedSources,
       maxChars: options.maxCharsPerSource,
@@ -1004,7 +1047,7 @@ export const runDeepResearchCollector = async (
       pidFile: `${workingDir}/research.pid`,
     };
 
-    const runCommand = `cd ${workingDir} && node ${escapeShellArg(scriptPath)} ${escapeShellArg(inputPath)} ${escapeShellArg(outputPath)}`;
+    const runCommand = `cd ${workingDir} && : > ${outputPath} && node ${escapeShellArg(scriptPath)} ${escapeShellArg(inputPath)} ${escapeShellArg(outputPath)}`;
     await startBackgroundCommand(
       sandboxId,
       runCommand,
@@ -1015,8 +1058,20 @@ export const runDeepResearchCollector = async (
     );
 
     let offset = 0;
+    let crawlTimedOut = false;
     const counts = { current: 0, total: options.maxPages };
     const start = Date.now();
+    const crawlerLogTail: string[] = [];
+    const pushCrawlerLogTail = (value: string) => {
+      const trimmed = value.trim();
+      if (!trimmed) return;
+      if (trimmed.startsWith('__PROGRESS__')) return;
+      crawlerLogTail.push(trimmed.slice(0, 400));
+      const maxLines = 80;
+      if (crawlerLogTail.length > maxLines) {
+        crawlerLogTail.splice(0, crawlerLogTail.length - maxLines);
+      }
+    };
 
     while (await isProcessRunning(sandboxId, sandboxCommand.doneFile)) {
       const { content, newOffset } = await readOutputFromOffset(
@@ -1028,8 +1083,10 @@ export const runDeepResearchCollector = async (
       if (content) {
         const lines = content.split('\n');
         parseProgressLines(lines, onProgress, counts);
+        for (const line of lines) pushCrawlerLogTail(line);
       }
       if (Date.now() - start > options.maxDurationMs) {
+        crawlTimedOut = true;
         onProgress({
           id: 'crawl',
           label: 'Crawling pages',
@@ -1042,34 +1099,248 @@ export const runDeepResearchCollector = async (
     }
 
     const exitCode = await getExitCode(sandboxId, sandboxCommand.doneFile);
+    // Read any remaining crawler log output after the process exits.
+    try {
+      const { content, newOffset } = await readOutputFromOffset(
+        sandboxId,
+        sandboxCommand.outputFile,
+        offset,
+      );
+      offset = newOffset;
+      if (content) {
+        const lines = content.split('\n');
+        parseProgressLines(lines, onProgress, counts);
+        for (const line of lines) pushCrawlerLogTail(line);
+      }
+    } catch {
+      // Ignore tail read failures.
+    }
+
+    const getFileSize = async (path: string) => {
+      const result = await execInSandbox(
+        activeSandboxId,
+        `wc -c < ${path} 2>/dev/null || echo 0`,
+        {},
+        15000,
+      );
+      const parsed = parseInt(result.stdout.trim(), 10);
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+    const readFileChunked = async (path: string, size: number) => {
+      const chunkSize = 48 * 1024;
+      let offset = 0;
+      let raw = '';
+
+      while (offset < size) {
+        const count = Math.min(chunkSize, size - offset);
+        const chunk = await execInSandbox(
+          activeSandboxId,
+          `dd if=${path} bs=1 skip=${offset} count=${count} 2>/dev/null`,
+          {},
+          20000,
+        );
+        if (chunk.exitCode !== 0) {
+          const combined = `${chunk.stdout || ''}\n${chunk.stderr || ''}`.trim();
+          throw new Error(
+            combined
+              ? `Failed to read sandbox file chunk: ${combined}`
+              : 'Failed to read sandbox file chunk',
+          );
+        }
+        raw += chunk.stdout || '';
+        offset += count;
+        if (!chunk.stdout) break;
+      }
+
+      return raw;
+    };
 
     let outputRaw = '';
+    let outputReadError: unknown = null;
+    let outputReadFailed = false;
+    let outputParseFailed = false;
+    let outputNonJson = false;
     try {
       outputRaw = await readSandboxFile(sandboxId, outputPath);
-    } catch {
-      onProgress({
-        id: 'crawl',
-        label: 'Crawling pages',
-        status: 'error',
-        detail: 'Crawler output was unavailable. Using fallback extracts.',
-      });
+    } catch (err) {
+      outputReadError = err;
+      outputReadFailed = true;
+
+      let outputFileSize = 0;
+      try {
+        outputFileSize = await getFileSize(outputPath);
+      } catch {
+        outputFileSize = 0;
+      }
+
+      // Fallback: read the file via the exec endpoint (sometimes more reliable than files/read).
+      try {
+        if (outputFileSize > 0) {
+          outputRaw = await readFileChunked(outputPath, outputFileSize);
+        } else {
+          const cat = await execInSandbox(
+            sandboxId,
+            `cat ${outputPath} 2>/dev/null || true`,
+            {},
+            20000,
+          );
+          if (cat.stdout?.trim()) {
+            outputRaw = cat.stdout;
+          }
+        }
+      } catch {
+        // ignore
+      }
+
+      if (!outputRaw?.trim()) {
+        onProgress({
+          id: 'crawl',
+          label: 'Crawling pages',
+          status: 'error',
+          detail: 'Crawler output was unavailable. Using fallback extracts.',
+        });
+      }
+
+      // Emit anonymized diagnostic info for debugging.
+      if (correlationId) {
+        let workspaceListing = '';
+        try {
+          const listing = await execInSandbox(
+            sandboxId,
+            `ls -la ${workingDir} 2>/dev/null | tail -n 200`,
+            {},
+            20000,
+          );
+          workspaceListing = listing.stdout || '';
+        } catch {
+          // ignore
+        }
+
+        logEvent({
+          level: 'error',
+          event: 'deep_research.crawl_output_read_failed',
+          correlationId,
+          metadata: {
+            exitCode,
+            crawled: counts.current,
+            planned: counts.total,
+            recoveredViaExec: Boolean(outputRaw),
+            error: serializeError(outputReadError),
+            workspace: workspaceListing
+              ? anonymizeLogText(workspaceListing)
+              : undefined,
+          },
+        });
+      }
     }
+    let outputParsedOk = false;
     let output: ResearchOutput = {
       query,
       collectedAt: new Date().toISOString(),
       sources: [],
     };
-    try {
-      if (outputRaw) {
-        output = JSON.parse(outputRaw) as ResearchOutput;
+    if (outputRaw) {
+      let parsed: ResearchOutput | null = null;
+      let parseError: unknown = null;
+
+      const trimmedRaw = outputRaw.trimStart();
+      if (!trimmedRaw.startsWith('{')) {
+        outputNonJson = true;
+        parseError = new Error('Crawler output did not contain JSON');
+      } else {
+        try {
+          parsed = JSON.parse(outputRaw) as ResearchOutput;
+        } catch (err) {
+          outputParseFailed = true;
+          parseError = err;
+        }
       }
-    } catch {
-      onProgress({
-        id: 'crawl',
-        label: 'Crawling pages',
-        status: 'error',
-        detail: 'Crawler output was not readable. Using fallback extracts.',
-      });
+
+      if (!parsed) {
+        // The Sandy files API sometimes truncates larger files. If parsing fails,
+        // attempt a chunked read via exec and parse again.
+        try {
+          const outputFileSize = await getFileSize(outputPath);
+          if (outputFileSize > 0) {
+            const chunked = await readFileChunked(outputPath, outputFileSize);
+            parsed = JSON.parse(chunked) as ResearchOutput;
+            outputRaw = chunked;
+          }
+        } catch (err) {
+          outputParseFailed = true;
+          parseError = parseError ?? err;
+        }
+      }
+
+      if (parsed) {
+        output = parsed;
+        outputParsedOk = true;
+      } else {
+        outputParseFailed = true;
+        onProgress({
+          id: 'crawl',
+          label: 'Crawling pages',
+          status: 'error',
+          detail: 'Crawler output was not readable. Using fallback extracts.',
+        });
+
+        if (correlationId) {
+          let fileSize = 0;
+          try {
+            fileSize = await getFileSize(outputPath);
+          } catch {
+            fileSize = 0;
+          }
+
+          logEvent({
+            level: 'error',
+            event: 'deep_research.crawl_output_parse_failed',
+            correlationId,
+            metadata: {
+              exitCode,
+              crawled: counts.current,
+              planned: counts.total,
+              fileSize,
+              rawLength: outputRaw.length,
+              error: serializeError(parseError),
+            },
+          });
+        }
+      }
+    }
+
+    if (outputParsedOk && output.runId !== collectorRunId) {
+      outputParseFailed = true;
+      if (correlationId) {
+        let fileSize = 0;
+        try {
+          fileSize = await getFileSize(outputPath);
+        } catch {
+          fileSize = 0;
+        }
+
+        logEvent({
+          level: 'error',
+          event: 'deep_research.crawl_output_runid_mismatch',
+          correlationId,
+          metadata: {
+            exitCode,
+            crawled: counts.current,
+            planned: counts.total,
+            fileSize,
+            expectedRunId: collectorRunId,
+            outputRunId: output.runId ?? null,
+          },
+        });
+      }
+
+      outputParsedOk = false;
+      output = {
+        query,
+        collectedAt: new Date().toISOString(),
+        sources: [],
+      };
     }
     sources = output.sources || [];
     const usedFallback =
@@ -1092,10 +1363,43 @@ export const runDeepResearchCollector = async (
         detail,
       });
     } else {
+      const detail = usedFallback
+        ? 'Crawler failed, using search snippets.'
+        : counts.current > 0 && counts.current < counts.total
+          ? 'Crawler returned partial results.'
+          : undefined;
       onProgress({
         id: 'crawl',
         label: 'Crawling pages',
         status: 'complete',
+        ...(detail ? { detail } : {}),
+      });
+    }
+
+    const crawlHadIssue =
+      crawlTimedOut ||
+      exitCode !== 0 ||
+      usedFallback ||
+      outputReadFailed ||
+      outputParseFailed ||
+      outputNonJson;
+
+    if (correlationId && crawlHadIssue && crawlerLogTail.length > 0) {
+      logEvent({
+        level: outputReadFailed || outputParseFailed || outputNonJson ? 'error' : 'warn',
+        event: 'deep_research.crawl_log_tail',
+        correlationId,
+        metadata: {
+          timedOut: crawlTimedOut,
+          exitCode,
+          usedFallback,
+          outputReadFailed,
+          outputParseFailed,
+          outputNonJson,
+          crawled: counts.current,
+          planned: counts.total,
+          tail: crawlerLogTail.map((line) => anonymizeLogText(line)),
+        },
       });
     }
 
@@ -1132,65 +1436,143 @@ export const runDeepResearchCollector = async (
         status: 'running',
       });
 
-      const agentPrompt = buildAgentPrompt(
-        query,
-        sources,
-        Math.min(options.summaryLimit, sources.length),
-      );
-      const promptPath = `${workingDir}/agent-prompt.txt`;
-      const agentOutputPath = `${workingDir}/agent-output.txt`;
-      const agentScriptPath = `${workingDir}/run-agent.sh`;
-      const systemPromptPath = agentSystemPrompt
-        ? `${workingDir}/agent-system-prompt.txt`
-        : null;
+      try {
+        const agentPrompt = buildAgentPrompt(
+          query,
+          sources,
+          Math.min(options.summaryLimit, sources.length),
+        );
+        const promptPath = `${workingDir}/agent-prompt.txt`;
+        const agentOutputPath = `${workingDir}/agent-output.txt`;
+        const agentScriptPath = `${workingDir}/run-agent.sh`;
+        const systemPromptPath = agentSystemPrompt
+          ? `${workingDir}/agent-system-prompt.txt`
+          : null;
 
-      await writeSandboxFile(sandboxId, promptPath, agentPrompt);
-      if (systemPromptPath && agentSystemPrompt) {
-        await writeSandboxFile(sandboxId, systemPromptPath, agentSystemPrompt);
+        await writeSandboxFile(sandboxId, promptPath, agentPrompt);
+        if (systemPromptPath && agentSystemPrompt) {
+          await writeSandboxFile(
+            sandboxId,
+            systemPromptPath,
+            agentSystemPrompt,
+          );
+        }
+        const agentScript = [
+          '#!/bin/sh',
+          'set -e',
+          'PROMPT="$(cat ' + promptPath + ')"',
+          `claude -p --output-format text --no-session-persistence --model "${agentModel}" ${
+            systemPromptPath
+              ? `--append-system-prompt-file "${systemPromptPath}" `
+              : ''
+          }"$PROMPT" > ${agentOutputPath}`,
+          '',
+        ].join('\n');
+        await writeSandboxFile(sandboxId, agentScriptPath, agentScript);
+        const normalizedRouterUrl = agentRouterUrl
+          ? agentRouterUrl.replace(/\/+$/, '').replace(/\/v1$/, '')
+          : null;
+
+        const agentRun = await execInSandbox(
+          sandboxId,
+          `chmod +x ${agentScriptPath} && ${agentScriptPath}`,
+          {
+            ANTHROPIC_BASE_URL: normalizedRouterUrl || 'https://claude.chutes.ai',
+            ANTHROPIC_AUTH_TOKEN: agentApiKey,
+            ANTHROPIC_API_KEY: agentApiKey,
+            API_TIMEOUT_MS: '600000',
+            CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+            NO_COLOR: '1',
+            TERM: 'dumb',
+          },
+          4 * 60 * 1000,
+        );
+
+        if (agentRun.exitCode !== 0) {
+          const combined = `${agentRun.stdout || ''}\n${agentRun.stderr || ''}`.trim();
+          const detail = combined.includes('not found')
+            ? 'Agent model not available. Check SANDY_AGENT_MODEL.'
+            : 'Agent summary unavailable, using raw extracts.';
+
+          if (correlationId) {
+            logEvent({
+              level: 'warn',
+              event: 'deep_research.agent_run_failed',
+              correlationId,
+              metadata: {
+                exitCode: agentRun.exitCode,
+                output: combined ? anonymizeLogText(combined) : undefined,
+              },
+            });
+          }
+
+          onProgress({
+            id: 'analysis',
+            label: 'Synthesizing notes',
+            status: 'error',
+            detail,
+          });
+        } else {
+          let agentOutput = '';
+          try {
+            agentOutput = await readSandboxFile(sandboxId, agentOutputPath);
+          } catch (err) {
+            if (correlationId) {
+              logEvent({
+                level: 'warn',
+                event: 'deep_research.agent_output_read_failed',
+                correlationId,
+                metadata: { error: serializeError(err) },
+              });
+            }
+            agentOutput = '';
+          }
+
+          summarizedSources = extractJson(agentOutput) as {
+            sources?: Array<{ url: string; summary?: string }>;
+          } | null;
+
+          const summaryErrorDetail = agentOutput.includes('not found')
+            ? 'Agent model not available. Check SANDY_AGENT_MODEL.'
+            : 'Agent summary unavailable, using raw extracts.';
+
+          if (!summarizedSources && correlationId) {
+            logEvent({
+              level: 'warn',
+              event: 'deep_research.agent_output_unavailable',
+              correlationId,
+              metadata: {
+                outputPreview: agentOutput
+                  ? anonymizeLogText(agentOutput.slice(0, 800))
+                  : undefined,
+              },
+            });
+          }
+
+          onProgress({
+            id: 'analysis',
+            label: 'Synthesizing notes',
+            status: summarizedSources ? 'complete' : 'error',
+            detail: summarizedSources ? undefined : summaryErrorDetail,
+          });
+        }
+      } catch (err) {
+        if (correlationId) {
+          logEvent({
+            level: 'error',
+            event: 'deep_research.agent_summary_error',
+            correlationId,
+            metadata: { error: serializeError(err) },
+          });
+        }
+
+        onProgress({
+          id: 'analysis',
+          label: 'Synthesizing notes',
+          status: 'error',
+          detail: 'Agent summary unavailable, using raw extracts.',
+        });
       }
-      const agentScript = [
-        '#!/bin/sh',
-        'set -e',
-        'PROMPT="$(cat ' + promptPath + ')"',
-        `claude -p --output-format text --no-session-persistence --model "${agentModel}" ${
-          systemPromptPath ? `--append-system-prompt-file "${systemPromptPath}" ` : ''
-        }"$PROMPT" > ${agentOutputPath}`,
-        '',
-      ].join('\n');
-      await writeSandboxFile(sandboxId, agentScriptPath, agentScript);
-      const normalizedRouterUrl = agentRouterUrl
-        ? agentRouterUrl.replace(/\/+$/, '').replace(/\/v1$/, '')
-        : null;
-      await execInSandbox(
-        sandboxId,
-        `chmod +x ${agentScriptPath} && ${agentScriptPath}`,
-        {
-          ANTHROPIC_BASE_URL: normalizedRouterUrl || 'https://claude.chutes.ai',
-          ANTHROPIC_AUTH_TOKEN: agentApiKey,
-          ANTHROPIC_API_KEY: agentApiKey,
-          API_TIMEOUT_MS: '600000',
-          CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
-          NO_COLOR: '1',
-          TERM: 'dumb',
-        },
-        4 * 60 * 1000,
-      );
-
-      const agentOutput = await readSandboxFile(sandboxId, agentOutputPath);
-      summarizedSources = extractJson(agentOutput) as {
-        sources?: Array<{ url: string; summary?: string }>;
-      } | null;
-
-      const summaryErrorDetail = agentOutput.includes('not found')
-        ? 'Agent model not available. Check SANDY_AGENT_MODEL.'
-        : 'Agent summary unavailable, using raw extracts.';
-
-      onProgress({
-        id: 'analysis',
-        label: 'Synthesizing notes',
-        status: summarizedSources ? 'complete' : 'error',
-        detail: summarizedSources ? undefined : summaryErrorDetail,
-      });
     }
 
     const docs = buildDocuments(sources, summarizedSources || undefined);

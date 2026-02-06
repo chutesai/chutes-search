@@ -55,3 +55,13 @@ export const ipSearchLogs = sqliteTable('ip_search_logs', {
   searchDate: text('search_date').notNull(), // Format: YYYY-MM-DD
   searchCount: integer('search_count').notNull().default(0),
 });
+
+// Anonymized application event logs (no user queries, no user identifiers).
+export const eventLogs = sqliteTable('event_logs', {
+  id: integer('id').primaryKey(),
+  createdAt: text('createdAt').notNull(),
+  level: text('level', { enum: ['debug', 'info', 'warn', 'error'] }).notNull(),
+  event: text('event').notNull(),
+  correlationId: text('correlationId'),
+  metadata: text('metadata', { mode: 'json' }),
+});

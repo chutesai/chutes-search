@@ -1,23 +1,40 @@
 import { ArrowRight } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import TextareaAutosize from 'react-textarea-autosize';
 import Optimization from './MessageInputActions/Optimization';
 import Attach from './MessageInputActions/Attach';
 import DeepResearchToggle from './MessageInputActions/DeepResearch';
 import { useChat } from '@/lib/hooks/useChat';
+import { useAuthMe } from '@/lib/hooks/useAuthMe';
 
 const EmptyChatMessageInput = ({
   onFocusChange,
 }: {
   onFocusChange?: (focused: boolean) => void;
 }) => {
-  const { sendMessage, focusMode, deepResearchMode } = useChat();
+  const { sendMessage, focusMode, deepResearchMode, loading } = useChat();
+  const { me, loading: authLoading } = useAuthMe();
+  const isSignedIn = Boolean(me?.user);
 
   /* const [copilotEnabled, setCopilotEnabled] = useState(false); */
   const [message, setMessage] = useState('');
   const isDeepResearch = focusMode === 'deepResearch';
   const deepResearchLabel =
     deepResearchMode === 'max' ? 'Deep Research MAX' : 'Deep Research light';
+  const deepResearchRequiresSignIn =
+    isDeepResearch && !authLoading && !isSignedIn;
+  const canSend =
+    message.trim().length > 0 && !loading && !deepResearchRequiresSignIn;
+
+  const [returnTo, setReturnTo] = useState('/');
+  useEffect(() => {
+    setReturnTo(window.location.pathname + window.location.search);
+  }, []);
+
+  const loginHref = useMemo(
+    () => `/api/auth/login?returnTo=${encodeURIComponent(returnTo)}`,
+    [returnTo],
+  );
 
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -74,12 +91,14 @@ const EmptyChatMessageInput = ({
     <form
       onSubmit={(e) => {
         e.preventDefault();
+        if (loading || deepResearchRequiresSignIn) return;
         sendMessage(message);
         setMessage('');
       }}
       onKeyDown={(e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
+          if (loading || deepResearchRequiresSignIn) return;
           sendMessage(message);
           setMessage('');
         }
@@ -102,18 +121,37 @@ const EmptyChatMessageInput = ({
               Start typing to search
             </span>
           </div>
-          <div className="flex flex-row items-center space-x-1 sm:space-x-4">
-            <Optimization />
-            <DeepResearchToggle align="right" />
+          <div className="flex flex-row items-center gap-1 sm:gap-4 flex-shrink-0">
+            <div className="sm:hidden">
+              <Optimization compact align="right" />
+            </div>
+            <div className="hidden sm:block">
+              <Optimization align="right" />
+            </div>
+            <div className="sm:hidden">
+              <DeepResearchToggle compact align="right" />
+            </div>
+            <div className="hidden sm:block">
+              <DeepResearchToggle align="right" />
+            </div>
             <button
-              disabled={message.trim().length === 0}
-              className="bg-[#24A0ED] text-white disabled:text-black/50 dark:disabled:text-white/50 disabled:bg-[#e0e0dc] dark:disabled:bg-[#ececec21] hover:bg-opacity-85 transition duration-100 rounded-full p-2"
+              disabled={!canSend}
+              className="bg-[#24A0ED] text-white disabled:text-black/50 dark:disabled:text-white/50 disabled:bg-[#e0e0dc] dark:disabled:bg-[#ececec21] hover:bg-opacity-85 transition duration-100 rounded-full p-2 flex-shrink-0"
             >
               <ArrowRight className="bg-background" size={17} />
             </button>
           </div>
         </div>
-        {isDeepResearch && (
+        {deepResearchRequiresSignIn && (
+          <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+            Deep Research is available after signing in.{' '}
+            <a href={loginHref} className="underline underline-offset-2">
+              Sign in with Chutes
+            </a>{' '}
+            to enable {deepResearchLabel}.
+          </div>
+        )}
+        {isDeepResearch && !deepResearchRequiresSignIn && (
           <div className="mt-3 rounded-lg border border-[#24A0ED]/30 bg-[#24A0ED]/10 px-3 py-2 text-xs text-[#0b66a8] dark:text-[#9fd3ff]">
             {deepResearchLabel} uses a live browser to visit sources. Expect
             longer runtimes for richer answers.

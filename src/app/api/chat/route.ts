@@ -272,6 +272,20 @@ export const POST = async (req: Request) => {
     // Check if user is authenticated (either via session or via chutesAccessToken)
     const isAuthenticated = !!authSession || !!body.chutesAccessToken;
 
+    // Deep Research is only available to signed-in users.
+    if (body.focusMode === 'deepResearch' && !isAuthenticated) {
+      return Response.json(
+        {
+          message: 'Deep Research requires signing in with Chutes',
+          error: 'DEEP_RESEARCH_REQUIRES_LOGIN',
+          details: {
+            requiresLogin: true,
+          },
+        },
+        { status: 401 },
+      );
+    }
+
     // If not authenticated, check IP-based rate limit
     if (!isAuthenticated) {
       const clientIp = getClientIp(req);
@@ -345,7 +359,9 @@ export const POST = async (req: Request) => {
       const hasInvoke = Boolean(
         authSession?.scope?.split(' ').includes('chutes:invoke'),
       );
-      const useUserToken = Boolean(authSession?.accessToken && hasInvoke);
+      const tokenExpiry = authSession?.accessTokenExpiresAt ?? null;
+      const tokenValid = tokenExpiry ? tokenExpiry > Math.floor(Date.now() / 1000) + 30 : true;
+      const useUserToken = Boolean(authSession?.accessToken && hasInvoke && tokenValid);
 
       const baseURL = getCustomOpenaiApiUrl();
       const apiKey = useUserToken ? authSession!.accessToken : getCustomOpenaiApiKey();

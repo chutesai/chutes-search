@@ -49,7 +49,7 @@ Want to know more about its architecture and how it works? You can read it [here
 
 ## Chutes deployment notes
 
-- Deep Research relies on Sandy sandboxes. Production uses `https://sandy.65.109.64.180.nip.io` (old Sandy host is deprecated).
+- Deep Research relies on Sandy sandboxes. Configure `SANDY_BASE_URL` to point at your Sandy endpoint.
 - If you run CLI agents via Sandy `/agent/run`, set `apiBaseUrl` to the Janus model router, keep `model=janus-router`, and pass `rawPrompt: true` so Claude Code can route across Chutes models + fallbacks. Upload the agent pack and point `JANUS_SYSTEM_PROMPT_PATH` (or `systemPromptPath`) at `/workspace/agent-pack/prompts/system.md`.
 - For agent-generated files, save to `/workspace/artifacts` and cache sandbox artifact URLs server‑side (e.g., `/var/data/...`) before the sandbox terminates.
 - Deep Research sandbox summaries can also use the router by setting `SANDY_AGENT_API_BASE_URL` (or `JANUS_ROUTER_URL`) and optionally `SANDY_AGENT_SYSTEM_PROMPT` to append a custom system prompt for Claude Code.

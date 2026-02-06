@@ -39,6 +39,12 @@ const renderIcon = (status: ProgressItem['status']) => {
   return <Circle className="h-3 w-3" />;
 };
 
+const toUserFacing = (value: string | undefined) => {
+  if (!value) return value;
+  // Keep the UI free of implementation details (e.g. "Playwright").
+  return value.replace(/Playwright/g, 'Browser');
+};
+
 const DeepResearchProgress = ({ progress }: { progress: ProgressItem[] }) => {
   const sorted = [...progress].sort((a, b) => {
     const aIndex = ORDER.indexOf(a.id as (typeof ORDER)[number]);
@@ -73,9 +79,10 @@ const DeepResearchProgress = ({ progress }: { progress: ProgressItem[] }) => {
             <div className="flex-1">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-black dark:text-white">
-                  {item.label}
+                  {toUserFacing(item.label)}
                 </p>
-                {typeof item.percent === 'number' && (
+                {item.status === 'running' &&
+                  typeof item.percent === 'number' && (
                   <span className="text-xs text-black/50 dark:text-white/50">
                     {item.percent}%
                   </span>
@@ -83,10 +90,10 @@ const DeepResearchProgress = ({ progress }: { progress: ProgressItem[] }) => {
               </div>
               {item.detail && (
                 <p className="text-xs text-black/50 dark:text-white/50">
-                  {item.detail}
+                  {toUserFacing(item.detail)}
                 </p>
               )}
-              {typeof item.percent === 'number' && (
+              {item.status === 'running' && typeof item.percent === 'number' && (
                 <div className="mt-2 h-1.5 w-full rounded-full bg-light-200 dark:bg-dark-200">
                   <div
                     className="h-1.5 rounded-full bg-[#24A0ED]"

@@ -32,9 +32,11 @@ type OptionKey = (typeof options)[number]['key'];
 const DeepResearchToggle = ({
   compact = false,
   align = 'right',
+  panelDirection = 'down',
 }: {
   compact?: boolean;
   align?: 'left' | 'right';
+  panelDirection?: 'up' | 'down';
 }) => {
   const { focusMode, setFocusMode, deepResearchMode, setDeepResearchMode } =
     useChat();
@@ -59,7 +61,7 @@ const DeepResearchToggle = ({
   };
 
   return (
-    <Popover className={cn('relative', compact ? 'w-auto' : 'w-full')}>
+    <Popover className={cn('relative w-auto')}>
       <PopoverButton
         type="button"
         aria-label={`Deep research mode: ${activeLabel}`}
@@ -102,6 +104,7 @@ const DeepResearchToggle = ({
           className={cn(
             'absolute z-10 w-64',
             align === 'left' ? 'left-0' : 'right-0',
+            panelDirection === 'up' ? 'bottom-full mb-2' : 'top-full mt-2',
           )}
         >
           <div className="flex flex-col gap-2 bg-light-primary dark:bg-dark-primary border rounded-lg border-light-200 dark:border-dark-200 w-full p-4">

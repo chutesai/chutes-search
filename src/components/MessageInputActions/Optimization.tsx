@@ -34,17 +34,18 @@ const OptimizationModes = [
 const Optimization = ({
   compact = false,
   align = 'right',
+  panelDirection = 'down',
 }: {
   compact?: boolean;
   align?: 'left' | 'right';
+  panelDirection?: 'up' | 'down';
 }) => {
   const { optimizationMode, setOptimizationMode } = useChat();
 
   return (
     <Popover
       className={cn(
-        'relative',
-        compact ? 'w-auto' : 'w-full max-w-[15rem] md:max-w-md lg:max-w-lg',
+        'relative w-auto',
       )}
     >
       <PopoverButton
@@ -86,6 +87,7 @@ const Optimization = ({
           className={cn(
             'absolute z-10 w-64 md:w-[250px]',
             align === 'left' ? 'left-0' : 'right-0',
+            panelDirection === 'up' ? 'bottom-full mb-2' : 'top-full mt-2',
           )}
         >
           <div className="flex flex-col gap-2 bg-light-primary dark:bg-dark-primary border rounded-lg border-light-200 dark:border-dark-200 w-full p-4 max-h-[200px] md:max-h-none overflow-y-auto">

@@ -493,6 +493,11 @@ export const ChatProvider = ({
       const me = isAuthLoaded ? authMe : await refreshAuth();
       const isSignedIn = Boolean(me.user);
 
+      if (focusMode === 'deepResearch' && !isSignedIn) {
+        toast.error('Sign in with Chutes to use Deep Research.');
+        return;
+      }
+
       if (!isSignedIn) {
         try {
           const current = readFreeSearchState(localStorage);
@@ -648,6 +653,26 @@ export const ChatProvider = ({
       }
 
       if (data.type === 'messageEnd') {
+        // If the backend didn't emit completion events for every progress item,
+        // stop any spinners so the UI reflects that the answer is finished.
+        setMessages((prev) =>
+          prev.map((msg) => {
+            if (msg.messageId !== data.messageId) return msg;
+            if (!msg.progress || msg.progress.length === 0) return msg;
+            return {
+              ...msg,
+              progress: msg.progress.map((item) => {
+                if (item.status !== 'running') return item;
+                return {
+                  ...item,
+                  status: 'complete',
+                  ...(typeof item.percent === 'number' ? { percent: 100 } : {}),
+                };
+              }),
+            };
+          }),
+        );
+
         setChatHistory((prevHistory) => [
           ...prevHistory,
           ['human', trimmed],
@@ -694,14 +719,6 @@ export const ChatProvider = ({
 
     const messageIndex = messages.findIndex((m) => m.messageId === messageId);
 
-    // Client-side timing for debugging
-    const searchStart = Date.now();
-    const logTiming = (step: string) => {
-      console.log(`[search-timing] +${Date.now() - searchStart}ms | ${step}`);
-    };
-    
-    logTiming('Sending request to /api/chat');
-
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: {
@@ -734,40 +751,18 @@ export const ChatProvider = ({
       }),
     });
 
-    logTiming(`Response received: ${res.status} ${res.statusText}`);
-
     if (!res.body) throw new Error('No response body');
 
-    const reader = res.body?.getReader();
+    const reader = res.body.getReader();
     const decoder = new TextDecoder('utf-8');
 
     let buffer = '';
-    let firstChunkReceived = false;
-    let sourcesReceived = false;
-    let firstMessageReceived = false;
-
-    const handleJson = (json: any) => {
-      if (json.type === 'sources' && !sourcesReceived) {
-        logTiming('Sources received from LLM');
-        sourcesReceived = true;
-      }
-      if (json.type === 'message' && !firstMessageReceived) {
-        logTiming('First response token received');
-        firstMessageReceived = true;
-      }
-      messageHandler(json);
-    };
+    const handleJson = (json: any) => messageHandler(json);
 
     while (true) {
       const { value, done } = await reader.read();
       if (done) {
-        logTiming('Stream complete');
         break;
-      }
-
-      if (!firstChunkReceived) {
-        logTiming('First chunk received from stream');
-        firstChunkReceived = true;
       }
 
       buffer += decoder.decode(value, { stream: true });

@@ -6,9 +6,12 @@ import AttachSmall from './MessageInputActions/AttachSmall';
 import Optimization from './MessageInputActions/Optimization';
 import DeepResearchToggle from './MessageInputActions/DeepResearch';
 import { useChat } from '@/lib/hooks/useChat';
+import { useAuthMe } from '@/lib/hooks/useAuthMe';
 
 const MessageInput = () => {
   const { loading, sendMessage, focusMode, deepResearchMode } = useChat();
+  const { me, loading: authLoading } = useAuthMe();
+  const isSignedIn = Boolean(me?.user);
 
   const [message, setMessage] = useState('');
   const [textareaRows, setTextareaRows] = useState(1);
@@ -16,6 +19,9 @@ const MessageInput = () => {
   const isDeepResearch = focusMode === 'deepResearch';
   const deepResearchLabel =
     deepResearchMode === 'max' ? 'Deep Research MAX' : 'Deep Research light';
+  const deepResearchRequiresSignIn =
+    isDeepResearch && !authLoading && !isSignedIn;
+  const canSend = message.trim().length > 0 && !loading && !deepResearchRequiresSignIn;
 
   useEffect(() => {
     if (textareaRows >= 2 && message && mode === 'single') {
@@ -54,12 +60,14 @@ const MessageInput = () => {
       onSubmit={(e) => {
         if (loading) return;
         e.preventDefault();
+        if (deepResearchRequiresSignIn) return;
         sendMessage(message);
         setMessage('');
       }}
       onKeyDown={(e) => {
         if (e.key === 'Enter' && !e.shiftKey && !loading) {
           e.preventDefault();
+          if (deepResearchRequiresSignIn) return;
           sendMessage(message);
           setMessage('');
         }
@@ -71,7 +79,7 @@ const MessageInput = () => {
     >
       {mode === 'single' && (
         <div className="flex flex-row items-center gap-1 pr-1">
-          <Optimization compact align="left" />
+          <Optimization compact align="left" panelDirection="up" />
           <AttachSmall />
         </div>
       )}
@@ -87,9 +95,9 @@ const MessageInput = () => {
       />
       {mode === 'single' && (
         <div className="flex flex-row items-center space-x-4">
-          <DeepResearchToggle compact align="right" />
+          <DeepResearchToggle compact align="right" panelDirection="up" />
           <button
-            disabled={message.trim().length === 0 || loading}
+            disabled={!canSend}
             className="bg-[#24A0ED] text-white disabled:text-black/50 dark:disabled:text-white/50 hover:bg-opacity-85 transition duration-100 disabled:bg-[#e0e0dc79] dark:disabled:bg-[#ececec21] rounded-full p-2"
           >
             <ArrowUp className="bg-background" size={17} />
@@ -99,13 +107,13 @@ const MessageInput = () => {
       {mode === 'multi' && (
         <div className="flex flex-row items-center justify-between w-full pt-2">
           <div className="flex flex-row items-center gap-1">
-            <Optimization compact align="left" />
+            <Optimization compact align="left" panelDirection="up" />
             <AttachSmall />
           </div>
           <div className="flex flex-row items-center space-x-4">
-            <DeepResearchToggle compact align="right" />
+            <DeepResearchToggle compact align="right" panelDirection="up" />
             <button
-              disabled={message.trim().length === 0 || loading}
+              disabled={!canSend}
               className="bg-[#24A0ED] text-white text-black/50 dark:disabled:text-white/50 hover:bg-opacity-85 transition duration-100 disabled:bg-[#e0e0dc79] dark:disabled:bg-[#ececec21] rounded-full p-2"
             >
               <ArrowUp className="bg-background" size={17} />
@@ -113,9 +121,14 @@ const MessageInput = () => {
           </div>
         </div>
       )}
-      {isDeepResearch && mode === 'multi' && (
+      {isDeepResearch && mode === 'multi' && !deepResearchRequiresSignIn && (
         <div className="mt-2 text-xs text-[#24A0ED]">
           {deepResearchLabel} can take longer while we browse sources.
+        </div>
+      )}
+      {deepResearchRequiresSignIn && (
+        <div className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+          Deep Research is available after signing in with Chutes.
         </div>
       )}
     </form>
