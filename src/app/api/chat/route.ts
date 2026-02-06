@@ -58,7 +58,6 @@ type Body = {
   chatModel: ChatModel;
   embeddingModel: EmbeddingModel;
   systemInstructions: string;
-  chutesAccessToken?: string; // Optional Chutes OAuth token for authenticated users
 };
 
 const handleEmitterEvents = async (
@@ -269,8 +268,9 @@ export const POST = async (req: Request) => {
       );
     }
 
-    // Check if user is authenticated (either via session or via chutesAccessToken)
-    const isAuthenticated = !!authSession || !!body.chutesAccessToken;
+    // Check if user is authenticated (server-side session cookie only).
+    // Do not trust auth tokens supplied in the request body.
+    const isAuthenticated = !!authSession;
 
     // Deep Research is only available to signed-in users.
     if (body.focusMode === 'deepResearch' && !isAuthenticated) {

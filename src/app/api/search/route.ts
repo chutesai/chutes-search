@@ -18,6 +18,9 @@ import {
   checkIpRateLimit,
   incrementIpSearchCount,
 } from '@/lib/rateLimit';
+import { cookies } from 'next/headers';
+import { AUTH_SESSION_COOKIE_NAME } from '@/lib/auth/constants';
+import { refreshAuthSessionIfNeeded } from '@/lib/auth/session';
 
 interface chatModel {
   provider: string;
@@ -41,7 +44,6 @@ interface ChatRequestBody {
   history: Array<[string, string]>;
   stream?: boolean;
   systemInstructions?: string;
-  chutesAccessToken?: string; // Optional Chutes OAuth token for authenticated users
 }
 
 export const POST = async (req: Request) => {
@@ -62,8 +64,33 @@ export const POST = async (req: Request) => {
       );
     }
 
-    // Check if user is authenticated with Chutes
-    const isAuthenticated = !!body.chutesAccessToken;
+    const cookieStore = await cookies();
+    // Refresh auth session if needed (token refresh + sliding DB expiry).
+    const authSessionId = cookieStore.get(AUTH_SESSION_COOKIE_NAME)?.value;
+    const authSession = authSessionId
+      ? await refreshAuthSessionIfNeeded(authSessionId)
+      : null;
+    if (authSessionId && !authSession) {
+      cookieStore.set(AUTH_SESSION_COOKIE_NAME, '', {
+        path: '/',
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 0,
+      });
+    } else if (authSessionId && authSession) {
+      // Keep users signed in for 30 days after last successful usage.
+      cookieStore.set(AUTH_SESSION_COOKIE_NAME, authSessionId, {
+        path: '/',
+        sameSite: 'lax',
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 30 * 24 * 60 * 60,
+      });
+    }
+
+    // Check if user is authenticated (server-side session cookie only).
+    const isAuthenticated = !!authSession;
 
     // If not authenticated, check IP-based rate limit
     if (!isAuthenticated) {
