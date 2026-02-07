@@ -5,8 +5,8 @@ import { logEvent } from '@/lib/eventLog';
 const FREE_SEARCHES_PER_DAY = 3;
 
 // Global throttles (anonymous/free searches only), across all users/IPs.
-const FREE_SEARCHES_GLOBAL_PER_MINUTE = 100;
-const FREE_SEARCHES_GLOBAL_PER_HOUR = 3000;
+const FREE_SEARCHES_GLOBAL_PER_MINUTE = 200;
+const FREE_SEARCHES_GLOBAL_PER_HOUR = 6000;
 
 type FreeSearchQuotaResult =
   | {
@@ -312,4 +312,3 @@ export async function getRateLimitInfo(ipAddress: string): Promise<{
     freeSearchesUsed: used,
   };
 }
-
