@@ -38,7 +38,7 @@ export const runWebSearch = async (
   const startTime = Date.now();
   const log = (msg: string) => console.log(`[webSearch] ${new Date().toISOString()} | +${Date.now() - startTime}ms | ${msg}`);
   
-  log(`Starting web search for: "${query.substring(0, 50)}..."`);
+  log(`Starting web search (queryLen=${query.length})`);
   
   const searxngSearch = overrides?.searchSearxngFn ?? searchSearxng;
   const serperSearch = overrides?.searchSerperFn ?? searchSerper;

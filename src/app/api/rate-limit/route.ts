@@ -14,8 +14,6 @@ export const GET = async (req: Request) => {
 
     return Response.json({
       ...rateLimitInfo,
-      clientIp:
-        clientIp !== 'unknown' ? clientIp.substring(0, 3) + '***' : 'unknown', // Partially mask IP for privacy
     });
   } catch (err) {
     console.error('Error getting rate limit info:', err);
@@ -25,5 +23,4 @@ export const GET = async (req: Request) => {
     );
   }
 };
-
 

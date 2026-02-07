@@ -24,9 +24,7 @@ import {
 } from '@/lib/auth/constants';
 import { refreshAuthSessionIfNeeded } from '@/lib/auth/session';
 import {
-  getClientIp,
-  checkIpRateLimit,
-  incrementIpSearchCount,
+  consumeFreeSearchQuota,
 } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
@@ -254,6 +252,15 @@ export const POST = async (req: Request) => {
         secure: process.env.NODE_ENV === 'production',
         maxAge: 0,
       });
+    } else if (authSessionId && authSession) {
+      // Keep users signed in for 30 days after last successful usage.
+      cookieStore.set(AUTH_SESSION_COOKIE_NAME, authSessionId, {
+        path: '/',
+        sameSite: 'lax',
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 30 * 24 * 60 * 60,
+      });
     }
 
     const body = (await req.json()) as Body;
@@ -288,27 +295,33 @@ export const POST = async (req: Request) => {
 
     // If not authenticated, check IP-based rate limit
     if (!isAuthenticated) {
-      const clientIp = getClientIp(req);
-      const { allowed, remaining, used } = await checkIpRateLimit(clientIp);
+      const quota = await consumeFreeSearchQuota(req);
+      if (!quota.allowed) {
+        if (quota.reason === 'ip_daily') {
+          return Response.json(
+            {
+              message: 'Free search limit reached',
+              error: 'RATE_LIMIT_EXCEEDED',
+              details: {
+                used: quota.used,
+                remaining: quota.remaining,
+                limit: 3,
+                requiresLogin: true,
+              },
+            },
+            { status: 429 },
+          );
+        }
 
-      if (!allowed) {
+        // Global throttles: keep the app safe under load/DDOS.
         return Response.json(
           {
-            message: 'Free search limit reached',
-            error: 'RATE_LIMIT_EXCEEDED',
-            details: {
-              used,
-              remaining,
-              limit: 3,
-              requiresLogin: true,
-            },
+            message: 'Too many free searches right now. Please try again soon.',
+            error: 'FREE_SEARCH_GLOBAL_RATE_LIMIT',
           },
           { status: 429 },
         );
       }
-
-      // Increment the search count for this IP (before processing to prevent abuse)
-      await incrementIpSearchCount(clientIp);
     }
 
     log('Auth check complete, loading model providers');
@@ -363,6 +376,18 @@ export const POST = async (req: Request) => {
       const useUserToken = Boolean(authSession?.accessToken && hasInvoke && tokenValid);
 
       const baseURL = getCustomOpenaiApiUrl();
+      // When a user is signed in, never fall back to the app key.
+      if (isAuthenticated && !useUserToken) {
+        return Response.json(
+          {
+            message:
+              'Your session is missing permission to run inference. Please sign in again.',
+            error: 'AUTH_INVOKE_REQUIRED',
+          },
+          { status: 401 },
+        );
+      }
+
       const apiKey = useUserToken ? authSession!.accessToken : getCustomOpenaiApiKey();
       // Use optimization mode model if available, otherwise use the requested model
       const primaryModelName = optimizedModelName || body.chatModel?.name || getCustomOpenaiModelName();
@@ -450,6 +475,7 @@ export const POST = async (req: Request) => {
       body.systemInstructions,
       body.deepResearchMode,
       llmCandidates,
+      { userAccessToken: authSession?.accessToken },
     );
     log('searchAndAnswer returned emitter, starting stream');
 

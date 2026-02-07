@@ -34,6 +34,10 @@ const createTimer = (prefix: string) => {
   };
 };
 
+export type SearchRequestContext = {
+  userAccessToken?: string;
+};
+
 export interface MetaSearchAgentType {
   searchAndAnswer: (
     message: string,
@@ -45,6 +49,7 @@ export interface MetaSearchAgentType {
     systemInstructions: string,
     deepResearchMode?: 'light' | 'max',
     llmCandidates?: LlmCandidate[],
+    requestContext?: SearchRequestContext,
   ) => Promise<eventEmitter>;
 }
 
@@ -95,7 +100,7 @@ class MetaSearchAgent implements MetaSearchAgentType {
           ? await questionOutputParser.parse(input)
           : input;
 
-        timer(`Parsed query: "${question.substring(0, 50)}...", links: ${links.length}`);
+        timer(`Parsed query (len=${question.length}), links: ${links.length}`);
 
         if (question === 'not_needed') {
           timer('Query not needed, returning empty');
@@ -227,7 +232,7 @@ class MetaSearchAgent implements MetaSearchAgentType {
         } else {
           question = question.replace(/<think>.*?<\/think>/g, '');
 
-          timer(`Starting web search for: "${question.substring(0, 50)}..."`);
+          timer(`Starting web search (len=${question.length})`);
           const res = await runWebSearch(question, this.config.activeEngines);
           timer(`Web search complete: ${res.results?.length || 0} results, engine: ${res.engine}`);
 
@@ -515,6 +520,7 @@ class MetaSearchAgent implements MetaSearchAgentType {
     systemInstructions: string,
     _deepResearchMode?: 'light' | 'max',
     llmCandidates?: LlmCandidate[],
+    _requestContext?: SearchRequestContext,
   ) {
     const emitter = new eventEmitter();
     const timer = createTimer('searchAndAnswer');

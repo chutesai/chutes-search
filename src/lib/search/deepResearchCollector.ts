@@ -73,6 +73,7 @@ type SandboxCommand = {
 
 type CollectorLogContext = {
   correlationId?: string;
+  agentApiKey?: string;
 };
 
 const DEFAULT_MAX_DURATION_MS = 8 * 60 * 1000;
@@ -1404,7 +1405,7 @@ export const runDeepResearchCollector = async (
     }
 
     let summarizedSources: { sources?: Array<{ url: string; summary?: string }> } | null = null;
-    const agentApiKey = process.env.CHUTES_API_KEY;
+    const agentApiKey = ctx.agentApiKey;
     const agentRouterUrl =
       process.env.SANDY_AGENT_API_BASE_URL ||
       process.env.SANDY_AGENT_ROUTER_URL ||

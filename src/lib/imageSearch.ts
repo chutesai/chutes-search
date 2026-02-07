@@ -51,7 +51,7 @@ export async function searchImages(request: ImageSearchRequest): Promise<ImageSe
       num: request.num || 10
     };
 
-    console.log('Searching images for:', request.query);
+    console.log(`[imageSearch] Searching images (queryLen=${request.query.length})`);
 
     const response = await axios.post(SERPER_API_URL, payload, {
       headers,
@@ -89,4 +89,3 @@ export async function searchImagesSafe(request: ImageSearchRequest): Promise<Ima
     return []; // Return empty array on error
   }
 }
-

@@ -36,14 +36,17 @@ function getDataDir(): string {
 }
 
 const DATA_DIR = getDataDir();
-const sqlite = new Database(path.join(DATA_DIR, 'db.sqlite'));
+const sqliteRaw = new Database(path.join(DATA_DIR, 'db.sqlite'));
+
+// Export the raw connection for transactional / atomic operations (server-side only).
+export { sqliteRaw };
 
 // Ensure all required tables exist at runtime
 // This handles the case where the persistent disk DB doesn't have the latest schema
 function ensureTablesExist() {
   try {
     // Create users table
-    sqlite.exec(`
+    sqliteRaw.exec(`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY NOT NULL,
         username TEXT,
@@ -53,7 +56,7 @@ function ensureTablesExist() {
     `);
 
     // Create auth_sessions table
-    sqlite.exec(`
+    sqliteRaw.exec(`
       CREATE TABLE IF NOT EXISTS auth_sessions (
         id TEXT PRIMARY KEY NOT NULL,
         userId TEXT NOT NULL,
@@ -68,7 +71,7 @@ function ensureTablesExist() {
     `);
 
     // Create chats table
-    sqlite.exec(`
+    sqliteRaw.exec(`
       CREATE TABLE IF NOT EXISTS chats (
         id TEXT PRIMARY KEY NOT NULL,
         title TEXT NOT NULL,
@@ -81,7 +84,7 @@ function ensureTablesExist() {
     `);
 
     // Create messages table
-    sqlite.exec(`
+    sqliteRaw.exec(`
       CREATE TABLE IF NOT EXISTS messages (
         id INTEGER PRIMARY KEY NOT NULL,
         content TEXT NOT NULL,
@@ -93,7 +96,7 @@ function ensureTablesExist() {
     `);
 
     // Create ip_search_logs table
-    sqlite.exec(`
+    sqliteRaw.exec(`
       CREATE TABLE IF NOT EXISTS ip_search_logs (
         id INTEGER PRIMARY KEY NOT NULL,
         ip_address TEXT NOT NULL,
@@ -103,12 +106,26 @@ function ensureTablesExist() {
     `);
 
     // Create index on ip_search_logs
-    sqlite.exec(`
+    sqliteRaw.exec(`
       CREATE INDEX IF NOT EXISTS ip_date_idx ON ip_search_logs (ip_address, search_date)
     `);
 
+    // Global counters for free-search throttling (aggregate across all IPs/users).
+    sqliteRaw.exec(`
+      CREATE TABLE IF NOT EXISTS free_search_global_counters (
+        id INTEGER PRIMARY KEY NOT NULL,
+        bucket TEXT NOT NULL,
+        bucket_start INTEGER NOT NULL,
+        count INTEGER DEFAULT 0 NOT NULL
+      )
+    `);
+    sqliteRaw.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS free_search_global_counters_unique_idx
+      ON free_search_global_counters (bucket, bucket_start)
+    `);
+
     // Create anonymized event_logs table
-    sqlite.exec(`
+    sqliteRaw.exec(`
       CREATE TABLE IF NOT EXISTS event_logs (
         id INTEGER PRIMARY KEY NOT NULL,
         createdAt TEXT NOT NULL,
@@ -119,13 +136,13 @@ function ensureTablesExist() {
       )
     `);
 
-    sqlite.exec(`
+    sqliteRaw.exec(`
       CREATE INDEX IF NOT EXISTS event_logs_createdAt_idx ON event_logs (createdAt)
     `);
-    sqlite.exec(`
+    sqliteRaw.exec(`
       CREATE INDEX IF NOT EXISTS event_logs_event_idx ON event_logs (event)
     `);
-    sqlite.exec(`
+    sqliteRaw.exec(`
       CREATE INDEX IF NOT EXISTS event_logs_correlation_idx ON event_logs (correlationId)
     `);
 
@@ -137,7 +154,7 @@ function ensureTablesExist() {
 
 ensureTablesExist();
 
-const db = drizzle(sqlite, {
+const db = drizzle(sqliteRaw, {
   schema: schema,
 });
 

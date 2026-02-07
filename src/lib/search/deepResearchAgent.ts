@@ -16,6 +16,7 @@ import {
 import { runWebSearch } from './runWebSearch';
 import { isRateLimitError, LlmCandidate } from '@/lib/llm/fallbacks';
 import { anonymizeLogText, logEvent, serializeError } from '@/lib/eventLog';
+import type { SearchRequestContext } from '@/lib/search/metaSearchAgent';
 
 const createTimer = (prefix: string) => {
   const start = Date.now();
@@ -70,6 +71,7 @@ class DeepResearchAgent {
     systemInstructions: string,
     deepResearchMode: DeepResearchMode = 'light',
     llmCandidates?: LlmCandidate[],
+    requestContext?: SearchRequestContext,
   ) {
     const emitter = new eventEmitter();
     const timer = createTimer('deepResearch');
@@ -120,7 +122,10 @@ class DeepResearchAgent {
             optimizationMode,
             deepResearchMode,
             onProgress,
-            { correlationId: runId },
+            {
+              correlationId: runId,
+              agentApiKey: requestContext?.userAccessToken,
+            },
           );
           docs = collected.docs;
           sources = collected.sources;

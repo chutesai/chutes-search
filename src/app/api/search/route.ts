@@ -14,9 +14,7 @@ import {
 import { searchHandlers } from '@/lib/search';
 import { buildChutesCandidates, LlmCandidate } from '@/lib/llm/fallbacks';
 import {
-  getClientIp,
-  checkIpRateLimit,
-  incrementIpSearchCount,
+  consumeFreeSearchQuota,
 } from '@/lib/rateLimit';
 import { cookies } from 'next/headers';
 import { AUTH_SESSION_COOKIE_NAME } from '@/lib/auth/constants';
@@ -92,29 +90,46 @@ export const POST = async (req: Request) => {
     // Check if user is authenticated (server-side session cookie only).
     const isAuthenticated = !!authSession;
 
+    // Deep Research is only available to signed-in users.
+    if (body.focusMode === 'deepResearch' && !isAuthenticated) {
+      return Response.json(
+        {
+          message: 'Deep Research requires signing in with Chutes',
+          error: 'DEEP_RESEARCH_REQUIRES_LOGIN',
+          details: { requiresLogin: true },
+        },
+        { status: 401 },
+      );
+    }
+
     // If not authenticated, check IP-based rate limit
     if (!isAuthenticated) {
-      const clientIp = getClientIp(req);
-      const { allowed, remaining, used } = await checkIpRateLimit(clientIp);
+      const quota = await consumeFreeSearchQuota(req);
+      if (!quota.allowed) {
+        if (quota.reason === 'ip_daily') {
+          return Response.json(
+            {
+              message: 'Free search limit reached',
+              error: 'RATE_LIMIT_EXCEEDED',
+              details: {
+                used: quota.used,
+                remaining: quota.remaining,
+                limit: 3,
+                requiresLogin: true,
+              },
+            },
+            { status: 429 },
+          );
+        }
 
-      if (!allowed) {
         return Response.json(
           {
-            message: 'Free search limit reached',
-            error: 'RATE_LIMIT_EXCEEDED',
-            details: {
-              used,
-              remaining,
-              limit: 3,
-              requiresLogin: true,
-            },
+            message: 'Too many free searches right now. Please try again soon.',
+            error: 'FREE_SEARCH_GLOBAL_RATE_LIMIT',
           },
           { status: 429 },
         );
       }
-
-      // Increment the search count for this IP (before processing to prevent abuse)
-      await incrementIpSearchCount(clientIp);
     }
 
     body.history = body.history || [];
@@ -188,7 +203,34 @@ export const POST = async (req: Request) => {
       chatModelProvider === 'custom_openai';
 
     if (isCustomOpenai) {
-      const apiKey = body.chatModel?.customOpenAIKey || getCustomOpenaiApiKey();
+      const hasInvoke = Boolean(
+        authSession?.scope?.split(' ').includes('chutes:invoke'),
+      );
+      const tokenExpiry = authSession?.accessTokenExpiresAt ?? null;
+      const tokenValid = tokenExpiry
+        ? tokenExpiry > Math.floor(Date.now() / 1000) + 30
+        : true;
+      const useUserToken = Boolean(
+        authSession?.accessToken && hasInvoke && tokenValid,
+      );
+
+      // When signed in, never fall back to the app CHUTES_API_KEY.
+      if (isAuthenticated && !body.chatModel?.customOpenAIKey && !useUserToken) {
+        return Response.json(
+          {
+            message:
+              'Your session is missing permission to run inference. Please sign in again.',
+            error: 'AUTH_INVOKE_REQUIRED',
+          },
+          { status: 401 },
+        );
+      }
+
+      const apiKey = body.chatModel?.customOpenAIKey
+        ? body.chatModel.customOpenAIKey
+        : isAuthenticated
+          ? authSession!.accessToken
+          : getCustomOpenaiApiKey();
       const baseURL =
         body.chatModel?.customOpenAIBaseURL || getCustomOpenaiApiUrl();
       const primaryModelName =
@@ -251,7 +293,9 @@ export const POST = async (req: Request) => {
       return Response.json({ message: 'Invalid focus mode' }, { status: 400 });
     }
 
-    logTiming(`Starting search with focusMode=${body.focusMode}, optimizationMode=${body.optimizationMode}, query="${body.query.substring(0, 50)}..."`);
+    logTiming(
+      `Starting search with focusMode=${body.focusMode}, optimizationMode=${body.optimizationMode}, queryLen=${body.query.length}`,
+    );
     const emitter = await searchHandler.searchAndAnswer(
       body.query,
       history,
@@ -262,6 +306,7 @@ export const POST = async (req: Request) => {
       body.systemInstructions || '',
       body.deepResearchMode,
       llmCandidates,
+      { userAccessToken: authSession?.accessToken },
     );
     logTiming('Search handler returned emitter');
 

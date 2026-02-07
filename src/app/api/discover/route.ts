@@ -96,7 +96,9 @@ const rateLimitedSearchSerper = async (query: string) => {
     return result;
   } catch (err: any) {
     if (err?.response?.status === 429) {
-      console.warn(`[discover] Rate limit hit for query: ${query}, returning empty results`);
+      console.warn(
+        `[discover] Serper rate limit hit, returning empty results`,
+      );
       return { results: [], suggestions: [] };
     }
     throw err;
@@ -255,14 +257,18 @@ export const GET = async (req: Request) => {
         .sort(() => Math.random() - 0.5)
         .slice(0, 3);
 
-      console.log(`[discover] Fetching dynamic results with queries: ${selectedQueries.join(', ')}`);
+      console.log(
+        `[discover] Fetching dynamic results with ${selectedQueries.length} queries`,
+      );
 
       for (const query of selectedQueries) {
         if (dynamicResults.length >= DYNAMIC_COUNT * 2) break; // Get extra to allow for filtering
         try {
           const result = await rateLimitedSearchSerper(query);
           dynamicResults.push(...result.results);
-          console.log(`[discover] Dynamic search "${query}" returned ${result.results.length} results`);
+          console.log(
+            `[discover] Dynamic search returned ${result.results.length} results`,
+          );
           
           // Log the domains we're getting for transparency
           const domains = result.results.slice(0, 5).map((r: any) => {
@@ -274,7 +280,7 @@ export const GET = async (req: Request) => {
           });
           console.log(`[discover] Dynamic domains sample: ${domains.join(', ')}`);
         } catch (err) {
-          console.warn(`[discover] Failed dynamic search for "${query}":`, err);
+          console.warn(`[discover] Failed dynamic search:`, err);
         }
       }
 

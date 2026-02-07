@@ -23,7 +23,9 @@ export async function POST(request: NextRequest) {
     // Limit number of results
     const num = Math.min(body.num || 10, 50); // Max 50 results
 
-    console.log(`Searching images for: "${body.query}" (${num} results)`);
+    console.log(
+      `[images] Searching images (queryLen=${body.query.length}, num=${num})`,
+    );
 
     const images = await searchImagesSafe({
       query: body.query,

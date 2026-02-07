@@ -13,17 +13,11 @@ export interface TTSResponse {
 
 const KOKORO_API_URL = 'https://chutes-kokoro.chutes.ai/speak';
 
-export async function generateSpeech(request: TTSRequest): Promise<TTSResponse> {
+export async function generateSpeech(
+  request: TTSRequest,
+  apiKey: string,
+): Promise<TTSResponse> {
   try {
-    const apiKey = process.env.CHUTES_API_KEY;
-
-    if (!apiKey) {
-      return {
-        success: false,
-        error: 'CHUTES_API_KEY environment variable not set'
-      };
-    }
-
     const headers = {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json'
@@ -34,7 +28,7 @@ export async function generateSpeech(request: TTSRequest): Promise<TTSResponse> 
       voice: request.voice || 'af_heart' // Default voice
     };
 
-    console.log('Generating speech for text:', request.text.substring(0, 100) + '...');
+    console.log(`[tts] Generating speech (chars=${request.text.length})`);
 
     const response = await axios.post(KOKORO_API_URL, body, {
       headers,
@@ -79,4 +73,3 @@ export const AVAILABLE_VOICES = [
   { id: 'af_heart', name: 'Heart (Female)', language: 'English' },
   // Add more voices as they become available from the API
 ];
-// Force redeploy

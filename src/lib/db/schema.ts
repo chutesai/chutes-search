@@ -51,10 +51,22 @@ export const chats = sqliteTable('chats', {
 // IP-based rate limiting for free search queries
 export const ipSearchLogs = sqliteTable('ip_search_logs', {
   id: integer('id').primaryKey(),
+  // NOTE: this stores a hashed client IP (not the raw address) for privacy.
   ipAddress: text('ip_address').notNull(),
   searchDate: text('search_date').notNull(), // Format: YYYY-MM-DD
   searchCount: integer('search_count').notNull().default(0),
 });
+
+// Aggregate counters for free-search throttling across all users/IPs.
+export const freeSearchGlobalCounters = sqliteTable(
+  'free_search_global_counters',
+  {
+    id: integer('id').primaryKey(),
+    bucket: text('bucket', { enum: ['minute', 'hour'] }).notNull(),
+    bucketStart: integer('bucket_start', { mode: 'number' }).notNull(),
+    count: integer('count').notNull().default(0),
+  },
+);
 
 // Anonymized application event logs (no user queries, no user identifiers).
 export const eventLogs = sqliteTable('event_logs', {

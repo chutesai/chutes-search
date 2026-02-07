@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateSpeech, TTSRequest } from '@/lib/tts';
+import { cookies } from 'next/headers';
+import { AUTH_SESSION_COOKIE_NAME } from '@/lib/auth/constants';
+import { refreshAuthSessionIfNeeded } from '@/lib/auth/session';
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,7 +26,27 @@ export async function POST(request: NextRequest) {
 
     console.log(`TTS request: ${body.text.length} chars, voice: ${body.voice || 'default'}`);
 
-    const result = await generateSpeech(body);
+    const cookieStore = await cookies();
+    const authSessionId = cookieStore.get(AUTH_SESSION_COOKIE_NAME)?.value;
+    const authSession = authSessionId
+      ? await refreshAuthSessionIfNeeded(authSessionId)
+      : null;
+    const hasInvoke = Boolean(
+      authSession?.scope?.split(' ').includes('chutes:invoke'),
+    );
+    const tokenExpiry = authSession?.accessTokenExpiresAt ?? null;
+    const tokenValid = tokenExpiry
+      ? tokenExpiry > Math.floor(Date.now() / 1000) + 30
+      : true;
+
+    if (!authSession?.accessToken || !hasInvoke || !tokenValid) {
+      return NextResponse.json(
+        { error: 'Sign in with Chutes to use text-to-speech' },
+        { status: 401 },
+      );
+    }
+
+    const result = await generateSpeech(body, authSession.accessToken);
 
     if (result.success) {
       return NextResponse.json({

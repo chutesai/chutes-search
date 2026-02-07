@@ -11,95 +11,16 @@ export const CHUTES_IDP_USERINFO_ENDPOINT =
 export const CHUTES_IDP_DEFAULT_SCOPES =
   process.env.CHUTES_IDP_SCOPES || 'openid profile chutes:invoke';
 
-const chutesIdpAppsListSchema = z.object({
-  items: z.array(
-    z.object({
-      app_id: z.string(),
-      client_id: z.string(),
-      name: z.string().optional(),
-      redirect_uris: z.array(z.string()).optional(),
-      updated_at: z.string().optional(),
-    }),
-  ),
-});
-
-const chutesIdpAppByIdSchema = z.object({
-  app_id: z.string(),
-  client_id: z.string(),
-  name: z.string().optional(),
-  redirect_uris: z.array(z.string()).optional(),
-});
-
-let cachedClientId: { value: string; expiresAtMs: number } | null = null;
-
-async function listIdpApps(apiKey: string) {
-  const res = await fetch('https://api.chutes.ai/idp/apps', {
-    headers: { authorization: `Bearer ${apiKey}` },
-    cache: 'no-store',
-  });
-  const raw = await readJsonOrText(res);
-  if (!res.ok) {
-    const msg = typeof raw === 'string' ? raw : JSON.stringify(raw);
-    throw new Error(`Failed to list IDP apps (${res.status}): ${msg}`);
-  }
-  return chutesIdpAppsListSchema.parse(raw).items;
-}
-
-async function getIdpAppById(apiKey: string, appId: string) {
-  const res = await fetch(`https://api.chutes.ai/idp/apps/${appId}`, {
-    headers: { authorization: `Bearer ${apiKey}` },
-    cache: 'no-store',
-  });
-  const raw = await readJsonOrText(res);
-  if (!res.ok) {
-    const msg = typeof raw === 'string' ? raw : JSON.stringify(raw);
-    throw new Error(`Failed to fetch IDP app (${res.status}): ${msg}`);
-  }
-  return chutesIdpAppByIdSchema.parse(raw);
-}
-
-async function discoverClientId(params: { redirectUri?: string } = {}) {
-  if (cachedClientId && cachedClientId.expiresAtMs > Date.now()) {
-    return cachedClientId.value;
-  }
-
-  const apiKey = process.env.CHUTES_API_KEY;
-  if (!apiKey) {
-    throw new Error(
-      'CHUTES_IDP_CLIENT_ID is not set and CHUTES_API_KEY is unavailable for auto-discovery',
-    );
-  }
-
-  const appId = process.env.CHUTES_IDP_APP_ID;
-  if (appId) {
-    const app = await getIdpAppById(apiKey, appId);
-    cachedClientId = { value: app.client_id, expiresAtMs: Date.now() + 5 * 60 * 1000 };
-    return app.client_id;
-  }
-
-  const apps = await listIdpApps(apiKey);
-  const desiredName = process.env.CHUTES_IDP_APP_NAME || 'Chutes Search';
-
-  const matchByRedirect = params.redirectUri
-    ? apps.find((a) => (a.redirect_uris || []).includes(params.redirectUri!))
-    : undefined;
-  const matchByName = apps.find((a) => a.name === desiredName);
-
-  const chosen = matchByRedirect || matchByName || apps[0];
-  if (!chosen?.client_id) {
-    throw new Error('Unable to discover IDP client_id');
-  }
-
-  cachedClientId = { value: chosen.client_id, expiresAtMs: Date.now() + 5 * 60 * 1000 };
-  return chosen.client_id;
-}
-
-export async function getChutesIdpClientCredentials(params: {
+export async function getChutesIdpClientCredentials(_params: {
   redirectUri?: string;
 } = {}) {
   const clientSecret = process.env.CHUTES_IDP_CLIENT_SECRET || undefined;
-  const clientId =
-    process.env.CHUTES_IDP_CLIENT_ID || (await discoverClientId(params));
+  const clientId = process.env.CHUTES_IDP_CLIENT_ID;
+  if (!clientId) {
+    throw new Error(
+      'CHUTES_IDP_CLIENT_ID is not set. Configure your app registration (client id / redirect URIs) via environment variables.',
+    );
+  }
   if (!clientId) throw new Error('Unable to resolve CHUTES IDP client_id');
   return { clientId, clientSecret };
 }

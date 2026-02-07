@@ -1,6 +1,5 @@
 import generateSuggestions from '@/lib/chains/suggestionGeneratorAgent';
 import {
-  getCustomOpenaiApiKey,
   getCustomOpenaiApiUrl,
   getCustomOpenaiModelName,
 } from '@/lib/config';
@@ -8,6 +7,9 @@ import { getAvailableChatModelProviders } from '@/lib/providers';
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { AIMessage, BaseMessage, HumanMessage } from '@langchain/core/messages';
 import { ChatOpenAI } from '@langchain/openai';
+import { cookies } from 'next/headers';
+import { AUTH_SESSION_COOKIE_NAME } from '@/lib/auth/constants';
+import { refreshAuthSessionIfNeeded } from '@/lib/auth/session';
 
 interface ChatModel {
   provider: string;
@@ -21,6 +23,19 @@ interface SuggestionsGenerationBody {
 
 export const POST = async (req: Request) => {
   try {
+    const cookieStore = await cookies();
+    const authSessionId = cookieStore.get(AUTH_SESSION_COOKIE_NAME)?.value;
+    const authSession = authSessionId
+      ? await refreshAuthSessionIfNeeded(authSessionId)
+      : null;
+    const hasInvoke = Boolean(
+      authSession?.scope?.split(' ').includes('chutes:invoke'),
+    );
+    const tokenExpiry = authSession?.accessTokenExpiresAt ?? null;
+    const tokenValid = tokenExpiry
+      ? tokenExpiry > Math.floor(Date.now() / 1000) + 30
+      : true;
+
     const body: SuggestionsGenerationBody = await req.json();
 
     const chatHistory = body.chatHistory
@@ -47,8 +62,17 @@ export const POST = async (req: Request) => {
     let llm: BaseChatModel | undefined;
 
     if (body.chatModel?.provider === 'custom_openai') {
+      if (!authSession?.accessToken || !hasInvoke || !tokenValid) {
+        return Response.json(
+          {
+            message: 'Sign in with Chutes to use suggestions',
+            error: 'AUTH_REQUIRED',
+          },
+          { status: 401 },
+        );
+      }
       llm = new ChatOpenAI({
-        apiKey: getCustomOpenaiApiKey(),
+        apiKey: authSession.accessToken,
         modelName: getCustomOpenaiModelName(),
         temperature: 0.7,
         configuration: {

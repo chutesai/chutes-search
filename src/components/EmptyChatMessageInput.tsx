@@ -115,8 +115,13 @@ const EmptyChatMessageInput = ({
           placeholder="Ask anything..."
         />
         <div className="flex flex-row items-center justify-between mt-4">
-          <div className="flex flex-row flex-wrap items-center gap-2">
-            <Attach showText />
+          <div className="flex flex-row flex-wrap items-center gap-2 min-w-0">
+            <div className="sm:hidden">
+              <Attach />
+            </div>
+            <div className="hidden sm:block">
+              <Attach showText />
+            </div>
             <span className="hidden sm:inline text-xs text-black/50 dark:text-white/50">
               Start typing to search
             </span>

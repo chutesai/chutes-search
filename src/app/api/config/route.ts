@@ -18,6 +18,10 @@ import {
   getAvailableEmbeddingModelProviders,
 } from '@/lib/providers';
 
+const allowConfigWrite =
+  process.env.NODE_ENV !== 'production' ||
+  process.env.CHUTES_SEARCH_ALLOW_CONFIG_WRITE === 'true';
+
 export const GET = async (req: Request) => {
   try {
     const config: Record<string, any> = {};
@@ -52,23 +56,36 @@ export const GET = async (req: Request) => {
       });
     }
 
-    config['openaiApiKey'] = getOpenaiApiKey();
+    // Never return secret values to the client.
+    // The settings page can still show "configured" status via the booleans below.
+    config['openaiApiKey'] = '';
+    config['anthropicApiKey'] = '';
+    config['groqApiKey'] = '';
+    config['geminiApiKey'] = '';
+    config['deepseekApiKey'] = '';
+    config['aimlApiKey'] = '';
+    config['ollamaApiKey'] = '';
+    config['customOpenaiApiKey'] = '';
+
+    config['openaiApiKeyPresent'] = Boolean(getOpenaiApiKey());
+    config['anthropicApiKeyPresent'] = Boolean(getAnthropicApiKey());
+    config['groqApiKeyPresent'] = Boolean(getGroqApiKey());
+    config['geminiApiKeyPresent'] = Boolean(getGeminiApiKey());
+    config['deepseekApiKeyPresent'] = Boolean(getDeepseekApiKey());
+    config['aimlApiKeyPresent'] = Boolean(getAimlApiKey());
+    config['ollamaApiKeyPresent'] = Boolean(getOllamaApiKey());
+    config['customOpenaiApiKeyPresent'] = Boolean(getCustomOpenaiApiKey());
+
     config['ollamaApiUrl'] = getOllamaApiEndpoint();
-    config['ollamaApiKey'] = getOllamaApiKey();
     config['lmStudioApiUrl'] = getLMStudioApiEndpoint();
-    config['anthropicApiKey'] = getAnthropicApiKey();
-    config['groqApiKey'] = getGroqApiKey();
-    config['geminiApiKey'] = getGeminiApiKey();
-    config['deepseekApiKey'] = getDeepseekApiKey();
-    config['aimlApiKey'] = getAimlApiKey();
     config['customOpenaiApiUrl'] = getCustomOpenaiApiUrl();
-    config['customOpenaiApiKey'] = getCustomOpenaiApiKey();
     config['customOpenaiModelName'] = getCustomOpenaiModelName();
     config['chutes'] = {
       apiUrl: getCustomOpenaiApiUrl(),
       apiKeyPresent: !!getCustomOpenaiApiKey(),
       modelName: getCustomOpenaiModelName(),
     };
+    config['allowConfigWrite'] = allowConfigWrite;
 
     return Response.json({ ...config }, { status: 200 });
   } catch (err) {
@@ -82,6 +99,13 @@ export const GET = async (req: Request) => {
 
 export const POST = async (req: Request) => {
   try {
+    if (!allowConfigWrite) {
+      return Response.json(
+        { message: 'Config updates are disabled in this environment' },
+        { status: 403 },
+      );
+    }
+
     const config = await req.json();
 
     const updatedConfig = {
