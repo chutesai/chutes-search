@@ -751,6 +751,36 @@ export const ChatProvider = ({
       }),
     });
 
+    if (!res.ok) {
+      let payload: any = null;
+      try {
+        payload = await res.clone().json();
+      } catch {
+        payload = null;
+      }
+
+      if (res.status === 429 && payload?.error === 'RATE_LIMIT_EXCEEDED') {
+        // Server-side quota enforcement (IP-based) can be stricter/more accurate than localStorage.
+        // Show the sign-in gate dialog so the UI doesn't get stuck waiting for stream events.
+        const used = typeof payload?.details?.used === 'number' ? payload.details.used : FREE_SEARCH_LIMIT;
+        const limit = typeof payload?.details?.limit === 'number' ? payload.details.limit : FREE_SEARCH_LIMIT;
+        setFreeSearchGate({
+          open: true,
+          count: Math.min(used, limit),
+          limit,
+          pendingQuery: trimmed,
+        });
+      }
+
+      const message =
+        payload?.message ||
+        payload?.error ||
+        `Request failed (${res.status})`;
+      toast.error(String(message));
+      setLoading(false);
+      return;
+    }
+
     if (!res.body) throw new Error('No response body');
 
     const reader = res.body.getReader();
