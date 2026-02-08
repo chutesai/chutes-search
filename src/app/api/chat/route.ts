@@ -275,6 +275,8 @@ export const POST = async (req: Request) => {
     if (message.content === '') {
       return Response.json(
         {
+          type: 'error',
+          data: 'Please provide a message to process',
           message: 'Please provide a message to process',
         },
         { status: 400 },
@@ -289,6 +291,8 @@ export const POST = async (req: Request) => {
     if (body.focusMode === 'deepResearch' && !isAuthenticated) {
       return Response.json(
         {
+          type: 'error',
+          data: 'Deep Research requires signing in with Chutes',
           message: 'Deep Research requires signing in with Chutes',
           error: 'DEEP_RESEARCH_REQUIRES_LOGIN',
           details: {
@@ -306,6 +310,8 @@ export const POST = async (req: Request) => {
         if (quota.reason === 'ip_daily') {
           return Response.json(
             {
+              type: 'error',
+              data: 'Free search limit reached',
               message: 'Free search limit reached',
               error: 'RATE_LIMIT_EXCEEDED',
               details: {
@@ -322,6 +328,8 @@ export const POST = async (req: Request) => {
         // Global throttles: keep the app safe under load/DDOS.
         return Response.json(
           {
+            type: 'error',
+            data: 'Too many free searches right now. Please try again soon.',
             message: 'Too many free searches right now. Please try again soon.',
             error: 'FREE_SEARCH_GLOBAL_RATE_LIMIT',
           },
@@ -386,6 +394,9 @@ export const POST = async (req: Request) => {
       if (isAuthenticated && !useUserToken) {
         return Response.json(
           {
+            type: 'error',
+            data:
+              'Your session is missing permission to run inference. Please sign in again.',
             message:
               'Your session is missing permission to run inference. Please sign in again.',
             error: 'AUTH_INVOKE_REQUIRED',
@@ -433,12 +444,25 @@ export const POST = async (req: Request) => {
     }
 
     if (!llm) {
-      return Response.json({ error: 'Invalid chat model' }, { status: 400 });
+      return Response.json(
+        {
+          type: 'error',
+          data: 'Invalid chat model',
+          message: 'Invalid chat model',
+          error: 'INVALID_CHAT_MODEL',
+        },
+        { status: 400 },
+      );
     }
 
     if (!embedding) {
       return Response.json(
-        { error: 'Invalid embedding model' },
+        {
+          type: 'error',
+          data: 'Invalid embedding model',
+          message: 'Invalid embedding model',
+          error: 'INVALID_EMBEDDING_MODEL',
+        },
         { status: 400 },
       );
     }
@@ -464,6 +488,8 @@ export const POST = async (req: Request) => {
     if (!handler) {
       return Response.json(
         {
+          type: 'error',
+          data: 'Invalid focus mode',
           message: 'Invalid focus mode',
         },
         { status: 400 },
@@ -505,7 +531,11 @@ export const POST = async (req: Request) => {
   } catch (err) {
     console.error('An error occurred while processing chat request:', err);
     return Response.json(
-      { message: 'An error occurred while processing chat request' },
+      {
+        type: 'error',
+        data: 'An error occurred while processing chat request',
+        message: 'An error occurred while processing chat request',
+      },
       { status: 500 },
     );
   }

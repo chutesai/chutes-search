@@ -73,7 +73,11 @@ export const GET = async (req: Request) => {
   } catch (err) {
     console.error('IDP login error:', err);
     return Response.json(
-      { error: 'Failed to start login flow' },
+      {
+        type: 'error',
+        data: 'Failed to start login flow',
+        error: 'FAILED_TO_START_LOGIN_FLOW',
+      },
       { status: 500 },
     );
   }
