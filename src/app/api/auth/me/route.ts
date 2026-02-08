@@ -13,7 +13,13 @@ export const GET = async () => {
     return Response.json({ user: null }, { status: 200 });
   }
   
-  const session = await refreshAuthSessionIfNeeded(sessionId);
+  let session = null;
+  try {
+    session = await refreshAuthSessionIfNeeded(sessionId);
+  } catch (err) {
+    console.warn('[auth/me] Failed to refresh auth session, clearing cookie.', err);
+    session = null;
+  }
   
   if (!session) {
     cookieStore.set(AUTH_SESSION_COOKIE_NAME, '', {

@@ -241,9 +241,15 @@ export const POST = async (req: Request) => {
     }
 
     const authSessionId = cookieStore.get(AUTH_SESSION_COOKIE_NAME)?.value;
-    const authSession = authSessionId
-      ? await refreshAuthSessionIfNeeded(authSessionId)
-      : null;
+    let authSession = null;
+    if (authSessionId) {
+      try {
+        authSession = await refreshAuthSessionIfNeeded(authSessionId);
+      } catch (err) {
+        console.warn('[chat] Failed to refresh auth session, treating as logged out.', err);
+        authSession = null;
+      }
+    }
     if (authSessionId && !authSession) {
       cookieStore.set(AUTH_SESSION_COOKIE_NAME, '', {
         path: '/',

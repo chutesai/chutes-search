@@ -130,14 +130,31 @@ export async function getAuthSessionById(
     return null;
   }
 
-  const secret = getChutesAuthSecret();
+  // Sessions are encrypted-at-rest with CHUTES_AUTH_SECRET (or NEXTAUTH_SECRET).
+  // If the secret is rotated or the ciphertext is corrupted, treat the session
+  // as invalid instead of crashing the entire request.
+  let accessToken: string;
+  let refreshToken: string | null = null;
+  let secret: string;
+  try {
+    secret = getChutesAuthSecret();
+    accessToken = unsealString(row.accessTokenEnc, secret);
+    refreshToken = row.refreshTokenEnc ? unsealString(row.refreshTokenEnc, secret) : null;
+  } catch (err) {
+    console.warn('[auth] Failed to decrypt auth session; deleting it.', err);
+    try {
+      await deleteAuthSession(sessionId);
+    } catch {
+      // ignore
+    }
+    return null;
+  }
+
   return {
     sessionId: row.id,
     user: { id: user.id, username: user.username ?? null },
-    accessToken: unsealString(row.accessTokenEnc, secret),
-    refreshToken: row.refreshTokenEnc
-      ? unsealString(row.refreshTokenEnc, secret)
-      : null,
+    accessToken,
+    refreshToken,
     accessTokenExpiresAt: row.accessTokenExpiresAt ?? null,
     scope: row.scope ?? null,
     tokenType: row.tokenType ?? null,
@@ -148,7 +165,13 @@ export async function refreshAuthSessionIfNeeded(
   sessionId: string,
   bufferSeconds = 60,
 ): Promise<AuthSession | null> {
-  const session = await getAuthSessionById(sessionId);
+  let session: AuthSession | null = null;
+  try {
+    session = await getAuthSessionById(sessionId);
+  } catch (err) {
+    console.warn('[auth] Failed to load auth session.', err);
+    return null;
+  }
   if (!session) return null;
 
   const exp = session.accessTokenExpiresAt;
