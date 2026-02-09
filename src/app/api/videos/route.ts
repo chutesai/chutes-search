@@ -29,9 +29,9 @@ export const POST = async (req: Request) => {
     const authSession = authSessionId
       ? await refreshAuthSessionIfNeeded(authSessionId)
       : null;
-    const hasInvoke = Boolean(
-      authSession?.scope?.split(' ').includes('chutes:invoke'),
-    );
+    const scopeStr = authSession?.scope?.trim() || '';
+    const hasInvoke =
+      !scopeStr || scopeStr.split(/\s+/).includes('chutes:invoke');
     const tokenExpiry = authSession?.accessTokenExpiresAt ?? null;
     const tokenValid = tokenExpiry
       ? tokenExpiry > Math.floor(Date.now() / 1000) + 30

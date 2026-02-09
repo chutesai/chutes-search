@@ -382,9 +382,13 @@ export const POST = async (req: Request) => {
 
     // Use Chutes for custom_openai provider or when optimization mode is set
     if (body.chatModel?.provider === 'custom_openai' || (isChutesProvider && optimizedModelName)) {
-      const hasInvoke = Boolean(
-        authSession?.scope?.split(' ').includes('chutes:invoke'),
-      );
+      // Some token endpoints omit `scope` (or return it as an empty string) even when
+      // the access token still has the expected permissions. Treat missing scope as
+      // "unknown" and allow invoke; if the token truly lacks permission, the request
+      // will fail and the user will be asked to sign in again.
+      const scopeStr = authSession?.scope?.trim() || '';
+      const hasInvoke =
+        !scopeStr || scopeStr.split(/\s+/).includes('chutes:invoke');
       const tokenExpiry = authSession?.accessTokenExpiresAt ?? null;
       const tokenValid = tokenExpiry ? tokenExpiry > Math.floor(Date.now() / 1000) + 30 : true;
       const useUserToken = Boolean(authSession?.accessToken && hasInvoke && tokenValid);

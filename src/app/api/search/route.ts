@@ -203,9 +203,9 @@ export const POST = async (req: Request) => {
       chatModelProvider === 'custom_openai';
 
     if (isCustomOpenai) {
-      const hasInvoke = Boolean(
-        authSession?.scope?.split(' ').includes('chutes:invoke'),
-      );
+      const scopeStr = authSession?.scope?.trim() || '';
+      const hasInvoke =
+        !scopeStr || scopeStr.split(/\s+/).includes('chutes:invoke');
       const tokenExpiry = authSession?.accessTokenExpiresAt ?? null;
       const tokenValid = tokenExpiry
         ? tokenExpiry > Math.floor(Date.now() / 1000) + 30

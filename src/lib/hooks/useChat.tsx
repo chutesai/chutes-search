@@ -45,6 +45,7 @@ type ChatContext = {
     count: number;
     limit: number;
     pendingQuery?: string;
+    reason?: 'quota' | 'session';
   };
   closeFreeSearchGate: () => void;
 };
@@ -395,6 +396,7 @@ export const ChatProvider = ({
     count: 0,
     limit: FREE_SEARCH_LIMIT,
     pendingQuery: undefined,
+    reason: 'quota',
   });
 
   const closeFreeSearchGate = useCallback(() => {
@@ -507,6 +509,7 @@ export const ChatProvider = ({
               count: current.count,
               limit: FREE_SEARCH_LIMIT,
               pendingQuery: trimmed,
+              reason: 'quota',
             });
             return;
           }
@@ -769,7 +772,20 @@ export const ChatProvider = ({
           count: Math.min(used, limit),
           limit,
           pendingQuery: trimmed,
+          reason: 'quota',
         });
+      }
+
+      if (res.status === 401 && payload?.error === 'AUTH_INVOKE_REQUIRED') {
+        setFreeSearchGate({
+          open: true,
+          count: 0,
+          limit: FREE_SEARCH_LIMIT,
+          pendingQuery: trimmed,
+          reason: 'session',
+        });
+        setLoading(false);
+        return;
       }
 
       const message =

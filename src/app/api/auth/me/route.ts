@@ -52,7 +52,9 @@ export const GET = async () => {
           username: session.user.username,
         },
         scope: session.scope,
-        hasInvoke: Boolean(session.scope?.split(' ').includes('chutes:invoke')),
+        hasInvoke:
+          !(session.scope?.trim()) ||
+          session.scope.trim().split(/\s+/).includes('chutes:invoke'),
       },
       { status: 200 },
     );
