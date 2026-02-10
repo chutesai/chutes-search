@@ -1,7 +1,8 @@
 const axios = require('axios');
 (async () => {
   try {
-    const apiKey = process.env.SERPER_API_KEY || '434c62507ed3c1460a4ef69c3b8381c004ee77ae';
+    const apiKey = process.env.SERPER_API_KEY;
+    if (!apiKey) { console.error('SERPER_API_KEY env var is required'); process.exit(1); }
     const r = await axios.post('https://google.serper.dev/search', { q: 'who is sam altman' }, { headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' }, timeout: 15000 });
     const organic = Array.isArray(r.data?.organic) ? r.data.organic : [];
     let count = organic.length;
