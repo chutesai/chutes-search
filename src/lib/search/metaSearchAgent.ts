@@ -281,54 +281,57 @@ class MetaSearchAgent implements MetaSearchAgentType {
     systemInstructions: string,
   ) {
     return RunnableSequence.from([
-      RunnableMap.from({
-        systemInstructions: () => systemInstructions,
-        query: (input: BasicChainInput) => input.query,
-        chat_history: (input: BasicChainInput) => input.chat_history,
-        date: () => new Date().toISOString(),
-        context: RunnableLambda.from(async (input: BasicChainInput) => {
-          const timer = createTimer('answering');
-          timer('Starting context retrieval');
-          
-          const processedHistory = formatChatHistoryAsString(
-            input.chat_history,
+      RunnableLambda.from(async (input: BasicChainInput) => {
+        const timer = createTimer('answering');
+        timer('Starting context retrieval');
+
+        const processedHistory = formatChatHistoryAsString(input.chat_history);
+
+        let docs: Document[] | null = null;
+        let query = input.query;
+
+        if (this.config.searchWeb) {
+          timer('Creating search retriever chain');
+          const searchRetrieverChain =
+            await this.createSearchRetrieverChain(llm);
+
+          timer(
+            'Invoking search retriever chain (includes LLM query analysis + web search)',
           );
-
-          let docs: Document[] | null = null;
-          let query = input.query;
-
-          if (this.config.searchWeb) {
-            timer('Creating search retriever chain');
-            const searchRetrieverChain =
-              await this.createSearchRetrieverChain(llm);
-
-            timer('Invoking search retriever chain (includes LLM query analysis + web search)');
-            const searchRetrieverResult = await searchRetrieverChain.invoke({
-              chat_history: processedHistory,
-              query,
-            });
-            timer(`Search retriever complete: ${searchRetrieverResult.docs?.length || 0} docs`);
-
-            query = searchRetrieverResult.query;
-            docs = searchRetrieverResult.docs;
-          }
-
-          timer(`Starting rerank with ${docs?.length || 0} docs, mode: ${optimizationMode}`);
-          const sortedDocs = await this.rerankDocs(
+          const searchRetrieverResult = await searchRetrieverChain.invoke({
+            chat_history: processedHistory,
             query,
-            docs ?? [],
-            fileIds,
-            embeddings,
-            optimizationMode,
+          });
+          timer(
+            `Search retriever complete: ${searchRetrieverResult.docs?.length || 0} docs`,
           );
-          timer(`Rerank complete: ${sortedDocs.length} docs after filtering`);
 
-          return sortedDocs;
-        })
-          .withConfig({
-            runName: 'FinalSourceRetriever',
-          })
-          .pipe(this.processDocs),
+          query = searchRetrieverResult.query;
+          docs = searchRetrieverResult.docs;
+        }
+
+        timer(
+          `Starting rerank with ${docs?.length || 0} docs, mode: ${optimizationMode}`,
+        );
+        const sortedDocs = await this.rerankDocs(
+          query,
+          docs ?? [],
+          fileIds,
+          embeddings,
+          optimizationMode,
+        );
+        timer(`Rerank complete: ${sortedDocs.length} docs after filtering`);
+
+        return {
+          systemInstructions,
+          query,
+          chat_history: input.chat_history,
+          date: new Date().toISOString(),
+          context: this.processDocs(sortedDocs),
+          sources: sortedDocs,
+        };
+      }).withConfig({
+        runName: 'FinalSourceRetriever',
       }),
       ChatPromptTemplate.fromMessages([
         ['system', this.config.responsePrompt],
@@ -486,10 +489,17 @@ class MetaSearchAgent implements MetaSearchAgentType {
     state: { hasOutput: boolean; completed: boolean },
   ) {
     for await (const event of stream) {
-      if (event.event === 'on_chain_end' && event.name === 'FinalSourceRetriever') {
+      if (
+        event.event === 'on_chain_end' &&
+        event.name === 'FinalSourceRetriever'
+      ) {
+        const sources =
+          event?.data?.output && Array.isArray(event.data.output.sources)
+            ? event.data.output.sources
+            : [];
         emitter.emit(
           'data',
-          JSON.stringify({ type: 'sources', data: event.data.output }),
+          JSON.stringify({ type: 'sources', data: sources }),
         );
         state.hasOutput = true;
       }
