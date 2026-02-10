@@ -19,19 +19,7 @@ export const GET = async (
 
     const cookieStore = await cookies();
     const sessionId = cookieStore.get(ANON_SESSION_COOKIE_NAME)?.value || null;
-    const authSessionId = cookieStore.get()?.value;
-    const authSession = authSessionId
-      ? await getAuthSessionById(authSessionId)
-      : null;
-    if (authSessionId && !authSession) {
-      cookieStore.set('', {
-        path: '/',
-        httpOnly: true,
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 0,
-      });
-    }
+    const authSession = await getAuthSession(cookieStore);
 
     const chatExists = await db.query.chats.findFirst({
       where: eq(chats.id, id),
@@ -80,19 +68,7 @@ export const DELETE = async (
 
     const cookieStore = await cookies();
     const sessionId = cookieStore.get(ANON_SESSION_COOKIE_NAME)?.value || null;
-    const authSessionId = cookieStore.get()?.value;
-    const authSession = authSessionId
-      ? await getAuthSessionById(authSessionId)
-      : null;
-    if (authSessionId && !authSession) {
-      cookieStore.set('', {
-        path: '/',
-        httpOnly: true,
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 0,
-      });
-    }
+    const authSession = await getAuthSession(cookieStore);
 
     const chatExists = await db.query.chats.findFirst({
       where: eq(chats.id, id),

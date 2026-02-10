@@ -24,10 +24,7 @@ interface VideoSearchBody {
 export const POST = async (req: Request) => {
   try {
     const cookieStore = await cookies();
-    const authSessionId = cookieStore.get()?.value;
-    const authSession = authSessionId
-      ? await refreshAuthSessionIfNeeded(authSessionId)
-      : null;
+    const authSession = await getAuthSession(cookieStore);
     const scopeStr = authSession?.scope?.trim() || '';
     const hasInvoke =
       !scopeStr || scopeStr.split(/\s+/).includes('chutes:invoke');

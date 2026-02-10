@@ -13,19 +13,7 @@ export const dynamic = 'force-dynamic';
 export const GET = async (req: Request) => {
   try {
     const cookieStore = await cookies();
-    const authSessionId = cookieStore.get()?.value;
-    const authSession = authSessionId
-      ? await getAuthSessionById(authSessionId)
-      : null;
-    if (authSessionId && !authSession) {
-      cookieStore.set('', {
-        path: '/',
-        httpOnly: true,
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 0,
-      });
-    }
+    const authSession = await getAuthSession(cookieStore);
 
     const sessionId = cookieStore.get(ANON_SESSION_COOKIE_NAME)?.value;
     const where = authSession

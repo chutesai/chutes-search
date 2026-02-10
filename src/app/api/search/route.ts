@@ -62,29 +62,7 @@ export const POST = async (req: Request) => {
     }
 
     const cookieStore = await cookies();
-    // Refresh auth session if needed (token refresh + sliding DB expiry).
-    const authSessionId = cookieStore.get()?.value;
-    const authSession = authSessionId
-      ? await refreshAuthSessionIfNeeded(authSessionId)
-      : null;
-    if (authSessionId && !authSession) {
-      cookieStore.set('', {
-        path: '/',
-        httpOnly: true,
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 0,
-      });
-    } else if (authSessionId && authSession) {
-      // Keep users signed in for 30 days after last successful usage.
-      cookieStore.set(authSessionId, {
-        path: '/',
-        sameSite: 'lax',
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 30 * 24 * 60 * 60,
-      });
-    }
+    const authSession = await getAuthSession(cookieStore);
 
     // Check if user is authenticated (server-side session cookie only).
     const isAuthenticated = !!authSession;

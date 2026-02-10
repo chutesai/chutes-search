@@ -239,34 +239,7 @@ export const POST = async (req: Request) => {
       });
     }
 
-    const authSessionId = cookieStore.get()?.value;
-    let authSession = null;
-    if (authSessionId) {
-      try {
-        authSession = await refreshAuthSessionIfNeeded(authSessionId);
-      } catch (err) {
-        console.warn('[chat] Failed to refresh auth session, treating as logged out.', err);
-        authSession = null;
-      }
-    }
-    if (authSessionId && !authSession) {
-      cookieStore.set('', {
-        path: '/',
-        httpOnly: true,
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 0,
-      });
-    } else if (authSessionId && authSession) {
-      // Keep users signed in for 30 days after last successful usage.
-      cookieStore.set(authSessionId, {
-        path: '/',
-        sameSite: 'lax',
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 30 * 24 * 60 * 60,
-      });
-    }
+    const authSession = await getAuthSession(cookieStore);
 
     const body = (await req.json()) as Body;
     const { message } = body;
