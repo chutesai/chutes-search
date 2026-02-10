@@ -67,3 +67,32 @@ export const isRateLimitError = (err: unknown) => {
     message.includes('429')
   );
 };
+
+export const isRetryableUpstreamError = (err: unknown) => {
+  const status = getErrorStatus(err as any);
+  if (typeof status === 'number') {
+    if ([408, 500, 502, 503, 504, 522, 524].includes(status)) return true;
+  }
+
+  const message =
+    typeof err === 'string'
+      ? err.toLowerCase()
+      : (err as any)?.message?.toLowerCase?.() ?? '';
+
+  // Common transient transport / gateway issues (including the "503 status code (no body)" we see
+  // when the OpenAI-compatible upstream is unhealthy).
+  return (
+    message.includes('503 status code') ||
+    message.includes('502 status code') ||
+    message.includes('504 status code') ||
+    message.includes('service unavailable') ||
+    message.includes('bad gateway') ||
+    message.includes('gateway timeout') ||
+    message.includes('timeout') ||
+    message.includes('socket hang up') ||
+    message.includes('econnreset') ||
+    message.includes('etimedout') ||
+    message.includes('eai_again') ||
+    message.includes('fetch failed')
+  );
+};

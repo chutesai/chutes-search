@@ -14,7 +14,7 @@ import {
   DeepResearchMode,
 } from './deepResearchCollector';
 import { runWebSearch } from './runWebSearch';
-import { isRateLimitError, LlmCandidate } from '@/lib/llm/fallbacks';
+import { isRateLimitError, isRetryableUpstreamError, LlmCandidate } from '@/lib/llm/fallbacks';
 import { anonymizeLogText, logEvent, serializeError } from '@/lib/eventLog';
 import type { SearchRequestContext } from '@/lib/search/metaSearchAgent';
 
@@ -302,22 +302,22 @@ class DeepResearchAgent {
             return;
           } catch (err: any) {
             const canRetry =
-              isRateLimitError(err) &&
+              (isRateLimitError(err) || isRetryableUpstreamError(err)) &&
               !state.hasOutput &&
               i < summaryCandidates.length - 1;
             if (canRetry) {
               timer(
-                `Rate limited on ${candidate.name}, retrying with ${summaryCandidates[i + 1].name}`,
+                `Retryable upstream error on ${candidate.name}, retrying with ${summaryCandidates[i + 1].name}`,
               );
               emitProgress({
                 id: 'finalize',
                 label: 'Drafting report',
                 status: 'running',
-                detail: `Rate limited on ${candidate.name}. Retrying.`,
+                detail: `Temporary upstream issue on ${candidate.name}. Retrying.`,
               });
               logEvent({
                 level: 'warn',
-                event: 'deep_research.rate_limited_retry',
+                event: 'deep_research.retryable_retry',
                 correlationId: runId,
                 metadata: { candidate: candidate.name, next: summaryCandidates[i + 1]?.name },
               });

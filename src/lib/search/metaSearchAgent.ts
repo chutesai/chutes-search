@@ -24,7 +24,7 @@ import formatChatHistoryAsString from '../utils/formatHistory';
 import eventEmitter from 'events';
 import { StreamEvent } from '@langchain/core/tracers/log_stream';
 import { runWebSearch } from './runWebSearch';
-import { isRateLimitError, LlmCandidate } from '@/lib/llm/fallbacks';
+import { isRateLimitError, isRetryableUpstreamError, LlmCandidate } from '@/lib/llm/fallbacks';
 
 // Timing utility for performance debugging
 const createTimer = (prefix: string) => {
@@ -572,12 +572,12 @@ class MetaSearchAgent implements MetaSearchAgentType {
           return;
         } catch (err: any) {
           const canRetry =
-            isRateLimitError(err) &&
+            (isRateLimitError(err) || isRetryableUpstreamError(err)) &&
             !state.hasOutput &&
             i < candidates.length - 1;
           if (canRetry) {
             timer(
-              `Rate limited on ${candidate.name}, retrying with ${candidates[i + 1].name}`,
+              `Retryable upstream error on ${candidate.name}, retrying with ${candidates[i + 1].name}`,
             );
             continue;
           }
