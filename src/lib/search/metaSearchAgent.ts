@@ -486,7 +486,7 @@ class MetaSearchAgent implements MetaSearchAgentType {
   private async streamChainEvents(
     stream: AsyncGenerator<StreamEvent, any, any>,
     emitter: eventEmitter,
-    state: { hasOutput: boolean; completed: boolean },
+    state: { hasResponse: boolean; completed: boolean; sourcesEmitted: boolean; sourcesCount: number },
   ) {
     for await (const event of stream) {
       if (
@@ -501,7 +501,8 @@ class MetaSearchAgent implements MetaSearchAgentType {
           'data',
           JSON.stringify({ type: 'sources', data: sources }),
         );
-        state.hasOutput = true;
+        state.sourcesEmitted = true;
+        state.sourcesCount = sources.length;
       }
       if (
         event.event === 'on_chain_stream' &&
@@ -511,7 +512,7 @@ class MetaSearchAgent implements MetaSearchAgentType {
           'data',
           JSON.stringify({ type: 'response', data: event.data.chunk }),
         );
-        state.hasOutput = true;
+        state.hasResponse = true;
       }
       if (event.event === 'on_chain_end' && event.name === 'FinalResponseGenerator') {
         state.completed = true;
@@ -542,7 +543,7 @@ class MetaSearchAgent implements MetaSearchAgentType {
     const run = async () => {
       for (let i = 0; i < candidates.length; i += 1) {
         const candidate = candidates[i];
-        const state = { hasOutput: false, completed: false };
+        const state = { hasResponse: false, completed: false, sourcesEmitted: false, sourcesCount: 0 };
 
         try {
           timer(`Creating answering chain (${candidate.name})`);
@@ -573,7 +574,7 @@ class MetaSearchAgent implements MetaSearchAgentType {
         } catch (err: any) {
           const canRetry =
             (isRateLimitError(err) || isRetryableUpstreamError(err)) &&
-            !state.hasOutput &&
+            !state.hasResponse &&
             i < candidates.length - 1;
           if (canRetry) {
             timer(
