@@ -1,0 +1,38 @@
+flowchart TB
+    subgraph User["User"]
+        BROWSER["Browser"]
+    end
+
+    subgraph Search["chutes-search"]
+        UI["Next.js Frontend"]
+        API["API Routes"]
+        AGENTS["Focus Mode Agents"]
+        DR["Deep Research Collector"]
+    end
+
+    subgraph Infra["Infrastructure"]
+        IDP["chutes_idp<br/>(OAuth2 PKCE)"]
+        SANDY["Sandy<br/>(Sandbox API)"]
+        JANUS["Janus Router<br/>(Model Selection)"]
+        LLM["Chutes LLM API<br/>(llm.chutes.ai)"]
+    end
+
+    subgraph Siblings["Sibling Applications"]
+        KA["chutes-knowledge-agent"]
+        WC["chutes-webcoder"]
+    end
+
+    BROWSER --> UI
+    UI --> API
+    API -->|auth| IDP
+    API --> AGENTS
+    AGENTS -->|inference| LLM
+    AGENTS --> DR
+    DR -->|sandboxes| SANDY
+    DR -->|agent summary| JANUS
+    JANUS -->|routes to| LLM
+
+    KA -->|sandboxes| SANDY
+    KA -->|auth| IDP
+    WC -->|sandboxes| SANDY
+    WC -->|auth| IDP

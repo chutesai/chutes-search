@@ -1,0 +1,5 @@
+flowchart LR
+    Q["Query"] --> SEARXNG["SearxNG<br/>(self-hosted, primary)"]
+    SEARXNG -->|results > 0| OK["Return SearxNG results"]
+    SEARXNG -->|failed or empty| SERPER["Serper API<br/>(Google, fallback)"]
+    SERPER --> OK2["Return Serper results"]

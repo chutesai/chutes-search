@@ -1,0 +1,39 @@
+sequenceDiagram
+    participant Browser
+    participant API as /api/chat
+    participant Auth as Auth Session
+    participant RL as Rate Limiter
+    participant Handler as Focus Mode Handler
+    participant Search as SearxNG / Serper
+    participant LLM as LLM (Chutes API)
+    participant Sandy as Sandy Sandbox
+
+    Browser->>API: POST { message, focusMode, optimizationMode }
+    API->>Auth: Validate session cookie
+    API->>RL: Check free-search quota (if anonymous)
+
+    alt focusMode = deepResearch
+        API->>Handler: DeepResearchAgent.searchAndAnswer()
+        Handler->>Search: runWebSearch(query)
+        Search-->>Handler: sources[]
+        Handler->>Sandy: createSandbox()
+        Sandy-->>Handler: sandboxId
+        Handler->>Sandy: Install Playwright + run crawler script
+        Sandy-->>Handler: crawled sources (JSON)
+        Handler->>Sandy: (optional) Agent summary via Claude Code
+        Sandy-->>Handler: summarized sources
+        Handler->>Sandy: terminateSandbox()
+        Handler->>LLM: Generate deep research report
+        LLM-->>Handler: streamed response
+    else other focus modes
+        API->>Handler: MetaSearchAgent.searchAndAnswer()
+        Handler->>LLM: Rephrase query
+        Handler->>Search: runWebSearch(rephrased query)
+        Search-->>Handler: documents[]
+        Handler->>Handler: Rerank with embeddings
+        Handler->>LLM: Generate answer with context
+        LLM-->>Handler: streamed response
+    end
+
+    Handler-->>API: EventEmitter (sources, response chunks, progress)
+    API-->>Browser: SSE text/event-stream

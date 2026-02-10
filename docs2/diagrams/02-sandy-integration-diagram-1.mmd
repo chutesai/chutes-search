@@ -1,0 +1,65 @@
+sequenceDiagram
+    participant User
+    participant API as /api/chat
+    participant DRA as DeepResearchAgent
+    participant DRC as DeepResearchCollector
+    participant Search as SearxNG / Serper
+    participant Sandy as Sandy API
+    participant SB as Sandbox (Chromium)
+    participant Agent as Claude Code (optional)
+    participant LLM as Chutes LLM API
+
+    User->>API: POST { focusMode: "deepResearch" }
+    Note over API: Auth required (401 if anonymous)
+
+    API->>DRA: searchAndAnswer()
+    DRA->>DRC: runDeepResearchCollector()
+
+    rect rgb(240, 248, 255)
+        Note over DRC,SB: Phase 1: Source Discovery
+        DRC->>Search: runWebSearch(query)
+        Search-->>DRC: primary results + suggestions
+        DRC->>Search: runWebSearch(related queries)
+        Search-->>DRC: additional results
+        DRC->>DRC: Deduplicate + rank sources
+    end
+
+    rect rgb(240, 255, 240)
+        Note over DRC,SB: Phase 2: Sandbox Crawling
+        DRC->>Sandy: POST /api/sandboxes (agent-ready, priority=1)
+        Sandy-->>DRC: { sandboxId }
+        DRC->>Sandy: Warmup: health check + exec "true"
+        DRC->>Sandy: mkdir, npm init, install Playwright
+        DRC->>Sandy: Install Chromium + system deps
+        DRC->>Sandy: Verify browser launch
+        DRC->>Sandy: Write crawler script + input.json
+        DRC->>Sandy: Start crawler as background process
+        loop Poll every 1.2s
+            DRC->>Sandy: Read log output (tail from offset)
+            Sandy-->>DRC: Progress lines (__PROGRESS__ prefix)
+            DRC->>DRC: Parse progress, emit to UI
+        end
+        DRC->>Sandy: Read output.json
+        Sandy-->>DRC: Crawled sources with content
+    end
+
+    rect rgb(255, 248, 240)
+        Note over DRC,Agent: Phase 3: Agent Summarization (optional)
+        DRC->>Sandy: Write agent prompt + system prompt
+        DRC->>Sandy: Run Claude Code (via shell script)
+        Agent-->>Sandy: JSON summary
+        DRC->>Sandy: Read agent output
+        Sandy-->>DRC: Summarized sources
+    end
+
+    DRC->>Sandy: POST /api/sandboxes/{id}/terminate
+    DRC-->>DRA: { docs, sources }
+
+    rect rgb(248, 240, 255)
+        Note over DRA,LLM: Phase 4: Report Generation
+        DRA->>LLM: Stream deep research response
+        LLM-->>DRA: Structured report (streamed)
+    end
+
+    DRA-->>API: EventEmitter (progress + sources + response)
+    API-->>User: SSE stream
