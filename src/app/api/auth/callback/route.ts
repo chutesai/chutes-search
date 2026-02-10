@@ -10,10 +10,10 @@ import {
   AUTH_SESSION_COOKIE_NAME,
   OAUTH_STATE_COOKIE_NAME,
 } from '@/lib/auth/constants';
+import { createSessionAndSeal } from '@/lib/auth/cookieSession';
 import { getRequestOrigin, getSafeReturnTo } from '@/lib/auth/request';
 import { getChutesAuthSecret } from '@/lib/auth/secret';
 import { unsealJson } from '@/lib/auth/seal';
-import { createAuthSession } from '@/lib/auth/session';
 import db from '@/lib/db';
 import { chats } from '@/lib/db/schema';
 import { and, eq, isNull } from 'drizzle-orm';
@@ -78,9 +78,9 @@ export const GET = async (req: Request) => {
     });
 
     const userInfo = await fetchChutesUserInfo(token.access_token);
-    const sessionId = await createAuthSession({ userInfo, token });
+    const sealedSession = await createSessionAndSeal({ userInfo, token });
 
-    cookieStore.set(AUTH_SESSION_COOKIE_NAME, sessionId, {
+    cookieStore.set(AUTH_SESSION_COOKIE_NAME, sealedSession, {
       path: '/',
       httpOnly: true,
       sameSite: 'lax',
