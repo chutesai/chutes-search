@@ -1,3 +1,4 @@
+import { getAuthSession } from '@/lib/auth/cookieSession';
 import crypto from 'crypto';
 import { AIMessage, BaseMessage, HumanMessage } from '@langchain/core/messages';
 import { EventEmitter } from 'stream';
@@ -20,9 +21,7 @@ import { searchHandlers } from '@/lib/search';
 import { buildChutesCandidates, LlmCandidate } from '@/lib/llm/fallbacks';
 import {
   ANON_SESSION_COOKIE_NAME,
-  AUTH_SESSION_COOKIE_NAME,
 } from '@/lib/auth/constants';
-import { refreshAuthSessionIfNeeded } from '@/lib/auth/session';
 import {
   consumeFreeSearchQuota,
 } from '@/lib/rateLimit';
@@ -240,7 +239,7 @@ export const POST = async (req: Request) => {
       });
     }
 
-    const authSessionId = cookieStore.get(AUTH_SESSION_COOKIE_NAME)?.value;
+    const authSessionId = cookieStore.get()?.value;
     let authSession = null;
     if (authSessionId) {
       try {
@@ -251,7 +250,7 @@ export const POST = async (req: Request) => {
       }
     }
     if (authSessionId && !authSession) {
-      cookieStore.set(AUTH_SESSION_COOKIE_NAME, '', {
+      cookieStore.set('', {
         path: '/',
         httpOnly: true,
         sameSite: 'lax',
@@ -260,7 +259,7 @@ export const POST = async (req: Request) => {
       });
     } else if (authSessionId && authSession) {
       // Keep users signed in for 30 days after last successful usage.
-      cookieStore.set(AUTH_SESSION_COOKIE_NAME, authSessionId, {
+      cookieStore.set(authSessionId, {
         path: '/',
         sameSite: 'lax',
         httpOnly: true,

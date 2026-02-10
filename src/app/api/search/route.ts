@@ -1,3 +1,4 @@
+import { getAuthSession } from '@/lib/auth/cookieSession';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { Embeddings } from '@langchain/core/embeddings';
 import {
@@ -17,8 +18,6 @@ import {
   consumeFreeSearchQuota,
 } from '@/lib/rateLimit';
 import { cookies } from 'next/headers';
-import { AUTH_SESSION_COOKIE_NAME } from '@/lib/auth/constants';
-import { refreshAuthSessionIfNeeded } from '@/lib/auth/session';
 
 interface chatModel {
   provider: string;
@@ -64,12 +63,12 @@ export const POST = async (req: Request) => {
 
     const cookieStore = await cookies();
     // Refresh auth session if needed (token refresh + sliding DB expiry).
-    const authSessionId = cookieStore.get(AUTH_SESSION_COOKIE_NAME)?.value;
+    const authSessionId = cookieStore.get()?.value;
     const authSession = authSessionId
       ? await refreshAuthSessionIfNeeded(authSessionId)
       : null;
     if (authSessionId && !authSession) {
-      cookieStore.set(AUTH_SESSION_COOKIE_NAME, '', {
+      cookieStore.set('', {
         path: '/',
         httpOnly: true,
         sameSite: 'lax',
@@ -78,7 +77,7 @@ export const POST = async (req: Request) => {
       });
     } else if (authSessionId && authSession) {
       // Keep users signed in for 30 days after last successful usage.
-      cookieStore.set(AUTH_SESSION_COOKIE_NAME, authSessionId, {
+      cookieStore.set(authSessionId, {
         path: '/',
         sameSite: 'lax',
         httpOnly: true,

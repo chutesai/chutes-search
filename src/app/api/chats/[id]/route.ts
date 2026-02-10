@@ -1,12 +1,11 @@
+import { getAuthSession } from '@/lib/auth/cookieSession';
 import db from '@/lib/db';
 import { chats, messages } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { cookies } from 'next/headers';
 import {
   ANON_SESSION_COOKIE_NAME,
-  AUTH_SESSION_COOKIE_NAME,
 } from '@/lib/auth/constants';
-import { getAuthSessionById } from '@/lib/auth/session';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,12 +19,12 @@ export const GET = async (
 
     const cookieStore = await cookies();
     const sessionId = cookieStore.get(ANON_SESSION_COOKIE_NAME)?.value || null;
-    const authSessionId = cookieStore.get(AUTH_SESSION_COOKIE_NAME)?.value;
+    const authSessionId = cookieStore.get()?.value;
     const authSession = authSessionId
       ? await getAuthSessionById(authSessionId)
       : null;
     if (authSessionId && !authSession) {
-      cookieStore.set(AUTH_SESSION_COOKIE_NAME, '', {
+      cookieStore.set('', {
         path: '/',
         httpOnly: true,
         sameSite: 'lax',
@@ -81,12 +80,12 @@ export const DELETE = async (
 
     const cookieStore = await cookies();
     const sessionId = cookieStore.get(ANON_SESSION_COOKIE_NAME)?.value || null;
-    const authSessionId = cookieStore.get(AUTH_SESSION_COOKIE_NAME)?.value;
+    const authSessionId = cookieStore.get()?.value;
     const authSession = authSessionId
       ? await getAuthSessionById(authSessionId)
       : null;
     if (authSessionId && !authSession) {
-      cookieStore.set(AUTH_SESSION_COOKIE_NAME, '', {
+      cookieStore.set('', {
         path: '/',
         httpOnly: true,
         sameSite: 'lax',

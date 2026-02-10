@@ -18,7 +18,11 @@ export const GET = async (req: Request) => {
   const sessionId = cookieStore.get(AUTH_SESSION_COOKIE_NAME)?.value;
 
   if (sessionId) {
-    await deleteAuthSession(sessionId);
+    try {
+      await deleteAuthSession(sessionId);
+    } catch {
+      // Cookie-based sessions have no DB row to delete; ignore.
+    }
   }
 
   cookieStore.set(AUTH_SESSION_COOKIE_NAME, '', {

@@ -1,8 +1,7 @@
+import { getAuthSession } from '@/lib/auth/cookieSession';
 import { NextRequest, NextResponse } from 'next/server';
 import { generateSpeech, TTSRequest } from '@/lib/tts';
 import { cookies } from 'next/headers';
-import { AUTH_SESSION_COOKIE_NAME } from '@/lib/auth/constants';
-import { refreshAuthSessionIfNeeded } from '@/lib/auth/session';
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,7 +26,7 @@ export async function POST(request: NextRequest) {
     console.log(`TTS request: ${body.text.length} chars, voice: ${body.voice || 'default'}`);
 
     const cookieStore = await cookies();
-    const authSessionId = cookieStore.get(AUTH_SESSION_COOKIE_NAME)?.value;
+    const authSessionId = cookieStore.get()?.value;
     const authSession = authSessionId
       ? await refreshAuthSessionIfNeeded(authSessionId)
       : null;

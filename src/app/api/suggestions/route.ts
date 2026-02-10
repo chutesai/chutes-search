@@ -1,3 +1,4 @@
+import { getAuthSession } from '@/lib/auth/cookieSession';
 import generateSuggestions from '@/lib/chains/suggestionGeneratorAgent';
 import {
   getCustomOpenaiApiUrl,
@@ -8,8 +9,6 @@ import { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { AIMessage, BaseMessage, HumanMessage } from '@langchain/core/messages';
 import { ChatOpenAI } from '@langchain/openai';
 import { cookies } from 'next/headers';
-import { AUTH_SESSION_COOKIE_NAME } from '@/lib/auth/constants';
-import { refreshAuthSessionIfNeeded } from '@/lib/auth/session';
 
 interface ChatModel {
   provider: string;
@@ -24,7 +23,7 @@ interface SuggestionsGenerationBody {
 export const POST = async (req: Request) => {
   try {
     const cookieStore = await cookies();
-    const authSessionId = cookieStore.get(AUTH_SESSION_COOKIE_NAME)?.value;
+    const authSessionId = cookieStore.get()?.value;
     const authSession = authSessionId
       ? await refreshAuthSessionIfNeeded(authSessionId)
       : null;
