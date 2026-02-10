@@ -1,0 +1,24 @@
+stateDiagram-v2
+    [*] --> Creating: POST /api/sandboxes
+    Creating --> Warmup: sandboxId returned
+    Warmup --> Ready: Health check + exec "true" pass
+    Warmup --> Failed: 5 warmup attempts exhausted
+
+    Ready --> Installing: npm install playwright
+    Installing --> Verifying: Browser launch test
+    Verifying --> Crawling: Browser launches OK
+    Verifying --> FallbackInstall: Preinstalled browser failed
+    FallbackInstall --> Verifying: Local install + retry
+
+    Crawling --> Summarizing: Crawler complete
+    Crawling --> Summarizing: Crawler timed out (partial results)
+    Crawling --> FallbackSnippets: Crawler failed entirely
+
+    Summarizing --> Generating: Agent summary complete
+    Summarizing --> Generating: Agent summary failed (use raw extracts)
+
+    Generating --> Terminated: Report streamed
+    Failed --> Terminated: Cleanup
+    FallbackSnippets --> Generating: Use search snippets
+
+    Terminated --> [*]: POST /terminate

@@ -1,0 +1,13 @@
+flowchart TD
+    A["Check SANDY_PLAYWRIGHT_READY env"] -->|"1"| B["Use preinstalled browser path"]
+    A -->|not set| C["Install npm playwright@1.46.0"]
+
+    B --> D["Verify browser launch"]
+    C --> E["Install system deps (libnss3, etc.)"]
+    E --> F["npx playwright install chromium"]
+    F --> D
+
+    D -->|success| G["Proceed to crawl"]
+    D -->|preinstalled failed| H["Fallback: local install"]
+    H --> E
+    D -->|all installs failed| I["Return search snippets as fallback"]

@@ -1,0 +1,54 @@
+flowchart TB
+    subgraph Client["Browser Client"]
+        UI["Next.js Frontend<br/>(React + Tailwind)"]
+        LS["LocalStorage<br/>free-search counter"]
+    end
+
+    subgraph Server["Next.js Server (Node 20)"]
+        API["/api/chat route"]
+        AUTH["Auth Session<br/>(Chutes IDP)"]
+        RATE["Rate Limiter<br/>(SQLite)"]
+        ROUTER["Search Router"]
+        PROVIDERS["LLM Provider Registry"]
+    end
+
+    subgraph FocusModes["Focus Modes (MetaSearchAgent)"]
+        WEB["Web Search"]
+        ACAD["Academic Search<br/>(arxiv, google scholar, pubmed)"]
+        YT["YouTube Search"]
+        RD["Reddit Search"]
+        WA["Wolfram Alpha"]
+        WR["Writing Assistant"]
+        DR["Deep Research<br/>(DeepResearchAgent)"]
+    end
+
+    subgraph SearchBackends["Search Backends"]
+        SEARXNG["SearxNG<br/>(self-hosted metasearch)"]
+        SERPER["Serper API<br/>(Google fallback)"]
+    end
+
+    subgraph LLMLayer["LLM Inference"]
+        CHUTES_LLM["Chutes LLM API<br/>(llm.chutes.ai/v1)"]
+        OPENAI["OpenAI"]
+        ANTHROPIC["Anthropic"]
+        OLLAMA["Ollama (local)"]
+        OTHERS["Groq / Gemini / DeepSeek / etc."]
+    end
+
+    subgraph SandboxLayer["Sandy Sandboxes (Deep Research only)"]
+        SANDY["Sandy API"]
+        SB["Ephemeral Sandbox<br/>(Playwright + Chromium)"]
+        AGENT["Claude Code Agent<br/>(optional summarizer)"]
+    end
+
+    UI -->|POST /api/chat| API
+    API --> AUTH
+    API --> RATE
+    API --> ROUTER
+    ROUTER --> FocusModes
+    FocusModes --> SearchBackends
+    FocusModes --> PROVIDERS
+    PROVIDERS --> LLMLayer
+    DR --> SANDY
+    SANDY --> SB
+    SB --> AGENT

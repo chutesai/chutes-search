@@ -1,0 +1,17 @@
+sequenceDiagram
+    participant Browser
+    participant App as chutes-search
+    participant IDP as Chutes IDP
+
+    Browser->>App: GET /api/auth/login
+    App->>App: Generate PKCE code_verifier + state
+    App->>Browser: Redirect to IDP /authorize
+    Browser->>IDP: Authorization request
+    IDP->>Browser: Redirect with code
+    Browser->>App: GET /api/auth/callback?code=...
+    App->>IDP: POST /idp/token (code + code_verifier)
+    IDP-->>App: { access_token, refresh_token }
+    App->>IDP: GET /idp/userinfo
+    IDP-->>App: { sub, username }
+    App->>App: Create encrypted session
+    App->>Browser: Set auth_session cookie

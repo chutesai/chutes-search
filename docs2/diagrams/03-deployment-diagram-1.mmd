@@ -1,0 +1,15 @@
+flowchart LR
+    subgraph Stage1["Stage 1: Builder (node:20.18.0-slim)"]
+        A["Copy package.json + yarn.lock"] --> B["yarn install --frozen-lockfile"]
+        B --> C["Copy source + config files"]
+        C --> D["yarn build (Next.js)"]
+        D --> E["Build DB migrator with @vercel/ncc"]
+    end
+
+    subgraph Stage2["Stage 2: Runtime (node:20.18.0-slim)"]
+        F["Copy .next/standalone"] --> G["Copy public + static assets"]
+        G --> H["Copy drizzle migrations + migrator"]
+        H --> I["entrypoint.sh"]
+    end
+
+    Stage1 --> Stage2

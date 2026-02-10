@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --accent: #24a0ed;
+    --accent-soft: rgba(36, 160, 237, 0.12);
+  }
+
+  .dark {
+    --accent-soft: rgba(36, 160, 237, 0.2);
+  }
+
+  .overflow-hidden-scrollable {
+    -ms-overflow-style: none;
+  }
+
+  .overflow-hidden-scrollable::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@media screen and (-webkit-min-device-pixel-ratio: 0) {
+  select,
+  textarea,
+  input {
+    font-size: 16px !important;
+  }
+}
