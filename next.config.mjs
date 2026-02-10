@@ -8,7 +8,7 @@ const nextConfig = {
       },
     ],
   },
-  serverExternalPackages: ['pdf-parse', 'better-sqlite3'],
+  serverExternalPackages: ['pdf-parse'],
 };
 
 export default nextConfig;

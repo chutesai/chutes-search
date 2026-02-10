@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { sqliteRaw } from '@/lib/db';
+import { pgClient } from '@/lib/db';
 import { logEvent } from '@/lib/eventLog';
 
 const FREE_SEARCHES_PER_DAY = 3;
@@ -95,15 +95,13 @@ export async function checkIpRateLimit(ipAddress: string): Promise<{
   const today = getTodayDate();
   const ipKey = getClientIpKey(ipAddress);
 
-  const row = sqliteRaw
-    .prepare(
-      `SELECT COALESCE(SUM(search_count), 0) AS used
-       FROM ip_search_logs
-       WHERE ip_address = ? AND search_date = ?`,
-    )
-    .get(ipKey, today) as { used?: number } | undefined;
+  const rows = await pgClient`
+    SELECT COALESCE(SUM(search_count), 0) AS used
+    FROM ip_search_logs
+    WHERE ip_address = ${ipKey} AND search_date = ${today}
+  `;
 
-  const used = row?.used ?? 0;
+  const used = Number(rows[0]?.used ?? 0);
   const remaining = Math.max(0, FREE_SEARCHES_PER_DAY - used);
   const allowed = used < FREE_SEARCHES_PER_DAY;
 
@@ -118,41 +116,37 @@ export async function incrementIpSearchCount(ipAddress: string): Promise<void> {
   const today = getTodayDate();
   const ipKey = getClientIpKey(ipAddress);
 
-  const first = sqliteRaw
-    .prepare(
-      `SELECT id
-       FROM ip_search_logs
-       WHERE ip_address = ? AND search_date = ?
-       ORDER BY id ASC
-       LIMIT 1`,
-    )
-    .get(ipKey, today) as { id: number } | undefined;
+  const first = await pgClient`
+    SELECT id
+    FROM ip_search_logs
+    WHERE ip_address = ${ipKey} AND search_date = ${today}
+    ORDER BY id ASC
+    LIMIT 1
+  `;
 
-  if (first?.id) {
-    sqliteRaw
-      .prepare(`UPDATE ip_search_logs SET search_count = search_count + 1 WHERE id = ?`)
-      .run(first.id);
+  if (first[0]?.id) {
+    await pgClient`
+      UPDATE ip_search_logs SET search_count = search_count + 1 WHERE id = ${first[0].id}
+    `;
     return;
   }
 
-  sqliteRaw
-    .prepare(
-      `INSERT INTO ip_search_logs (ip_address, search_date, search_count)
-       VALUES (?, ?, 1)`,
-    )
-    .run(ipKey, today);
+  await pgClient`
+    INSERT INTO ip_search_logs (ip_address, search_date, search_count)
+    VALUES (${ipKey}, ${today}, 1)
+  `;
 }
 
 /**
- * Atomically consume a free-search token for this request.
+ * Consume a free-search token for this request (best-effort, no transaction).
  *
  * Enforces:
  * - Per-IP daily quota (3/day)
- * - Global anonymous caps (100/min, 3000/hr)
+ * - Global anonymous caps (200/min, 6000/hr)
  *
- * IMPORTANT:
- * - This does not log user queries or IP addresses.
- * - This stores hashed IPs in the DB for privacy.
+ * NOTE: Uses individual queries instead of a DB transaction because Neon HTTP
+ * driver is stateless. Rate limiting is best-effort so small race windows
+ * are acceptable.
  */
 export async function consumeFreeSearchQuota(req: Request): Promise<FreeSearchQuotaResult> {
   const nowMs = Date.now();
@@ -162,138 +156,116 @@ export async function consumeFreeSearchQuota(req: Request): Promise<FreeSearchQu
   const minuteBucket = getMinuteBucketStart(nowMs);
   const hourBucket = getHourBucketStart(nowMs);
 
-  const tx = sqliteRaw.transaction((): FreeSearchQuotaResult => {
-    const usedRow = sqliteRaw
-      .prepare(
-        `SELECT COALESCE(SUM(search_count), 0) AS used
-         FROM ip_search_logs
-         WHERE ip_address = ? AND search_date = ?`,
-      )
-      .get(ipKey, today) as { used?: number } | undefined;
+  // Check per-IP daily quota.
+  const usedRows = await pgClient`
+    SELECT COALESCE(SUM(search_count), 0) AS used
+    FROM ip_search_logs
+    WHERE ip_address = ${ipKey} AND search_date = ${today}
+  `;
+  const used = Number(usedRows[0]?.used ?? 0);
 
-    const used = usedRow?.used ?? 0;
-    if (used >= FREE_SEARCHES_PER_DAY) {
-      return {
-        allowed: false,
-        reason: 'ip_daily',
-        used,
-        remaining: 0,
-      };
-    }
-
-    // Ensure global buckets exist.
-    sqliteRaw
-      .prepare(
-        `INSERT OR IGNORE INTO free_search_global_counters (bucket, bucket_start, count)
-         VALUES ('minute', ?, 0)`,
-      )
-      .run(minuteBucket);
-    sqliteRaw
-      .prepare(
-        `INSERT OR IGNORE INTO free_search_global_counters (bucket, bucket_start, count)
-         VALUES ('hour', ?, 0)`,
-      )
-      .run(hourBucket);
-
-    const minuteRow = sqliteRaw
-      .prepare(
-        `SELECT count
-         FROM free_search_global_counters
-         WHERE bucket = 'minute' AND bucket_start = ?`,
-      )
-      .get(minuteBucket) as { count?: number } | undefined;
-
-    const hourRow = sqliteRaw
-      .prepare(
-        `SELECT count
-         FROM free_search_global_counters
-         WHERE bucket = 'hour' AND bucket_start = ?`,
-      )
-      .get(hourBucket) as { count?: number } | undefined;
-
-    const minuteCount = minuteRow?.count ?? 0;
-    const hourCount = hourRow?.count ?? 0;
-
-    if (minuteCount >= FREE_SEARCHES_GLOBAL_PER_MINUTE) {
-      return {
-        allowed: false,
-        reason: 'global_minute',
-        used,
-        remaining: FREE_SEARCHES_PER_DAY - used,
-      };
-    }
-
-    if (hourCount >= FREE_SEARCHES_GLOBAL_PER_HOUR) {
-      return {
-        allowed: false,
-        reason: 'global_hour',
-        used,
-        remaining: FREE_SEARCHES_PER_DAY - used,
-      };
-    }
-
-    // Increment per-IP daily count (update one row to avoid duplicate amplification).
-    const first = sqliteRaw
-      .prepare(
-        `SELECT id
-         FROM ip_search_logs
-         WHERE ip_address = ? AND search_date = ?
-         ORDER BY id ASC
-         LIMIT 1`,
-      )
-      .get(ipKey, today) as { id: number } | undefined;
-
-    if (first?.id) {
-      sqliteRaw
-        .prepare(`UPDATE ip_search_logs SET search_count = search_count + 1 WHERE id = ?`)
-        .run(first.id);
-    } else {
-      sqliteRaw
-        .prepare(
-          `INSERT INTO ip_search_logs (ip_address, search_date, search_count)
-           VALUES (?, ?, 1)`,
-        )
-        .run(ipKey, today);
-    }
-
-    // Increment global counters.
-    sqliteRaw
-      .prepare(
-        `UPDATE free_search_global_counters
-         SET count = count + 1
-         WHERE bucket = 'minute' AND bucket_start = ?`,
-      )
-      .run(minuteBucket);
-    sqliteRaw
-      .prepare(
-        `UPDATE free_search_global_counters
-         SET count = count + 1
-         WHERE bucket = 'hour' AND bucket_start = ?`,
-      )
-      .run(hourBucket);
-
-    const nextUsed = used + 1;
-    return {
-      allowed: true,
-      used: nextUsed,
-      remaining: Math.max(0, FREE_SEARCHES_PER_DAY - nextUsed),
-    };
-  });
-
-  const result = tx();
-  if (!result.allowed) {
-    // Log *only* aggregate failure reasons and counts (no IP/user/query).
+  if (used >= FREE_SEARCHES_PER_DAY) {
     logEvent({
       level: 'warn',
       event: 'free_search.rate_limited',
-      metadata: {
-        reason: result.reason,
-        used: result.used,
-      },
+      metadata: { reason: 'ip_daily', used },
     });
+    return { allowed: false, reason: 'ip_daily', used, remaining: 0 };
   }
 
-  return result;
+  // Ensure global buckets exist.
+  await pgClient`
+    INSERT INTO free_search_global_counters (bucket, bucket_start, count)
+    VALUES ('minute', ${minuteBucket}, 0)
+    ON CONFLICT (bucket, bucket_start) DO NOTHING
+  `;
+  await pgClient`
+    INSERT INTO free_search_global_counters (bucket, bucket_start, count)
+    VALUES ('hour', ${hourBucket}, 0)
+    ON CONFLICT (bucket, bucket_start) DO NOTHING
+  `;
+
+  // Check global limits.
+  const minuteRows = await pgClient`
+    SELECT count
+    FROM free_search_global_counters
+    WHERE bucket = 'minute' AND bucket_start = ${minuteBucket}
+  `;
+  const hourRows = await pgClient`
+    SELECT count
+    FROM free_search_global_counters
+    WHERE bucket = 'hour' AND bucket_start = ${hourBucket}
+  `;
+
+  const minuteCount = Number(minuteRows[0]?.count ?? 0);
+  const hourCount = Number(hourRows[0]?.count ?? 0);
+
+  if (minuteCount >= FREE_SEARCHES_GLOBAL_PER_MINUTE) {
+    logEvent({
+      level: 'warn',
+      event: 'free_search.rate_limited',
+      metadata: { reason: 'global_minute', used },
+    });
+    return {
+      allowed: false,
+      reason: 'global_minute',
+      used,
+      remaining: FREE_SEARCHES_PER_DAY - used,
+    };
+  }
+
+  if (hourCount >= FREE_SEARCHES_GLOBAL_PER_HOUR) {
+    logEvent({
+      level: 'warn',
+      event: 'free_search.rate_limited',
+      metadata: { reason: 'global_hour', used },
+    });
+    return {
+      allowed: false,
+      reason: 'global_hour',
+      used,
+      remaining: FREE_SEARCHES_PER_DAY - used,
+    };
+  }
+
+  // Increment per-IP daily count.
+  const first = await pgClient`
+    SELECT id
+    FROM ip_search_logs
+    WHERE ip_address = ${ipKey} AND search_date = ${today}
+    ORDER BY id ASC
+    LIMIT 1
+  `;
+
+  if (first[0]?.id) {
+    await pgClient`
+      UPDATE ip_search_logs SET search_count = search_count + 1 WHERE id = ${first[0].id}
+    `;
+  } else {
+    await pgClient`
+      INSERT INTO ip_search_logs (ip_address, search_date, search_count)
+      VALUES (${ipKey}, ${today}, 1)
+    `;
+  }
+
+  // Increment global counters.
+  await pgClient`
+    UPDATE free_search_global_counters
+    SET count = count + 1
+    WHERE bucket = 'minute' AND bucket_start = ${minuteBucket}
+  `;
+  await pgClient`
+    UPDATE free_search_global_counters
+    SET count = count + 1
+    WHERE bucket = 'hour' AND bucket_start = ${hourBucket}
+  `;
+
+  const nextUsed = used + 1;
+  return {
+    allowed: true,
+    used: nextUsed,
+    remaining: Math.max(0, FREE_SEARCHES_PER_DAY - nextUsed),
+  };
 }
 
 /**
