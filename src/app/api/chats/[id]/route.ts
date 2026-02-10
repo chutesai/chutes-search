@@ -6,6 +6,7 @@ import { cookies } from 'next/headers';
 import {
   ANON_SESSION_COOKIE_NAME,
 } from '@/lib/auth/constants';
+import { decryptField } from '@/lib/crypto/fieldEncryption';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -43,10 +44,17 @@ export const GET = async (
       where: eq(messages.chatId, id),
     });
 
+    const userId = authSession?.user.id ?? null;
     return Response.json(
       {
-        chat: chatExists,
-        messages: chatMessages,
+        chat: {
+          ...chatExists,
+          title: decryptField(chatExists.title, userId),
+        },
+        messages: chatMessages.map((m) => ({
+          ...m,
+          content: decryptField(m.content, userId),
+        })),
       },
       { status: 200 },
     );

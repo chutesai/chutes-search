@@ -25,6 +25,7 @@ import {
 import {
   consumeFreeSearchQuota,
 } from '@/lib/rateLimit';
+import { encryptField } from '@/lib/crypto/fieldEncryption';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -63,6 +64,7 @@ const handleEmitterEvents = async (
   encoder: TextEncoder,
   aiMessageId: string,
   chatId: string,
+  userId: string | null,
 ) => {
   let recievedMessage = '';
   let sources: any[] = [];
@@ -128,7 +130,7 @@ const handleEmitterEvents = async (
 
     db.insert(messagesSchema)
       .values({
-        content: recievedMessage,
+        content: encryptField(recievedMessage, userId),
         chatId: chatId,
         messageId: aiMessageId,
         role: 'assistant',
@@ -165,7 +167,7 @@ const handleHistorySave = async (
       .insert(chats)
       .values({
         id: message.chatId,
-        title: message.content,
+        title: encryptField(message.content, owner.userId),
         createdAt: new Date().toISOString(),
         focusMode: focusMode,
         sessionId: owner.sessionId,
@@ -198,7 +200,7 @@ const handleHistorySave = async (
     await db
       .insert(messagesSchema)
       .values({
-        content: message.content,
+        content: encryptField(message.content, owner.userId),
         chatId: message.chatId,
         messageId: humanMessageId,
         role: 'user',
@@ -491,7 +493,7 @@ export const POST = async (req: Request) => {
     const writer = responseStream.writable.getWriter();
     const encoder = new TextEncoder();
 
-    handleEmitterEvents(stream, writer, encoder, aiMessageId, message.chatId);
+    handleEmitterEvents(stream, writer, encoder, aiMessageId, message.chatId, authSession?.user.id ?? null);
     handleHistorySave(message, humanMessageId, body.focusMode, body.files, {
       sessionId,
       userId: authSession?.user.id ?? null,
