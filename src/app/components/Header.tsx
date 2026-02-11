@@ -23,6 +23,7 @@ const Header = () => {
           <div className="flex items-center gap-3 mb-4 pt-8">
             <img src="/chutes-logo.svg" alt="Chutes" className="h-10 w-auto" />
             <h1 className="text-2xl font-semibold">Chutes Search</h1>
+            <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-white/10 text-white/60 border border-white/10 uppercase tracking-wide">Beta</span>
           </div>
         </div>
       )}
