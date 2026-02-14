@@ -1,109 +1,9 @@
-import { searchSerper } from '@/lib/serper';
 import { fetchMultipleOGImages } from '@/lib/og-image';
-import fs from 'fs/promises';
-import path from 'path';
+import { cachedSearchSerper } from '@/lib/serperCache';
 
-// Rate limiting and error handling for Serper API
-let lastRequestTime = 0;
-const MIN_REQUEST_INTERVAL = 2000; // 2 seconds between requests to be more conservative
-
-// Simple in-memory cache to avoid duplicate requests
+// Simple in-memory cache to avoid recomputing the full discover response
 const cache = new Map<string, { data: any[]; timestamp: number }>();
 const CACHE_DURATION = 300000; // 5 minutes
-
-// Filesystem cache for persistent caching (disabled in serverless environments)
-const CACHE_DIR = path.join(process.cwd(), 'cache');
-const FS_CACHE_DURATION = 1800000; // 30 minutes for filesystem cache
-const IS_SERVERLESS = process.env.LAMBDA_TASK_ROOT || process.env.VERCEL || !process.cwd().includes('/');
-
-// Ensure cache directory exists
-async function ensureCacheDir() {
-  if (IS_SERVERLESS) {
-    console.log('[discover] Serverless environment detected, skipping filesystem cache setup');
-    return;
-  }
-
-  try {
-    await fs.access(CACHE_DIR);
-  } catch {
-    try {
-      await fs.mkdir(CACHE_DIR, { recursive: true });
-    } catch (error) {
-      console.log('[discover] Could not create cache directory:', error instanceof Error ? error.message : 'Unknown error');
-    }
-  }
-}
-
-// Get cached data from filesystem
-async function getFSCache(key: string): Promise<any[] | null> {
-  if (IS_SERVERLESS) {
-    return null;
-  }
-
-  try {
-    const cacheFile = path.join(CACHE_DIR, `${key}.json`);
-    const cacheData = await fs.readFile(cacheFile, 'utf-8');
-    const parsed = JSON.parse(cacheData);
-
-    if (Date.now() - parsed.timestamp < FS_CACHE_DURATION) {
-      console.log(`[discover] Found valid filesystem cache for ${key}`);
-      return parsed.data;
-    }
-
-    // Cache expired, remove file
-    await fs.unlink(cacheFile).catch(() => {});
-    return null;
-  } catch (error) {
-    // Silently fail if filesystem operations aren't available
-    console.log(`[discover] Filesystem cache not available for ${key}:`, error instanceof Error ? error.message : 'Unknown error');
-    return null;
-  }
-}
-
-// Save data to filesystem cache
-async function setFSCache(key: string, data: any[]) {
-  if (IS_SERVERLESS) {
-    return;
-  }
-
-  try {
-    await ensureCacheDir();
-    const cacheFile = path.join(CACHE_DIR, `${key}.json`);
-    const cacheData = {
-      data,
-      timestamp: Date.now()
-    };
-    await fs.writeFile(cacheFile, JSON.stringify(cacheData));
-    console.log(`[discover] Saved filesystem cache for ${key}`);
-  } catch (error) {
-    // Silently fail if filesystem operations aren't available
-    console.log(`[discover] Could not save filesystem cache for ${key}:`, error instanceof Error ? error.message : 'Unknown error');
-  }
-}
-
-const rateLimitedSearchSerper = async (query: string) => {
-  const now = Date.now();
-  const timeSinceLastRequest = now - lastRequestTime;
-
-  if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
-    await new Promise(resolve => setTimeout(resolve, MIN_REQUEST_INTERVAL - timeSinceLastRequest));
-  }
-
-  lastRequestTime = Date.now();
-
-  try {
-    const result = await searchSerper(query);
-    return result;
-  } catch (err: any) {
-    if (err?.response?.status === 429) {
-      console.warn(
-        `[discover] Serper rate limit hit, returning empty results`,
-      );
-      return { results: [], suggestions: [] };
-    }
-    throw err;
-  }
-};
 
 const websitesForTopic = {
   tech: {
@@ -190,25 +90,6 @@ export const GET = async (req: Request) => {
       );
     }
 
-    // Check filesystem cache
-    const fsCached = await getFSCache(cacheKey);
-    if (fsCached) {
-      console.log(`[discover] Returning filesystem cached data with ${fsCached.length} blogs`);
-      // Update in-memory cache
-      cache.set(cacheKey, { data: fsCached, timestamp: now });
-      return Response.json(
-        {
-          blogs: fsCached,
-          cached: true,
-          timestamp: now,
-          cacheType: 'filesystem'
-        },
-        {
-          status: 200,
-        },
-      );
-    }
-
     const selectedTopic = websitesForTopic[topic];
 
     let data: { title: string; url: string; content?: string; thumbnail?: string }[] = [];
@@ -235,7 +116,7 @@ export const GET = async (req: Request) => {
         if (siteSpecificResults.length >= SITE_SPECIFIC_COUNT * 2) break; // Get extra to allow for filtering
         try {
           const randomQuery = selectedTopic.query[Math.floor(Math.random() * selectedTopic.query.length)];
-          const result = await rateLimitedSearchSerper(`${randomQuery} site:${link}`);
+          const result = await cachedSearchSerper(`${randomQuery} site:${link}`);
           siteSpecificResults.push(...result.results.slice(0, 3)); // Take up to 3 per site
           console.log(`[discover] Got ${result.results.length} results from ${link}`);
         } catch (err) {
@@ -264,7 +145,7 @@ export const GET = async (req: Request) => {
       for (const query of selectedQueries) {
         if (dynamicResults.length >= DYNAMIC_COUNT * 2) break; // Get extra to allow for filtering
         try {
-          const result = await rateLimitedSearchSerper(query);
+          const result = await cachedSearchSerper(query);
           dynamicResults.push(...result.results);
           console.log(
             `[discover] Dynamic search returned ${result.results.length} results`,
@@ -288,7 +169,7 @@ export const GET = async (req: Request) => {
       if (selectedTopic.broadSearch && dynamicResults.length < DYNAMIC_COUNT) {
         console.log(`[discover] Fetching broader results for topic ${topic}`);
         try {
-          const broadResult = await rateLimitedSearchSerper(selectedTopic.broadSearch);
+          const broadResult = await cachedSearchSerper(selectedTopic.broadSearch);
           dynamicResults.push(...broadResult.results);
           console.log(`[discover] Broad search returned ${broadResult.results.length} results`);
         } catch (err) {
@@ -472,7 +353,7 @@ export const GET = async (req: Request) => {
       const randomLink = selectedTopic.links[Math.floor(Math.random() * selectedTopic.links.length)];
       const randomQuery = selectedTopic.query[Math.floor(Math.random() * selectedTopic.query.length)];
       try {
-        data = (await rateLimitedSearchSerper(`${randomQuery} site:${randomLink}`)).results;
+        data = (await cachedSearchSerper(`${randomQuery} site:${randomLink}`)).results;
 
         // Fetch OG images for preview mode as well
         const articlesWithoutThumbnails = data.filter(item => !item.thumbnail);
@@ -544,9 +425,8 @@ export const GET = async (req: Request) => {
       }
     }
 
-    // Cache the results in both memory and filesystem
+    // Cache the full response in memory (individual Serper queries are DB-cached in serperCache)
     cache.set(cacheKey, { data, timestamp: now });
-    await setFSCache(cacheKey, data);
 
     console.log(`[discover] Final response with ${data.length} blogs:`, data.map(item => ({ title: item.title, url: item.url, thumbnail: item.thumbnail })));
     console.log(`[discover] Sample blog with thumbnail:`, data[0]);

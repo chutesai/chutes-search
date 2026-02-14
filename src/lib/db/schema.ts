@@ -84,6 +84,21 @@ export const freeSearchGlobalCounters = pgTable(
   ],
 );
 
+// Serper API response cache (4h TTL, checked at query time).
+export const serperCache = pgTable(
+  'serper_cache',
+  {
+    id: serial('id').primaryKey(),
+    queryHash: text('query_hash').notNull(),
+    query: text('query').notNull(),
+    results: jsonb('results').notNull(),
+    createdAt: text('createdAt').notNull(),
+  },
+  (table) => [
+    uniqueIndex('serper_cache_query_hash_idx').on(table.queryHash),
+  ],
+);
+
 // Anonymized application event logs (no user queries, no user identifiers).
 export const eventLogs = pgTable(
   'event_logs',
