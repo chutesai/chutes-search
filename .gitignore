@@ -47,3 +47,6 @@ certificates
 
 # Vercel
 .vercel/
+
+# Implementation plans (consumed by AI agents, not tracked)
+implementation-plan*
