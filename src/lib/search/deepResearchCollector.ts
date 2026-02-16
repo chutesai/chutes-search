@@ -832,6 +832,8 @@ export const runDeepResearchCollector = async (
     const buildPlaywrightEnv = (browserPath: string, skipDownload: boolean) => ({
       ...basePlaywrightEnv,
       PLAYWRIGHT_BROWSERS_PATH: browserPath,
+      NODE_PATH:
+        '/usr/local/lib/node_modules:/usr/lib/node_modules',
       ...(skipDownload ? { PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1' } : {}),
     });
 
@@ -840,28 +842,46 @@ export const runDeepResearchCollector = async (
       usePreinstalledPlaywright,
     );
 
+    const ensurePlaywrightModuleAvailable = async (sandboxIdToUse: string) =>
+      execInSandbox(
+        sandboxIdToUse,
+        `cd ${workingDir} && node -e "require.resolve('playwright')"`,
+        playwrightEnv,
+        20000,
+      );
+
+    if (usePreinstalledPlaywright) {
+      const moduleCheck = await ensurePlaywrightModuleAvailable(activeSandboxId);
+      if (moduleCheck.exitCode !== 0) {
+        usePreinstalledPlaywright = false;
+        playwrightEnv = buildPlaywrightEnv(localBrowserPath, false);
+      }
+    }
+
     onProgress({
       id: 'setup',
       label: 'Installing Browser',
       status: 'running',
       detail: usePreinstalledPlaywright
-        ? 'Using preinstalled browser runtime.'
+        ? 'Using prewarmed browser runtime.'
         : 'Installing browser dependencies.',
     });
 
-    await execInSandbox(
-      sandboxId,
-      `cd ${workingDir} && if [ ! -f package.json ]; then npm init -y >/dev/null 2>&1; fi`,
-      {},
-      20000,
-    );
+    if (!usePreinstalledPlaywright) {
+      await execInSandbox(
+        sandboxId,
+        `cd ${workingDir} && if [ ! -f package.json ]; then npm init -y >/dev/null 2>&1; fi`,
+        {},
+        20000,
+      );
 
-    await execInSandbox(
-      sandboxId,
-      `cd ${workingDir} && if ! node -e "require.resolve('playwright')" >/dev/null 2>&1; then npm install --no-audit --no-fund playwright@1.46.0; fi`,
-      playwrightEnv,
-      6 * 60 * 1000,
-    );
+      await execInSandbox(
+        sandboxId,
+        `cd ${workingDir} && if ! node -e "require.resolve('playwright')" >/dev/null 2>&1; then npm install --no-audit --no-fund playwright@1.46.0; fi`,
+        playwrightEnv,
+        6 * 60 * 1000,
+      );
+    }
 
     const attemptPlaywrightInstall = async (command: string) => {
       return execInSandbox(
