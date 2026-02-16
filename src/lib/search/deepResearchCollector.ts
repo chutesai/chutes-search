@@ -858,14 +858,26 @@ export const runDeepResearchCollector = async (
       }
     }
 
-    onProgress({
-      id: 'setup',
-      label: 'Installing Browser',
-      status: 'running',
-      detail: usePreinstalledPlaywright
+    const getSetupLabel = () =>
+      usePreinstalledPlaywright ? 'Preparing Browser Runtime' : 'Installing Browser';
+    const emitSetupProgress = (
+      status: DeepResearchProgress['status'],
+      detail?: string,
+    ) => {
+      onProgress({
+        id: 'setup',
+        label: getSetupLabel(),
+        status,
+        ...(detail ? { detail } : {}),
+      });
+    };
+
+    emitSetupProgress(
+      'running',
+      usePreinstalledPlaywright
         ? 'Using prewarmed browser runtime.'
         : 'Installing browser dependencies.',
-    });
+    );
 
     if (!usePreinstalledPlaywright) {
       await execInSandbox(
@@ -943,12 +955,7 @@ export const runDeepResearchCollector = async (
     };
 
     const installChromium = async () => {
-      onProgress({
-        id: 'setup',
-        label: 'Installing Browser',
-        status: 'running',
-        detail: 'Downloading Chromium.',
-      });
+      emitSetupProgress('running', 'Downloading Chromium.');
 
       return attemptPlaywrightInstall('npx playwright install chromium');
     };
@@ -959,25 +966,20 @@ export const runDeepResearchCollector = async (
     if (!usePreinstalledPlaywright) {
       depsInstallResult = await installPlaywrightDependencies();
       if (depsInstallResult.exitCode !== 0) {
-        onProgress({
-          id: 'setup',
-          label: 'Installing Browser',
-          status: 'error',
-          detail:
-            'Browser dependencies failed to install. Using search snippets instead.',
-        });
+        emitSetupProgress(
+          'error',
+          'Browser dependencies failed to install. Using search snippets instead.',
+        );
         const docs = buildDocuments(fallbackSources);
         return { docs, sources: fallbackSources };
       }
 
       browserInstallResult = await installChromium();
       if (browserInstallResult.exitCode !== 0) {
-        onProgress({
-          id: 'setup',
-          label: 'Installing Browser',
-          status: 'error',
-          detail: 'Browser download failed. Using search snippets instead.',
-        });
+        emitSetupProgress(
+          'error',
+          'Browser download failed. Using search snippets instead.',
+        );
         const docs = buildDocuments(fallbackSources);
         return { docs, sources: fallbackSources };
       }
@@ -991,22 +993,15 @@ export const runDeepResearchCollector = async (
         120000,
       );
 
-    onProgress({
-      id: 'setup',
-      label: 'Installing Browser',
-      status: 'running',
-      detail: 'Verifying browser launch.',
-    });
+    emitSetupProgress('running', 'Verifying browser launch.');
 
     let verifyResult = await verifyBrowserLaunch();
 
     if (verifyResult.exitCode !== 0 && usePreinstalledPlaywright) {
-      onProgress({
-        id: 'setup',
-        label: 'Installing Browser',
-        status: 'running',
-        detail: 'Preinstalled browser failed. Downloading a local copy.',
-      });
+      emitSetupProgress(
+        'running',
+        'Preinstalled browser failed. Downloading a local copy.',
+      );
       usePreinstalledPlaywright = false;
       playwrightEnv = buildPlaywrightEnv(localBrowserPath, false);
 
@@ -1020,21 +1015,15 @@ export const runDeepResearchCollector = async (
     }
 
     if (verifyResult.exitCode !== 0) {
-      onProgress({
-        id: 'setup',
-        label: 'Installing Browser',
-        status: 'error',
-        detail: 'Browser launch failed. Using search snippets instead.',
-      });
+      emitSetupProgress(
+        'error',
+        'Browser launch failed. Using search snippets instead.',
+      );
       const docs = buildDocuments(fallbackSources);
       return { docs, sources: fallbackSources };
     }
 
-    onProgress({
-      id: 'setup',
-      label: 'Installing Browser',
-      status: 'complete',
-    });
+    emitSetupProgress('complete');
 
     const collectorRunId =
       correlationId ??
