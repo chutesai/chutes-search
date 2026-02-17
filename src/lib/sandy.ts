@@ -17,6 +17,10 @@ type SandyRequestOptions = {
   retryDelayMs?: number;
 };
 
+type SandyRequestError = Error & {
+  retryable?: boolean;
+};
+
 const getSandyConfig = () => {
   const baseUrl = process.env.SANDY_BASE_URL;
   const apiKey = process.env.SANDY_API_KEY;
@@ -85,8 +89,9 @@ export const sandyRequest = async <T>(
         const errorText = await response.text();
         const error = new Error(
           `Sandy API error ${response.status}: ${errorText || response.statusText}`,
-        );
-        if (attempt < retries && shouldRetry(response.status, errorText)) {
+        ) as SandyRequestError;
+        error.retryable = shouldRetry(response.status, errorText);
+        if (attempt < retries && error.retryable) {
           lastError = error;
           console.log(`[Sandy] Retrying request to ${path} (attempt ${attempt + 1}/${retries + 1}, status ${response.status})`);
           await sleep(retryDelayMs * Math.pow(2, attempt));
@@ -98,9 +103,12 @@ export const sandyRequest = async <T>(
       return await parseJsonResponse<T>(response);
     } catch (error: any) {
       clearTimeout(timeout);
-      const err = error instanceof Error ? error : new Error(String(error));
+      const err = (error instanceof Error
+        ? error
+        : new Error(String(error))) as SandyRequestError;
       lastError = err;
-      if (attempt < retries) {
+      const shouldAttemptRetry = attempt < retries && err.retryable !== false;
+      if (shouldAttemptRetry) {
         await sleep(retryDelayMs * Math.pow(2, attempt));
         continue;
       }
