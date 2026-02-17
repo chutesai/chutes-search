@@ -71,7 +71,8 @@ export const isRateLimitError = (err: unknown) => {
 export const isRetryableUpstreamError = (err: unknown) => {
   const status = getErrorStatus(err as any);
   if (typeof status === 'number') {
-    if ([408, 500, 502, 503, 504, 522, 524].includes(status)) return true;
+    // 404: model temporarily unavailable on the LLM gateway — try next candidate.
+    if ([404, 408, 500, 502, 503, 504, 522, 524].includes(status)) return true;
   }
 
   const message =

@@ -19,6 +19,8 @@ import {
 } from '@/lib/rateLimit';
 import { cookies } from 'next/headers';
 
+export const maxDuration = 300;
+
 interface chatModel {
   provider: string;
   name: string;

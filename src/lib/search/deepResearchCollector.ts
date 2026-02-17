@@ -76,7 +76,7 @@ type CollectorLogContext = {
   agentApiKey?: string;
 };
 
-const DEFAULT_MAX_DURATION_MS = 8 * 60 * 1000;
+const DEFAULT_MAX_DURATION_MS = 2.5 * 60 * 1000;
 
 const sanitizeUrl = (url: string) => {
   try {
@@ -595,28 +595,31 @@ export const runDeepResearchCollector = async (
   ctx: CollectorLogContext = {},
 ): Promise<{ docs: Document[]; sources: DeepResearchSource[] }> => {
   const correlationId = ctx.correlationId;
+  // Vercel Pro max function duration is 300s. Reserve time for sandbox
+  // setup (~30s), summary LLM (~30s), and buffer. Cap crawler durations
+  // so the full flow fits within the function timeout.
   const modeDefaults = {
     light: {
       maxSources: 10,
       maxCharsPerSource: 8000,
-      maxDurationMs: 12 * 60 * 1000,
-      maxPages: 22,
+      maxDurationMs: 2.5 * 60 * 1000,
+      maxPages: 15,
       maxDepth: 1,
-      maxLinksPerPage: 8,
+      maxLinksPerPage: 6,
       maxPagesPerHost: 4,
       relatedQueries: 1,
       summaryLimit: 12,
     },
     max: {
-      maxSources: 18,
-      maxCharsPerSource: 12000,
-      maxDurationMs: 18 * 60 * 1000,
-      maxPages: 48,
-      maxDepth: 2,
-      maxLinksPerPage: 12,
-      maxPagesPerHost: 8,
-      relatedQueries: 3,
-      summaryLimit: 20,
+      maxSources: 14,
+      maxCharsPerSource: 10000,
+      maxDurationMs: 3.5 * 60 * 1000,
+      maxPages: 28,
+      maxDepth: 1,
+      maxLinksPerPage: 8,
+      maxPagesPerHost: 6,
+      relatedQueries: 2,
+      summaryLimit: 16,
     },
   } as const;
 
@@ -766,7 +769,7 @@ export const runDeepResearchCollector = async (
     const inputPath = `${workingDir}/input.json`;
     const outputPath = `${workingDir}/output.json`;
 
-    const warmupAttempts = 5;
+    const warmupAttempts = 3;
     for (let attempt = 1; attempt <= warmupAttempts; attempt += 1) {
       try {
         onProgress({
@@ -781,7 +784,7 @@ export const runDeepResearchCollector = async (
           throw new Error('Sandbox not ready yet');
         }
         // Then verify we can execute commands
-        await execInSandbox(sandboxId, 'true', {}, 30000);
+        await execInSandbox(sandboxId, 'true', {}, 15000);
         break;
       } catch (error: any) {
         const is502 = error?.message?.includes('502') || error?.message?.includes('Upstream error');
@@ -792,8 +795,8 @@ export const runDeepResearchCollector = async (
           throw new Error(`Sandbox warmup failed: ${errorMsg}`);
         }
         // Exponential backoff with jitter
-        const baseDelay = 2000 * attempt;
-        const jitter = Math.random() * 500;
+        const baseDelay = 1500 * attempt;
+        const jitter = Math.random() * 300;
         await new Promise((resolve) => setTimeout(resolve, baseDelay + jitter));
       }
     }

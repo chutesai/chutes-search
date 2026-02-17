@@ -8,6 +8,8 @@ import {
 } from '@/lib/config';
 import { searchHandlers } from '@/lib/search';
 
+export const maxDuration = 300;
+
 interface ResearchRequestBody {
   query: string;
   mode?: 'light' | 'max';
@@ -131,7 +133,16 @@ export const POST = async (req: Request) => {
           encoder.encode(JSON.stringify({ type: 'init', data: 'Stream connected' }) + '\n'),
         );
 
+        // Heartbeat to prevent Vercel streaming idle timeout (~25s)
+        const heartbeat = setInterval(() => {
+          if (signal.aborted) return;
+          try {
+            controller.enqueue(encoder.encode(JSON.stringify({ type: 'keepAlive' }) + '\n'));
+          } catch {}
+        }, 15000);
+
         signal.addEventListener('abort', () => {
+          clearInterval(heartbeat);
           emitter.removeAllListeners();
           try { controller.close(); } catch {}
         });
@@ -147,12 +158,14 @@ export const POST = async (req: Request) => {
         });
 
         emitter.on('end', () => {
+          clearInterval(heartbeat);
           if (signal.aborted) return;
           controller.enqueue(encoder.encode(JSON.stringify({ type: 'done' }) + '\n'));
           controller.close();
         });
 
         emitter.on('error', (error: any) => {
+          clearInterval(heartbeat);
           if (signal.aborted) return;
           controller.error(error);
         });

@@ -29,6 +29,7 @@ import { encryptField } from '@/lib/crypto/fieldEncryption';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 300;
 
 type Message = {
   messageId: string;
@@ -84,6 +85,7 @@ const handleEmitterEvents = async (
   const safeClose = () => {
     if (closed) return;
     closed = true;
+    clearInterval(heartbeat);
     try {
       void writer.close().catch(() => {});
     } catch {
@@ -93,6 +95,14 @@ const handleEmitterEvents = async (
     stream.removeAllListeners('end');
     stream.removeAllListeners('error');
   };
+
+  // Send heartbeat every 15s to prevent Vercel's streaming idle timeout (~25s).
+  const heartbeat = setInterval(() => {
+    safeWrite({ type: 'keepAlive' });
+  }, 15000);
+
+  // Send initial keep-alive immediately so the first byte is sent right away.
+  safeWrite({ type: 'keepAlive' });
 
   stream.on('data', (data) => {
     const parsedData = JSON.parse(data);
