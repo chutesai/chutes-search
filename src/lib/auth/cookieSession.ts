@@ -81,25 +81,31 @@ export function unsealSessionFromCookie(
   }
 }
 
-const SESSION_COOKIE_OPTS = {
-  path: '/',
-  httpOnly: true,
-  sameSite: 'lax' as const,
-  secure: process.env.NODE_ENV === 'production',
-  maxAge: 30 * 24 * 60 * 60,
-};
+const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // 30 days in seconds
+
+export function getSessionCookieOpts() {
+  return {
+    path: '/',
+    httpOnly: true,
+    sameSite: 'lax' as const,
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: SESSION_MAX_AGE,
+    expires: new Date(Date.now() + SESSION_MAX_AGE * 1000),
+  };
+}
 
 function setCookie(
   cookieStore: ReadonlyRequestCookies,
   value: string,
 ) {
-  (cookieStore as any).set(AUTH_SESSION_COOKIE_NAME, value, SESSION_COOKIE_OPTS);
+  (cookieStore as any).set(AUTH_SESSION_COOKIE_NAME, value, getSessionCookieOpts());
 }
 
 function clearCookie(cookieStore: ReadonlyRequestCookies) {
   (cookieStore as any).set(AUTH_SESSION_COOKIE_NAME, '', {
-    ...SESSION_COOKIE_OPTS,
+    ...getSessionCookieOpts(),
     maxAge: 0,
+    expires: new Date(0),
   });
 }
 

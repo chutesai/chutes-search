@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { AUTH_SESSION_COOKIE_NAME } from '@/lib/auth/constants';
+import { getSessionCookieOpts } from '@/lib/auth/cookieSession';
 import { getRequestOrigin, getSafeReturnTo } from '@/lib/auth/request';
 import { deleteAuthSession } from '@/lib/auth/session';
 
@@ -26,11 +27,9 @@ export const GET = async (req: Request) => {
   }
 
   cookieStore.set(AUTH_SESSION_COOKIE_NAME, '', {
-    path: '/',
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    ...getSessionCookieOpts(),
     maxAge: 0,
+    expires: new Date(0),
   });
 
   return NextResponse.redirect(new URL(returnTo, origin));

@@ -6,6 +6,7 @@ import {
   getChutesIdpClientCredentials,
 } from '@/lib/auth/chutesIdp';
 import { AUTH_SESSION_COOKIE_NAME, OAUTH_STATE_COOKIE_NAME } from '@/lib/auth/constants';
+import { getSessionCookieOpts } from '@/lib/auth/cookieSession';
 import { generateOAuthState, generatePkcePair } from '@/lib/auth/pkce';
 import { getRequestOrigin, getSafeReturnTo } from '@/lib/auth/request';
 import { sealJson } from '@/lib/auth/seal';
@@ -45,20 +46,16 @@ export const GET = async (req: Request) => {
     // Clear any existing session before starting a fresh flow.
     if (cookieStore.get(AUTH_SESSION_COOKIE_NAME)?.value) {
       cookieStore.set(AUTH_SESSION_COOKIE_NAME, '', {
-        path: '/',
-        httpOnly: true,
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
+        ...getSessionCookieOpts(),
         maxAge: 0,
+        expires: new Date(0),
       });
     }
 
     cookieStore.set(OAUTH_STATE_COOKIE_NAME, sealed, {
-      path: '/',
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
+      ...getSessionCookieOpts(),
       maxAge: 10 * 60,
+      expires: new Date(Date.now() + 10 * 60 * 1000),
     });
 
     const authorizationUrl = buildChutesAuthorizationUrl({

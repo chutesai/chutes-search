@@ -10,7 +10,7 @@ import {
   AUTH_SESSION_COOKIE_NAME,
   OAUTH_STATE_COOKIE_NAME,
 } from '@/lib/auth/constants';
-import { createSessionAndSeal } from '@/lib/auth/cookieSession';
+import { createSessionAndSeal, getSessionCookieOpts } from '@/lib/auth/cookieSession';
 import { getRequestOrigin, getSafeReturnTo } from '@/lib/auth/request';
 import { getChutesAuthSecret } from '@/lib/auth/secret';
 import { unsealJson } from '@/lib/auth/seal';
@@ -80,21 +80,13 @@ export const GET = async (req: Request) => {
     const userInfo = await fetchChutesUserInfo(token.access_token);
     const sealedSession = await createSessionAndSeal({ userInfo, token });
 
-    cookieStore.set(AUTH_SESSION_COOKIE_NAME, sealedSession, {
-      path: '/',
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 30 * 24 * 60 * 60,
-    });
+    cookieStore.set(AUTH_SESSION_COOKIE_NAME, sealedSession, getSessionCookieOpts());
 
     // Clear one-time OAuth cookie.
     cookieStore.set(OAUTH_STATE_COOKIE_NAME, '', {
-      path: '/',
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
+      ...getSessionCookieOpts(),
       maxAge: 0,
+      expires: new Date(0),
     });
 
     const anonSessionId = cookieStore.get(ANON_SESSION_COOKIE_NAME)?.value;

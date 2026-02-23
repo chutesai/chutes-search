@@ -3,6 +3,7 @@ import { Montserrat } from 'next/font/google';
 import './globals.css';
 import { cn } from '@/lib/utils';
 import Sidebar from '@/components/Sidebar';
+import PwaInstallPrompt from '@/components/PwaInstallPrompt';
 import { Toaster } from 'sonner';
 import ThemeProvider from '@/components/theme/Provider';
 
@@ -35,10 +36,14 @@ export default function RootLayout({
         <link rel="icon" href="https://chutes.ai/favicon.png" type="image/png" />
         <link rel="shortcut icon" href="https://chutes.ai/favicon.png" type="image/png" />
         <link rel="apple-touch-icon" href="https://chutes.ai/favicon.png" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="Chutes Search" />
       </head>
       <body className={cn('h-full', montserrat.className)}>
         <ThemeProvider>
           <Sidebar>{children}</Sidebar>
+          <PwaInstallPrompt />
           <Toaster
             toastOptions={{
               unstyled: true,

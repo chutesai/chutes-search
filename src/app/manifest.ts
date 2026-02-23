@@ -5,10 +5,12 @@ export default function manifest(): MetadataRoute.Manifest {
     name: 'Chutes Search',
     short_name: 'Chutes',
     description: 'Chutes Search is an AI-powered search engine using Chutes LLMs.',
+    id: '/',
     start_url: '/',
     display: 'standalone',
     background_color: '#0a0a0a',
     theme_color: '#0a0a0a',
+    prefer_related_applications: false,
     screenshots: [
       {
         src: '/screenshots/p1.png',

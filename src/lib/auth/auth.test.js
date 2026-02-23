@@ -1,11 +1,18 @@
 const assert = require('node:assert');
-const { describe, it } = require('node:test');
+const { describe, it, beforeEach, afterEach } = require('node:test');
+
+// cookieSession transitively imports the DB module; provide a dummy URL
+// so the import succeeds without a real database.
+if (!process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test';
+}
 
 const b64 = require('./base64url.ts');
 const pkce = require('./pkce.ts');
 const seal = require('./seal.ts');
 const req = require('./request.ts');
 const idp = require('./chutesIdp.ts');
+const cookieSession = require('./cookieSession.ts');
 
 describe('base64url', () => {
   it('roundtrips bytes', () => {
@@ -74,6 +81,90 @@ describe('authorization url', () => {
     assert.equal(parsed.searchParams.get('scope'), 'openid profile');
     assert.equal(parsed.searchParams.get('state'), 'state123');
     assert.equal(parsed.searchParams.get('code_challenge_method'), 'S256');
+  });
+});
+
+describe('cookieSession', () => {
+  let origEnv;
+
+  beforeEach(() => {
+    origEnv = process.env.CHUTES_AUTH_SECRET;
+    process.env.CHUTES_AUTH_SECRET = 'test-secret-for-unit-tests';
+  });
+
+  afterEach(() => {
+    if (origEnv !== undefined) process.env.CHUTES_AUTH_SECRET = origEnv;
+    else delete process.env.CHUTES_AUTH_SECRET;
+  });
+
+  it('getSessionCookieOpts returns correct structure', () => {
+    const opts = cookieSession.getSessionCookieOpts();
+    assert.equal(opts.path, '/');
+    assert.equal(opts.httpOnly, true);
+    assert.equal(opts.sameSite, 'lax');
+    assert.equal(opts.maxAge, 30 * 24 * 60 * 60);
+    assert.ok(opts.expires instanceof Date);
+    const expectedExpiry = Date.now() + 30 * 24 * 60 * 60 * 1000;
+    const diff = Math.abs(opts.expires.getTime() - expectedExpiry);
+    assert.ok(diff < 2000, `expires should be ~30 days from now, diff=${diff}ms`);
+  });
+
+  it('getSessionCookieOpts returns fresh expires on each call', () => {
+    const a = cookieSession.getSessionCookieOpts();
+    const b = cookieSession.getSessionCookieOpts();
+    assert.ok(b.expires.getTime() >= a.expires.getTime());
+  });
+
+  it('sealSessionToCookie produces cc5_ prefixed value', () => {
+    const session = {
+      sessionId: 'sid-123',
+      user: { id: 'uid-456', username: 'testuser' },
+      accessToken: 'at-789',
+      refreshToken: 'rt-abc',
+      accessTokenExpiresAt: Math.floor(Date.now() / 1000) + 3600,
+      scope: 'openid profile',
+      tokenType: 'Bearer',
+    };
+    const sealed = cookieSession.sealSessionToCookie(session);
+    assert.ok(sealed.startsWith('cc5_'), `Expected cc5_ prefix, got: ${sealed.slice(0, 10)}`);
+  });
+
+  it('unsealSessionFromCookie roundtrips a session', () => {
+    const session = {
+      sessionId: 'sid-roundtrip',
+      user: { id: 'uid-rt', username: 'roundtripuser' },
+      accessToken: 'access-token-value',
+      refreshToken: 'refresh-token-value',
+      accessTokenExpiresAt: 1700000000,
+      scope: 'openid',
+      tokenType: 'Bearer',
+    };
+    const sealed = cookieSession.sealSessionToCookie(session);
+    const unsealed = cookieSession.unsealSessionFromCookie(sealed);
+    assert.deepEqual(unsealed, session);
+  });
+
+  it('unsealSessionFromCookie returns null for non-cc5 values', () => {
+    assert.equal(cookieSession.unsealSessionFromCookie('plain-session-id'), null);
+  });
+
+  it('unsealSessionFromCookie returns null for corrupted data', () => {
+    assert.equal(cookieSession.unsealSessionFromCookie('cc5_invalid.data.here'), null);
+  });
+
+  it('roundtrips session with null optional fields', () => {
+    const session = {
+      sessionId: 'sid-nulls',
+      user: { id: 'uid-nulls', username: null },
+      accessToken: 'at-nulls',
+      refreshToken: null,
+      accessTokenExpiresAt: null,
+      scope: null,
+      tokenType: null,
+    };
+    const sealed = cookieSession.sealSessionToCookie(session);
+    const unsealed = cookieSession.unsealSessionFromCookie(sealed);
+    assert.deepEqual(unsealed, session);
   });
 });
 
