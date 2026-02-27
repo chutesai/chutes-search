@@ -845,13 +845,41 @@ export const runDeepResearchCollector = async (
       usePreinstalledPlaywright,
     );
 
-    const ensurePlaywrightModuleAvailable = async (sandboxIdToUse: string) =>
-      execInSandbox(
+    // The crawler script is an ESM module (.mjs) so we must verify that
+    // `import('playwright')` works, not just `require.resolve()`.  ESM does
+    // NOT honour NODE_PATH, so when playwright is installed globally we need
+    // a symlink inside the working directory's node_modules.
+    const ensurePlaywrightModuleAvailable = async (sandboxIdToUse: string) => {
+      // First try the fast CJS probe to locate the package.
+      const cjsProbe = await execInSandbox(
         sandboxIdToUse,
-        `cd ${workingDir} && node -e "require.resolve('playwright')"`,
+        `cd ${workingDir} && node -e "console.log(require.resolve('playwright'))"`,
         playwrightEnv,
         20000,
       );
+      if (cjsProbe.exitCode !== 0) return cjsProbe;
+
+      // Symlink the package into the local node_modules so ESM can find it.
+      const resolvedPath = (cjsProbe.stdout || '').trim();
+      if (resolvedPath) {
+        // Derive the package root (strip trailing /index.js or similar).
+        const symlinkCmd = [
+          `mkdir -p ${workingDir}/node_modules`,
+          `PW_PKG=$(node -e "console.log(require.resolve('playwright/package.json'))" 2>/dev/null)`,
+          `PW_DIR=$(dirname "$PW_PKG" 2>/dev/null)`,
+          `if [ -n "$PW_DIR" ] && [ ! -e ${workingDir}/node_modules/playwright ]; then ln -sfn "$PW_DIR" ${workingDir}/node_modules/playwright; fi`,
+        ].join(' && ');
+        await execInSandbox(sandboxIdToUse, symlinkCmd, playwrightEnv, 15000);
+      }
+
+      // Verify ESM resolution actually works (this is what the .mjs script uses).
+      return execInSandbox(
+        sandboxIdToUse,
+        `cd ${workingDir} && node --input-type=module -e "await import('playwright')"`,
+        playwrightEnv,
+        20000,
+      );
+    };
 
     if (usePreinstalledPlaywright) {
       const moduleCheck = await ensurePlaywrightModuleAvailable(activeSandboxId);
@@ -890,9 +918,10 @@ export const runDeepResearchCollector = async (
         20000,
       );
 
+      // Install playwright locally if not already resolvable via ESM.
       await execInSandbox(
         sandboxId,
-        `cd ${workingDir} && if ! node -e "require.resolve('playwright')" >/dev/null 2>&1; then npm install --no-audit --no-fund playwright@1.46.0; fi`,
+        `cd ${workingDir} && if ! node --input-type=module -e "await import('playwright')" >/dev/null 2>&1; then npm install --no-audit --no-fund playwright@1.46.0; fi`,
         playwrightEnv,
         6 * 60 * 1000,
       );
