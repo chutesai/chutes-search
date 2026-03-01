@@ -401,6 +401,132 @@ const buildRelatedQueries = (
   return related;
 };
 
+const FALLBACK_USER_AGENT =
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+const stripHtmlContent = (html: string) =>
+  html
+    .replace(
+      /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
+      ' ',
+    )
+    .replace(
+      /<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi,
+      ' ',
+    )
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const matchHtmlTag = (html: string, pattern: RegExp) => {
+  const match = html.match(pattern);
+  return (match?.[1] || '').replace(/\s+/g, ' ').trim();
+};
+
+const fetchSourceViaHttp = async (
+  source: DeepResearchSource,
+  maxChars: number,
+  timeoutMs: number,
+): Promise<DeepResearchSource> => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(source.url, {
+      method: 'GET',
+      redirect: 'follow',
+      signal: controller.signal,
+      headers: {
+        'user-agent': FALLBACK_USER_AGENT,
+        'accept-language': 'en-US,en;q=0.9',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const contentType = (response.headers.get('content-type') || '').toLowerCase();
+    if (
+      contentType &&
+      !contentType.includes('text/html') &&
+      !contentType.includes('text/plain') &&
+      !contentType.includes('application/xhtml+xml')
+    ) {
+      throw new Error(`Unsupported content type: ${contentType}`);
+    }
+
+    const raw = await response.text();
+    const title =
+      matchHtmlTag(raw, /<title[^>]*>([\s\S]*?)<\/title>/i) ||
+      matchHtmlTag(
+        raw,
+        /<meta[^>]+property=["']og:title["'][^>]+content=["']([\s\S]*?)["']/i,
+      );
+    const description =
+      matchHtmlTag(
+        raw,
+        /<meta[^>]+name=["']description["'][^>]+content=["']([\s\S]*?)["']/i,
+      ) ||
+      matchHtmlTag(
+        raw,
+        /<meta[^>]+property=["']og:description["'][^>]+content=["']([\s\S]*?)["']/i,
+      );
+    const content = stripHtmlContent(raw).slice(0, maxChars);
+
+    if (content.length < 200) {
+      throw new Error('Extracted content too short');
+    }
+
+    return {
+      title: title || source.title || source.url,
+      url: source.url,
+      description: description || source.description || '',
+      content,
+      status: 'ok',
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const enrichFallbackSourcesViaHttp = async (
+  seedSources: DeepResearchSource[],
+  maxCharsPerSource: number,
+  deepResearchMode: DeepResearchMode,
+) => {
+  if (seedSources.length === 0) return [];
+
+  const maxAttempts = deepResearchMode === 'max' ? 12 : 6;
+  const timeoutMs = deepResearchMode === 'max' ? 12000 : 9000;
+  const selectedSeeds = seedSources.slice(0, maxAttempts);
+  const enriched: DeepResearchSource[] = [];
+
+  for (const seed of selectedSeeds) {
+    try {
+      const hydrated = await fetchSourceViaHttp(
+        seed,
+        maxCharsPerSource,
+        timeoutMs,
+      );
+      enriched.push(hydrated);
+    } catch (error: any) {
+      const message = error?.message
+        ? String(error.message)
+        : 'HTTP extraction failed';
+      enriched.push({
+        ...seed,
+        status: 'fallback',
+        error: message,
+        content: seed.content || '',
+        description: seed.description || seed.content || '',
+      });
+    }
+  }
+
+  return enriched;
+};
+
 const buildResearchScript = () => {
   return [
     "import fs from 'node:fs/promises';",
@@ -1725,8 +1851,9 @@ export const runDeepResearchCollector = async (
       });
     }
 
-    const usedFallback =
+    let usedFallback =
       sources.length === 0 && fallbackSources.length > 0;
+    let recoveredViaHttpFallback = false;
     if (usedFallback) {
       const rankedFallbackSources = rankCollectedSources(
         query,
@@ -1734,14 +1861,37 @@ export const runDeepResearchCollector = async (
         Math.max(4, options.maxSources),
         deepResearchMode,
       );
-      sources =
+      const selectedFallbackSources =
         rankedFallbackSources.length > 0 ? rankedFallbackSources : fallbackSources;
+      const hydratedFallbackSources = await enrichFallbackSourcesViaHttp(
+        selectedFallbackSources,
+        options.maxCharsPerSource,
+        deepResearchMode,
+      );
+      const rankedHydratedFallback = rankCollectedSources(
+        query,
+        hydratedFallbackSources,
+        Math.max(4, options.maxSources),
+        deepResearchMode,
+      );
+      const recoveredSources = rankedHydratedFallback.filter(
+        (source) => (source.content || '').length >= 200,
+      );
+      if (recoveredSources.length > 0) {
+        sources = recoveredSources;
+        usedFallback = false;
+        recoveredViaHttpFallback = true;
+      } else {
+        sources = selectedFallbackSources;
+      }
     }
 
     if (exitCode !== 0) {
       const detail =
         sources.length > 0
-          ? usedFallback
+          ? recoveredViaHttpFallback
+            ? 'Crawler unavailable, recovered via direct extraction.'
+            : usedFallback
             ? 'Crawler failed, using search snippets.'
             : 'Crawler returned partial results.'
           : `Crawler exited with code ${exitCode}.`;
@@ -1752,7 +1902,9 @@ export const runDeepResearchCollector = async (
         detail,
       });
     } else {
-      const detail = usedFallback
+      const detail = recoveredViaHttpFallback
+        ? 'Recovered via direct extraction.'
+        : usedFallback
         ? 'Crawler failed, using search snippets.'
         : counts.current > 0 && counts.current < counts.total
           ? 'Crawler returned partial results.'
@@ -1769,6 +1921,7 @@ export const runDeepResearchCollector = async (
       crawlTimedOut ||
       exitCode !== 0 ||
       usedFallback ||
+      recoveredViaHttpFallback ||
       outputReadFailed ||
       outputParseFailed ||
       outputNonJson;
