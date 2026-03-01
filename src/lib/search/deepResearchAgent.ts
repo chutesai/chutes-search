@@ -31,12 +31,92 @@ const truncateContextText = (value: string, maxChars: number) => {
   return `${value.slice(0, maxChars)}...`;
 };
 
-const processDocs = (docs: Document[], maxCharsPerDoc: number) =>
+const tokenizeForMatch = (value: string) =>
+  value
+    .toLowerCase()
+    .split(/[^a-z0-9]+/g)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 3);
+
+const evidenceSentencePattern =
+  /\b(data|evidence|study|research|report|survey|analysis|method|result|trend|risk|impact)\b/i;
+const lowValueSentencePattern =
+  /\b(cookie|privacy|sign in|login|sign up|register|subscribe|newsletter)\b/i;
+
+const buildFocusedExcerpt = (text: string, query: string, maxChars: number) => {
+  const normalized = (text || '').replace(/\r/g, ' ').replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!normalized) return '';
+
+  const queryFacets = tokenizeForMatch(query).slice(0, 14);
+  if (queryFacets.length === 0) {
+    return truncateContextText(normalized, maxChars);
+  }
+
+  const rawUnits = normalized.match(/[^.!?]+[.!?]?/g) || [normalized];
+  const units = rawUnits
+    .map((unit) => unit.trim())
+    .filter((unit) => unit.length >= 24);
+
+  const scored = units
+    .map((unit, index) => {
+      const tokens = tokenizeForMatch(unit);
+      const tokenSet = new Set(tokens);
+      const facetHits = queryFacets.filter((facet) => tokenSet.has(facet)).length;
+      let score = facetHits * 2.4;
+      score += Math.min(1.2, tokenSet.size / 28);
+      if (evidenceSentencePattern.test(unit)) score += 0.8;
+      if (/\d/.test(unit)) score += 0.5;
+      if (unit.length < 55) score -= 0.6;
+      if (lowValueSentencePattern.test(unit)) score -= 1.2;
+      return { unit, index, score, tokens };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  const selected: Array<{ unit: string; index: number; score: number; tokens: string[] }> = [];
+  const selectedTokenSet = new Set<string>();
+  for (const candidate of scored) {
+    if (selected.length >= 12) break;
+    const novelTokens = candidate.tokens.filter((token) => !selectedTokenSet.has(token)).length;
+    if (selected.length > 0 && novelTokens < 2 && candidate.score < 2.2) {
+      continue;
+    }
+    selected.push(candidate);
+    candidate.tokens.forEach((token) => selectedTokenSet.add(token));
+  }
+
+  const ordered = (selected.length > 0 ? selected : scored.slice(0, 4))
+    .sort((a, b) => a.index - b.index)
+    .map((item) => item.unit);
+
+  const chunks: string[] = [];
+  let totalLength = 0;
+  for (const chunk of ordered) {
+    if (totalLength >= maxChars) break;
+    const next = chunks.length === 0 ? chunk : ` ${chunk}`;
+    if (totalLength + next.length > maxChars) {
+      const remaining = Math.max(0, maxChars - totalLength);
+      if (remaining > 120) {
+        chunks.push(`${next.slice(0, remaining)}...`);
+      }
+      break;
+    }
+    chunks.push(next);
+    totalLength += next.length;
+  }
+
+  const excerpt = chunks.join('').trim();
+  if (!excerpt) {
+    return truncateContextText(normalized, maxChars);
+  }
+  return excerpt;
+};
+
+const processDocs = (docs: Document[], query: string, maxCharsPerDoc: number) =>
   docs
     .map((doc, index) => {
       const title = String(doc.metadata.title || 'Untitled source');
       const url = String(doc.metadata.url || '');
-      const body = truncateContextText(doc.pageContent || '', maxCharsPerDoc);
+      const body = buildFocusedExcerpt(doc.pageContent || '', query, maxCharsPerDoc);
       return `${index + 1}. ${title}\nURL: ${url}\n${body}`;
     })
     .join('\n\n');
@@ -187,11 +267,11 @@ class DeepResearchAgent {
             );
         const docLimitByMode = {
           light: { speed: 8, balanced: 10, quality: 12 },
-          max: { speed: 12, balanced: 14, quality: 16 },
+          max: { speed: 13, balanced: 16, quality: 18 },
         } as const;
         const contextCharsByMode = {
-          light: { speed: 1200, balanced: 1500, quality: 1800 },
-          max: { speed: 2000, balanced: 2600, quality: 3200 },
+          light: { speed: 1200, balanced: 1700, quality: 2100 },
+          max: { speed: 2200, balanced: 3000, quality: 3800 },
         } as const;
         const docLimit =
           docLimitByMode[deepResearchMode]?.[optimizationMode] ?? 10;
@@ -236,7 +316,7 @@ class DeepResearchAgent {
 
         timer('Documents prepared, starting response generation');
 
-        const context = processDocs(limitedDocs, maxCharsPerDoc);
+        const context = processDocs(limitedDocs, message, maxCharsPerDoc);
         emitProgress({
           id: 'finalize',
           label: 'Drafting report',
