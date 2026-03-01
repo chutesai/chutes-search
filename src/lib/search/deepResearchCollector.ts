@@ -271,7 +271,7 @@ const rankCollectedSources = (
 
   const sorted = Array.from(bestByUrl.values()).sort((a, b) => b.__score - a.__score);
   const hostCap = mode === 'max' ? 4 : 3;
-  const selected: DeepResearchSource[] = [];
+  const selected: Array<DeepResearchSource & { __host: string; __score: number }> = [];
   const selectedSet = new Set<string>();
   const hostCounts = new Map<string, number>();
 
