@@ -54,21 +54,13 @@ export const POST = async (req: Request) => {
       'Qwen/Qwen2.5-72B-Instruct',
       'NousResearch/Hermes-4-70B',
     ];
-    const deepResearchSummaryModels = [
-      'deepseek-ai/DeepSeek-V3',
-      'Qwen/Qwen2.5-72B-Instruct',
-      'NousResearch/Hermes-4-70B',
-    ];
-
     const chutesCandidates = buildChutesCandidates({
       modelNames: [primaryModel, ...fallbackModels],
       apiKey,
       baseURL,
     });
 
-    const llmCandidates = mode === 'max'
-      ? buildChutesCandidates({ modelNames: deepResearchSummaryModels, apiKey, baseURL })
-      : chutesCandidates;
+    const llmCandidates = chutesCandidates;
     const llm = llmCandidates[0]?.model as BaseChatModel;
 
     // Get embedding model (uses server-side config, not caller's key)

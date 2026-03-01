@@ -1385,6 +1385,29 @@ export const runDeepResearchCollector = async (
       };
     }
     sources = output.sources || [];
+
+    // Diagnostic: log content lengths from crawler output.
+    if (correlationId) {
+      const contentLengths = sources.map((s) => ({
+        url: s.url?.slice(0, 60),
+        status: s.status,
+        contentLen: (s.content || '').length,
+        descLen: (s.description || '').length,
+      }));
+      logEvent({
+        level: 'info',
+        event: 'deep_research.crawl_content_diagnostic',
+        correlationId,
+        metadata: {
+          sourcesCount: sources.length,
+          exitCode,
+          outputRawLen: outputRaw.length,
+          outputParsedOk,
+          contentLengths,
+        },
+      });
+    }
+
     const usedFallback =
       sources.length === 0 && fallbackSources.length > 0;
     if (usedFallback) {
