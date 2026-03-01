@@ -187,11 +187,11 @@ class DeepResearchAgent {
             );
         const docLimitByMode = {
           light: { speed: 8, balanced: 10, quality: 12 },
-          max: { speed: 10, balanced: 12, quality: 14 },
+          max: { speed: 12, balanced: 14, quality: 16 },
         } as const;
         const contextCharsByMode = {
           light: { speed: 1200, balanced: 1500, quality: 1800 },
-          max: { speed: 1700, balanced: 2200, quality: 2800 },
+          max: { speed: 2000, balanced: 2600, quality: 3200 },
         } as const;
         const docLimit =
           docLimitByMode[deepResearchMode]?.[optimizationMode] ?? 10;

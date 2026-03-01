@@ -130,12 +130,13 @@ const tokenizeForScore = (value: string) =>
     .map((token) => token.trim())
     .filter((token) => token.length >= 3);
 
+const QUERY_FACET_LIMIT = 12;
 const LOW_SIGNAL_HOST_RE =
   /(^|\.)((facebook|instagram|linkedin|x|twitter|youtube|tiktok|pinterest|reddit)\.com)$/i;
 const LOW_SIGNAL_PATH_RE =
   /\/(login|signup|register|privacy|terms|cookies?|search|tag|tags|category|categories|account|checkout|cart|wp-admin)\b/i;
-const HIGH_SIGNAL_TEXT_RE =
-  /\b(report|analysis|research|study|whitepaper|white paper|benchmark|statistics|survey|outlook|forecast|case study|findings)\b/i;
+const EVIDENCE_TEXT_RE =
+  /\b(data|evidence|official|methodology|report|analysis|research|study|paper|survey|dataset|guideline|findings)\b/i;
 
 const keywordOverlapScore = (queryTokens: string[], text: string) => {
   if (queryTokens.length === 0 || !text) return 0;
@@ -155,9 +156,10 @@ const rankSeedSources = (
   mode: DeepResearchMode,
 ) => {
   const queryTokens = tokenizeForScore(query);
+  const coverageTargets = queryTokens.slice(0, QUERY_FACET_LIMIT);
   const bestByUrl = new Map<
     string,
-    { title: string; url: string; host: string; score: number }
+    { title: string; url: string; host: string; score: number; coverage: string[] }
   >();
 
   for (const source of sources) {
@@ -168,21 +170,24 @@ const rankSeedSources = (
     const snippet = normalizeQuery(source.content || '');
     const host = normalizeHost(normalized);
     const path = getPathname(normalized);
-    const relevance = keywordOverlapScore(queryTokens, `${title} ${snippet}`);
+    const fullText = `${title} ${snippet}`;
+    const relevance = keywordOverlapScore(queryTokens, fullText);
+    const textTokens = new Set(tokenizeForScore(fullText));
+    const coverage = coverageTargets.filter((token) => textTokens.has(token));
 
-    let score = relevance * 6;
-    score += Math.min(2.5, snippet.length / 240);
-    if (HIGH_SIGNAL_TEXT_RE.test(title) || HIGH_SIGNAL_TEXT_RE.test(snippet)) {
-      score += 1.25;
+    let score = relevance * 5.5;
+    score += Math.min(2.2, snippet.length / 280);
+    if (EVIDENCE_TEXT_RE.test(title) || EVIDENCE_TEXT_RE.test(snippet)) {
+      score += 0.9;
     }
-    if (!snippet) score -= 0.75;
-    if (LOW_SIGNAL_PATH_RE.test(path)) score -= 2.25;
-    if (LOW_SIGNAL_HOST_RE.test(host)) score -= 2.5;
+    if (!snippet) score -= 0.45;
+    if (LOW_SIGNAL_PATH_RE.test(path)) score -= 1.4;
+    if (LOW_SIGNAL_HOST_RE.test(host)) score -= 1.0;
     score -= Math.min(1.2, Math.max(0, path.split('/').filter(Boolean).length - 6) * 0.25);
 
     const existing = bestByUrl.get(key);
     if (!existing || score > existing.score) {
-      bestByUrl.set(key, { title, url: normalized, host, score });
+      bestByUrl.set(key, { title, url: normalized, host, score, coverage });
     }
   }
 
@@ -191,6 +196,22 @@ const rankSeedSources = (
   const selected: { title: string; url: string }[] = [];
   const selectedSet = new Set<string>();
   const hostCounts = new Map<string, number>();
+  const coveredFacets = new Set<string>();
+
+  if (coverageTargets.length > 0) {
+    for (const source of sorted) {
+      if (selected.length >= limit) break;
+      const hostKey = source.host || '';
+      const hostCount = hostCounts.get(hostKey) || 0;
+      if (hostKey && hostCount >= hostCap) continue;
+      const freshCoverage = source.coverage.filter((token) => !coveredFacets.has(token));
+      if (freshCoverage.length === 0) continue;
+      selected.push({ title: source.title, url: source.url });
+      selectedSet.add(source.url.replace(/\/$/, ''));
+      if (hostKey) hostCounts.set(hostKey, hostCount + 1);
+      freshCoverage.forEach((token) => coveredFacets.add(token));
+    }
+  }
 
   for (const source of sorted) {
     if (selected.length >= limit) break;
@@ -222,9 +243,10 @@ const rankCollectedSources = (
   mode: DeepResearchMode,
 ) => {
   const queryTokens = tokenizeForScore(query);
+  const coverageTargets = queryTokens.slice(0, QUERY_FACET_LIMIT);
   const bestByUrl = new Map<
     string,
-    DeepResearchSource & { __host: string; __score: number }
+    DeepResearchSource & { __host: string; __score: number; __coverage: string[] }
   >();
 
   for (const source of sources) {
@@ -236,31 +258,39 @@ const rankCollectedSources = (
     const content = normalizeQuery(source.content || '');
     const host = normalizeHost(normalized);
     const path = getPathname(normalized);
+    const fullText = `${title} ${description} ${content.slice(0, 2800)}`;
     const relevance = keywordOverlapScore(
       queryTokens,
-      `${title} ${description} ${content.slice(0, 2800)}`,
+      fullText,
     );
+    const textTokens = new Set(tokenizeForScore(fullText));
+    const coverage = coverageTargets.filter((token) => textTokens.has(token));
 
-    let score = relevance * 7;
-    score += Math.min(3.5, content.length / 1600);
-    score += Math.min(1.5, description.length / 320);
+    let score = relevance * 6.5;
+    score += Math.min(3.2, content.length / 1800);
+    score += Math.min(1.2, description.length / 360);
     if (source.status === 'ok') score += 1.5;
     if (source.status === 'fallback') score += 0.5;
-    if (source.status === 'error') score -= 2.5;
-    if (!content) score -= 2.5;
-    if (content.length > 0 && content.length < 350) score -= 1.1;
-    if (HIGH_SIGNAL_TEXT_RE.test(title) || HIGH_SIGNAL_TEXT_RE.test(description)) {
-      score += 1.1;
+    if (source.status === 'error') score -= 3.0;
+    if (!content) score -= 1.8;
+    if (content.length > 0 && content.length < 350) score -= 0.8;
+    if (EVIDENCE_TEXT_RE.test(title) || EVIDENCE_TEXT_RE.test(description)) {
+      score += 0.9;
     }
-    if (LOW_SIGNAL_PATH_RE.test(path)) score -= 2.1;
-    if (LOW_SIGNAL_HOST_RE.test(host)) score -= 2.3;
+    if (LOW_SIGNAL_PATH_RE.test(path)) score -= 1.6;
+    if (LOW_SIGNAL_HOST_RE.test(host)) score -= 1.1;
 
-    const candidate: DeepResearchSource & { __host: string; __score: number } = {
+    const candidate: DeepResearchSource & {
+      __host: string;
+      __score: number;
+      __coverage: string[];
+    } = {
       ...source,
       title,
       url: normalized,
       __host: host,
       __score: score,
+      __coverage: coverage,
     };
 
     const existing = bestByUrl.get(key);
@@ -271,9 +301,29 @@ const rankCollectedSources = (
 
   const sorted = Array.from(bestByUrl.values()).sort((a, b) => b.__score - a.__score);
   const hostCap = mode === 'max' ? 4 : 3;
-  const selected: Array<DeepResearchSource & { __host: string; __score: number }> = [];
+  const selected: Array<
+    DeepResearchSource & { __host: string; __score: number; __coverage: string[] }
+  > = [];
   const selectedSet = new Set<string>();
   const hostCounts = new Map<string, number>();
+  const coveredFacets = new Set<string>();
+
+  if (coverageTargets.length > 0) {
+    for (const source of sorted) {
+      if (selected.length >= limit) break;
+      const key = source.url.replace(/\/$/, '');
+      const host = source.__host;
+      const hostCount = hostCounts.get(host) || 0;
+      if (host && hostCount >= hostCap) continue;
+      if (source.status === 'error') continue;
+      const freshCoverage = source.__coverage.filter((token) => !coveredFacets.has(token));
+      if (freshCoverage.length === 0) continue;
+      selected.push(source);
+      selectedSet.add(key);
+      if (host) hostCounts.set(host, hostCount + 1);
+      freshCoverage.forEach((token) => coveredFacets.add(token));
+    }
+  }
 
   for (const source of sorted) {
     if (selected.length >= limit) break;
@@ -281,6 +331,7 @@ const rankCollectedSources = (
     const host = source.__host;
     const hostCount = hostCounts.get(host) || 0;
     if (host && hostCount >= hostCap) continue;
+    if (source.status === 'error') continue;
     selected.push(source);
     selectedSet.add(key);
     if (host) hostCounts.set(host, hostCount + 1);
@@ -298,7 +349,14 @@ const rankCollectedSources = (
 
   return selected
     .slice(0, limit)
-    .map(({ __host: _ignoredHost, __score: _ignoredScore, ...source }) => source);
+    .map(
+      ({
+        __host: _ignoredHost,
+        __score: _ignoredScore,
+        __coverage: _ignoredCoverage,
+        ...source
+      }) => source,
+    );
 };
 
 const buildRelatedQueries = (
@@ -805,10 +863,10 @@ export const runDeepResearchCollector = async (
       maxSources: 18,
       maxCharsPerSource: 12000,
       maxDurationMs: 18 * 60 * 1000,
-      maxPages: 40,
-      maxDepth: 1,
-      maxLinksPerPage: 8,
-      maxPagesPerHost: 5,
+      maxPages: 44,
+      maxDepth: 2,
+      maxLinksPerPage: 10,
+      maxPagesPerHost: 6,
       relatedQueries: 4,
       summaryLimit: 18,
     },
