@@ -5,12 +5,13 @@
   "author": "ItzCrazyKns",
   "scripts": {
     "dev": "next dev",
-    "build": "npm run db:push && next build",
+    "build": "next build",
     "start": "next start",
     "test": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' node --require ts-node/register --require tsconfig-paths/register --test --test-reporter=spec src/lib",
     "lint": "next lint",
     "format:write": "prettier . --write",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "db:push:force": "drizzle-kit push --force"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.0",
