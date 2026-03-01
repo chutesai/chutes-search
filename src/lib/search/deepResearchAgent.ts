@@ -266,12 +266,12 @@ class DeepResearchAgent {
                 }),
             );
         const docLimitByMode = {
-          light: { speed: 8, balanced: 10, quality: 12 },
+          light: { speed: 8, balanced: 11, quality: 12 },
           max: { speed: 13, balanced: 16, quality: 18 },
         } as const;
         const contextCharsByMode = {
-          light: { speed: 1200, balanced: 1700, quality: 2100 },
-          max: { speed: 2200, balanced: 3000, quality: 3800 },
+          light: { speed: 1250, balanced: 1900, quality: 2300 },
+          max: { speed: 2300, balanced: 3200, quality: 4200 },
         } as const;
         const docLimit =
           docLimitByMode[deepResearchMode]?.[optimizationMode] ?? 10;

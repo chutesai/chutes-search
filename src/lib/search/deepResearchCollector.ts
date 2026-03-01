@@ -137,6 +137,12 @@ const LOW_SIGNAL_PATH_RE =
   /\/(login|signup|register|privacy|terms|cookies?|search|tag|tags|category|categories|account|checkout|cart|wp-admin)\b/i;
 const EVIDENCE_TEXT_RE =
   /\b(data|evidence|official|methodology|report|analysis|research|study|paper|survey|dataset|guideline|findings)\b/i;
+const HIGH_SIGNAL_HOST_RE =
+  /(^|\.)((gov|edu|ac)\.[a-z.]+|who\.int|oecd\.org|worldbank\.org|imf\.org|iea\.org|ipcc\.ch|nature\.com|science\.org|nejm\.org|thelancet\.com|ourworldindata\.org|census\.gov|eia\.gov|energy\.gov|europa\.eu)$/i;
+const COMMERCIAL_NOISE_RE =
+  /\b(price prediction|forecast for \d{4}|buy now|best deals?|coupon|promo|sponsored|affiliate|gambling|casino|click here)\b/i;
+const FINANCE_ANALYSIS_RE =
+  /\b(sec filing|10-k|10-q|annual report|earnings|guidance|balance sheet|cash flow|quarterly report)\b/i;
 
 const keywordOverlapScore = (queryTokens: string[], text: string) => {
   if (queryTokens.length === 0 || !text) return 0;
@@ -179,6 +185,13 @@ const rankSeedSources = (
     score += Math.min(2.2, snippet.length / 280);
     if (EVIDENCE_TEXT_RE.test(title) || EVIDENCE_TEXT_RE.test(snippet)) {
       score += 0.9;
+    }
+    if (HIGH_SIGNAL_HOST_RE.test(host)) score += 1.0;
+    if (FINANCE_ANALYSIS_RE.test(title) || FINANCE_ANALYSIS_RE.test(snippet)) {
+      score += 0.5;
+    }
+    if (COMMERCIAL_NOISE_RE.test(title) || COMMERCIAL_NOISE_RE.test(snippet)) {
+      score -= 1.6;
     }
     if (!snippet) score -= 0.45;
     if (LOW_SIGNAL_PATH_RE.test(path)) score -= 1.4;
@@ -276,6 +289,17 @@ const rankCollectedSources = (
     if (content.length > 0 && content.length < 350) score -= 0.8;
     if (EVIDENCE_TEXT_RE.test(title) || EVIDENCE_TEXT_RE.test(description)) {
       score += 0.9;
+    }
+    if (HIGH_SIGNAL_HOST_RE.test(host)) score += 1.1;
+    if (FINANCE_ANALYSIS_RE.test(title) || FINANCE_ANALYSIS_RE.test(description)) {
+      score += 0.5;
+    }
+    if (
+      COMMERCIAL_NOISE_RE.test(title) ||
+      COMMERCIAL_NOISE_RE.test(description) ||
+      COMMERCIAL_NOISE_RE.test(content.slice(0, 800))
+    ) {
+      score -= 1.8;
     }
     if (LOW_SIGNAL_PATH_RE.test(path)) score -= 1.6;
     if (LOW_SIGNAL_HOST_RE.test(host)) score -= 1.1;
@@ -387,9 +411,16 @@ const buildRelatedQueries = (
     'overview',
     'analysis',
     'latest report',
+    'official report',
+    'government data',
+    'regulatory filing',
+    'peer reviewed',
     'statistics',
     'case study',
     'timeline',
+    'risks',
+    'trade-offs',
+    'methodology',
     'trends',
   ];
 
