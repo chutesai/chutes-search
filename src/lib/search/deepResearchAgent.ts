@@ -25,13 +25,21 @@ const createTimer = (prefix: string) => {
   };
 };
 
-const processDocs = (docs: Document[]) =>
+const truncateContextText = (value: string, maxChars: number) => {
+  if (!value) return '';
+  if (value.length <= maxChars) return value;
+  return `${value.slice(0, maxChars)}...`;
+};
+
+const processDocs = (docs: Document[], maxCharsPerDoc: number) =>
   docs
-    .map(
-      (_, index) =>
-        `${index + 1}. ${docs[index].metadata.title} ${docs[index].pageContent}`,
-    )
-    .join('\n');
+    .map((doc, index) => {
+      const title = String(doc.metadata.title || 'Untitled source');
+      const url = String(doc.metadata.url || '');
+      const body = truncateContextText(doc.pageContent || '', maxCharsPerDoc);
+      return `${index + 1}. ${title}\nURL: ${url}\n${body}`;
+    })
+    .join('\n\n');
 
 const ensureProgressDefaults = (progress: DeepResearchProgress[]) => {
   const baseline = [
@@ -179,11 +187,17 @@ class DeepResearchAgent {
             );
         const docLimitByMode = {
           light: { speed: 8, balanced: 10, quality: 12 },
-          max: { speed: 12, balanced: 16, quality: 20 },
+          max: { speed: 10, balanced: 12, quality: 14 },
+        } as const;
+        const contextCharsByMode = {
+          light: { speed: 1200, balanced: 1500, quality: 1800 },
+          max: { speed: 1700, balanced: 2200, quality: 2800 },
         } as const;
         const docLimit =
           docLimitByMode[deepResearchMode]?.[optimizationMode] ?? 10;
         const limitedDocs = safeDocs.slice(0, docLimit);
+        const maxCharsPerDoc =
+          contextCharsByMode[deepResearchMode]?.[optimizationMode] ?? 1800;
 
         logEvent({
           level: 'info',
@@ -222,7 +236,7 @@ class DeepResearchAgent {
 
         timer('Documents prepared, starting response generation');
 
-        const context = processDocs(limitedDocs);
+        const context = processDocs(limitedDocs, maxCharsPerDoc);
         emitProgress({
           id: 'finalize',
           label: 'Drafting report',

@@ -107,6 +107,200 @@ const dedupeSources = (sources: { title: string; url: string }[]) => {
 
 const normalizeQuery = (value: string) => value.trim().replace(/\s+/g, ' ');
 
+const normalizeHost = (url: string) => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '').toLowerCase();
+  } catch {
+    return '';
+  }
+};
+
+const getPathname = (url: string) => {
+  try {
+    return new URL(url).pathname.toLowerCase();
+  } catch {
+    return '';
+  }
+};
+
+const tokenizeForScore = (value: string) =>
+  value
+    .toLowerCase()
+    .split(/[^a-z0-9]+/g)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 3);
+
+const LOW_SIGNAL_HOST_RE =
+  /(^|\.)((facebook|instagram|linkedin|x|twitter|youtube|tiktok|pinterest|reddit)\.com)$/i;
+const LOW_SIGNAL_PATH_RE =
+  /\/(login|signup|register|privacy|terms|cookies?|search|tag|tags|category|categories|account|checkout|cart|wp-admin)\b/i;
+const HIGH_SIGNAL_TEXT_RE =
+  /\b(report|analysis|research|study|whitepaper|white paper|benchmark|statistics|survey|outlook|forecast|case study|findings)\b/i;
+
+const keywordOverlapScore = (queryTokens: string[], text: string) => {
+  if (queryTokens.length === 0 || !text) return 0;
+  const textTokens = new Set(tokenizeForScore(text));
+  if (textTokens.size === 0) return 0;
+  let matches = 0;
+  queryTokens.forEach((token) => {
+    if (textTokens.has(token)) matches += 1;
+  });
+  return matches / queryTokens.length;
+};
+
+const rankSeedSources = (
+  query: string,
+  sources: Array<{ title?: string; url: string; content?: string }>,
+  limit: number,
+  mode: DeepResearchMode,
+) => {
+  const queryTokens = tokenizeForScore(query);
+  const bestByUrl = new Map<
+    string,
+    { title: string; url: string; host: string; score: number }
+  >();
+
+  for (const source of sources) {
+    const normalized = sanitizeUrl(source.url);
+    if (!normalized) continue;
+    const key = normalized.replace(/\/$/, '');
+    const title = normalizeQuery(source.title || source.url || normalized);
+    const snippet = normalizeQuery(source.content || '');
+    const host = normalizeHost(normalized);
+    const path = getPathname(normalized);
+    const relevance = keywordOverlapScore(queryTokens, `${title} ${snippet}`);
+
+    let score = relevance * 6;
+    score += Math.min(2.5, snippet.length / 240);
+    if (HIGH_SIGNAL_TEXT_RE.test(title) || HIGH_SIGNAL_TEXT_RE.test(snippet)) {
+      score += 1.25;
+    }
+    if (!snippet) score -= 0.75;
+    if (LOW_SIGNAL_PATH_RE.test(path)) score -= 2.25;
+    if (LOW_SIGNAL_HOST_RE.test(host)) score -= 2.5;
+    score -= Math.min(1.2, Math.max(0, path.split('/').filter(Boolean).length - 6) * 0.25);
+
+    const existing = bestByUrl.get(key);
+    if (!existing || score > existing.score) {
+      bestByUrl.set(key, { title, url: normalized, host, score });
+    }
+  }
+
+  const sorted = Array.from(bestByUrl.values()).sort((a, b) => b.score - a.score);
+  const hostCap = mode === 'max' ? 3 : 2;
+  const selected: { title: string; url: string }[] = [];
+  const selectedSet = new Set<string>();
+  const hostCounts = new Map<string, number>();
+
+  for (const source of sorted) {
+    if (selected.length >= limit) break;
+    const hostKey = source.host || '';
+    const hostCount = hostCounts.get(hostKey) || 0;
+    if (hostKey && hostCount >= hostCap) continue;
+    selected.push({ title: source.title, url: source.url });
+    selectedSet.add(source.url.replace(/\/$/, ''));
+    if (hostKey) hostCounts.set(hostKey, hostCount + 1);
+  }
+
+  if (selected.length < limit) {
+    for (const source of sorted) {
+      if (selected.length >= limit) break;
+      const key = source.url.replace(/\/$/, '');
+      if (selectedSet.has(key)) continue;
+      selected.push({ title: source.title, url: source.url });
+      selectedSet.add(key);
+    }
+  }
+
+  return dedupeSources(selected).slice(0, limit);
+};
+
+const rankCollectedSources = (
+  query: string,
+  sources: DeepResearchSource[],
+  limit: number,
+  mode: DeepResearchMode,
+) => {
+  const queryTokens = tokenizeForScore(query);
+  const bestByUrl = new Map<
+    string,
+    DeepResearchSource & { __host: string; __score: number }
+  >();
+
+  for (const source of sources) {
+    const normalized = sanitizeUrl(source.url);
+    if (!normalized) continue;
+    const key = normalized.replace(/\/$/, '');
+    const title = normalizeQuery(source.title || normalized);
+    const description = normalizeQuery(source.description || '');
+    const content = normalizeQuery(source.content || '');
+    const host = normalizeHost(normalized);
+    const path = getPathname(normalized);
+    const relevance = keywordOverlapScore(
+      queryTokens,
+      `${title} ${description} ${content.slice(0, 2800)}`,
+    );
+
+    let score = relevance * 7;
+    score += Math.min(3.5, content.length / 1600);
+    score += Math.min(1.5, description.length / 320);
+    if (source.status === 'ok') score += 1.5;
+    if (source.status === 'fallback') score += 0.5;
+    if (source.status === 'error') score -= 2.5;
+    if (!content) score -= 2.5;
+    if (content.length > 0 && content.length < 350) score -= 1.1;
+    if (HIGH_SIGNAL_TEXT_RE.test(title) || HIGH_SIGNAL_TEXT_RE.test(description)) {
+      score += 1.1;
+    }
+    if (LOW_SIGNAL_PATH_RE.test(path)) score -= 2.1;
+    if (LOW_SIGNAL_HOST_RE.test(host)) score -= 2.3;
+
+    const candidate: DeepResearchSource & { __host: string; __score: number } = {
+      ...source,
+      title,
+      url: normalized,
+      __host: host,
+      __score: score,
+    };
+
+    const existing = bestByUrl.get(key);
+    if (!existing || candidate.__score > existing.__score) {
+      bestByUrl.set(key, candidate);
+    }
+  }
+
+  const sorted = Array.from(bestByUrl.values()).sort((a, b) => b.__score - a.__score);
+  const hostCap = mode === 'max' ? 4 : 3;
+  const selected: DeepResearchSource[] = [];
+  const selectedSet = new Set<string>();
+  const hostCounts = new Map<string, number>();
+
+  for (const source of sorted) {
+    if (selected.length >= limit) break;
+    const key = source.url.replace(/\/$/, '');
+    const host = source.__host;
+    const hostCount = hostCounts.get(host) || 0;
+    if (host && hostCount >= hostCap) continue;
+    selected.push(source);
+    selectedSet.add(key);
+    if (host) hostCounts.set(host, hostCount + 1);
+  }
+
+  if (selected.length < limit) {
+    for (const source of sorted) {
+      if (selected.length >= limit) break;
+      const key = source.url.replace(/\/$/, '');
+      if (selectedSet.has(key)) continue;
+      selected.push(source);
+      selectedSet.add(key);
+    }
+  }
+
+  return selected
+    .slice(0, limit)
+    .map(({ __host: _ignoredHost, __score: _ignoredScore, ...source }) => source);
+};
+
 const buildRelatedQueries = (
   query: string,
   suggestions: string[],
@@ -611,12 +805,12 @@ export const runDeepResearchCollector = async (
       maxSources: 18,
       maxCharsPerSource: 12000,
       maxDurationMs: 18 * 60 * 1000,
-      maxPages: 48,
-      maxDepth: 2,
-      maxLinksPerPage: 12,
-      maxPagesPerHost: 8,
-      relatedQueries: 3,
-      summaryLimit: 20,
+      maxPages: 40,
+      maxDepth: 1,
+      maxLinksPerPage: 8,
+      maxPagesPerHost: 5,
+      relatedQueries: 4,
+      summaryLimit: 18,
     },
   } as const;
 
@@ -695,12 +889,16 @@ export const runDeepResearchCollector = async (
   }
 
   const combinedResults = searchRuns.flatMap((run) => run.results || []);
-  const rankedSources = dedupeSources(
+  const rankedSources = rankSeedSources(
+    query,
     combinedResults.map((result) => ({
       title: result.title || result.url,
       url: result.url,
+      content: result.content,
     })),
-  ).slice(0, options.maxSources);
+    options.maxSources,
+    deepResearchMode,
+  );
 
   if (rankedSources.length === 0) {
     const searchError = searchRuns.map((run) => run.error).find(Boolean);
@@ -721,8 +919,23 @@ export const runDeepResearchCollector = async (
   });
 
   const fallbackSources: DeepResearchSource[] = [];
-  const fallbackSeen = new Set<string>();
+  const fallbackByUrl = new Map<string, (typeof combinedResults)[number]>();
   for (const result of combinedResults) {
+    const normalized = sanitizeUrl(result.url);
+    if (!normalized) continue;
+    const key = normalized.replace(/\/$/, '');
+    if (!fallbackByUrl.has(key)) {
+      fallbackByUrl.set(key, result);
+    }
+  }
+  const fallbackPriority = [
+    ...rankedSources
+      .map((source) => fallbackByUrl.get(source.url.replace(/\/$/, '')))
+      .filter((item): item is (typeof combinedResults)[number] => Boolean(item)),
+    ...combinedResults,
+  ];
+  const fallbackSeen = new Set<string>();
+  for (const result of fallbackPriority) {
     const normalized = sanitizeUrl(result.url);
     if (!normalized) continue;
     const key = normalized.replace(/\/$/, '');
@@ -1344,6 +1557,15 @@ export const runDeepResearchCollector = async (
       };
     }
     sources = output.sources || [];
+    const rankedCollectedSources = rankCollectedSources(
+      query,
+      sources,
+      Math.max(4, options.maxSources),
+      deepResearchMode,
+    );
+    if (rankedCollectedSources.length > 0) {
+      sources = rankedCollectedSources;
+    }
 
     // Diagnostic: log content lengths from crawler output.
     if (correlationId) {
@@ -1370,7 +1592,14 @@ export const runDeepResearchCollector = async (
     const usedFallback =
       sources.length === 0 && fallbackSources.length > 0;
     if (usedFallback) {
-      sources = fallbackSources;
+      const rankedFallbackSources = rankCollectedSources(
+        query,
+        fallbackSources,
+        Math.max(4, options.maxSources),
+        deepResearchMode,
+      );
+      sources =
+        rankedFallbackSources.length > 0 ? rankedFallbackSources : fallbackSources;
     }
 
     if (exitCode !== 0) {
