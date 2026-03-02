@@ -93,7 +93,7 @@ export const POST = async (req: Request) => {
         let message = '';
         let sources: any[] = [];
         let resolved = false;
-        const hardTimeoutMs = mode === 'max' ? 250_000 : 270_000;
+        const hardTimeoutMs = mode === 'max' ? 250_000 : 290_000;
 
         const timeoutHandle = setTimeout(() => {
           const fallbackMessage =
