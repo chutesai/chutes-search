@@ -131,6 +131,7 @@ const tokenizeForScore = (value: string) =>
     .filter((token) => token.length >= 3);
 
 const QUERY_FACET_LIMIT = 12;
+const CURRENT_YEAR = new Date().getUTCFullYear();
 const LOW_SIGNAL_HOST_RE =
   /(^|\.)((facebook|instagram|linkedin|x|twitter|youtube|tiktok|pinterest|reddit)\.com)$/i;
 const LOW_SIGNAL_PATH_RE =
@@ -143,6 +144,9 @@ const COMMERCIAL_NOISE_RE =
   /\b(price prediction|forecast for \d{4}|buy now|best deals?|coupon|promo|sponsored|affiliate|gambling|casino|click here)\b/i;
 const FINANCE_ANALYSIS_RE =
   /\b(sec filing|10-k|10-q|annual report|earnings|guidance|balance sheet|cash flow|quarterly report)\b/i;
+const TIME_SENSITIVE_QUERY_RE =
+  /\b(latest|recent|current|today|this year|year to date|ytd|trend|outlook|forecast|update|news|breaking|now|202[0-9])\b/i;
+const YEAR_RE = /\b(19[6-9][0-9]|20[0-4][0-9]|2050)\b/g;
 
 const isHighSignalHost = (host: string) => {
   const normalized = host.toLowerCase();
@@ -165,6 +169,33 @@ const normalizeTitleKey = (title: string) =>
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
     .slice(0, 120);
+
+const extractLikelyYear = (value: string) => {
+  if (!value) return 0;
+  const matches = value.match(YEAR_RE);
+  if (!matches || matches.length === 0) return 0;
+  let maxYear = 0;
+  for (const match of matches) {
+    const year = Number.parseInt(match, 10);
+    if (!Number.isFinite(year)) continue;
+    if (year < 1960 || year > 2050) continue;
+    if (year > maxYear) maxYear = year;
+  }
+  return maxYear;
+};
+
+const recencyScore = (query: string, candidates: string[]) => {
+  if (!TIME_SENSITIVE_QUERY_RE.test(query)) return 0;
+  const combined = candidates.filter(Boolean).join(' ');
+  const year = extractLikelyYear(combined);
+  if (!year) return 0;
+  const age = CURRENT_YEAR - year;
+  if (age <= 1) return 0.8;
+  if (age <= 3) return 0.4;
+  if (age >= 7) return -0.8;
+  if (age >= 5) return -0.4;
+  return 0;
+};
 
 const keywordOverlapScore = (queryTokens: string[], text: string) => {
   if (queryTokens.length === 0 || !text) return 0;
@@ -215,6 +246,7 @@ const rankSeedSources = (
     if (COMMERCIAL_NOISE_RE.test(title) || COMMERCIAL_NOISE_RE.test(snippet)) {
       score -= 0.9;
     }
+    score += recencyScore(query, [title, snippet, normalized]);
     if (!snippet) score -= 0.45;
     if (LOW_SIGNAL_PATH_RE.test(path)) score -= 1.4;
     if (LOW_SIGNAL_HOST_RE.test(host)) score -= 1.0;
@@ -333,6 +365,7 @@ const rankCollectedSources = (
     ) {
       score -= 1.0;
     }
+    score += recencyScore(query, [title, description, path, content.slice(0, 900)]);
     if (LOW_SIGNAL_PATH_RE.test(path)) score -= 1.6;
     if (LOW_SIGNAL_HOST_RE.test(host)) score -= 1.1;
 
@@ -356,7 +389,7 @@ const rankCollectedSources = (
   }
 
   const sorted = Array.from(bestByUrl.values()).sort((a, b) => b.__score - a.__score);
-  const hostCap = mode === 'max' ? 4 : 3;
+  const hostCap = mode === 'max' ? 3 : 2;
   const selected: Array<
     DeepResearchSource & { __host: string; __score: number; __coverage: string[] }
   > = [];

@@ -93,30 +93,10 @@ export const POST = async (req: Request) => {
         let message = '';
         let sources: any[] = [];
         let resolved = false;
-        const hardTimeoutMs = 250_000;
-        const timeoutHandle = setTimeout(() => {
-          const fallbackMessage =
-            message.trim().length > 0
-              ? message
-              : 'I could not fully finish deep research in time. Here is a partial response based on the sources collected so far.';
-          safeResolve(
-            Response.json(
-              {
-                message: fallbackMessage,
-                sources,
-                partial: true,
-                error: 'Research timeout',
-              },
-              { status: 200 },
-            ),
-          );
-        }, hardTimeoutMs);
 
         const safeResolve = (response: Response) => {
           if (resolved) return;
           resolved = true;
-          clearTimeout(timeoutHandle);
-          emitter.removeAllListeners();
           resolve(response);
         };
 
