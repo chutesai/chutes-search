@@ -131,6 +131,7 @@ const tokenizeForScore = (value: string) =>
     .filter((token) => token.length >= 3);
 
 const QUERY_FACET_LIMIT = 12;
+const CURRENT_YEAR = new Date().getUTCFullYear();
 const LOW_SIGNAL_HOST_RE =
   /(^|\.)((facebook|instagram|linkedin|x|twitter|youtube|tiktok|pinterest|reddit)\.com)$/i;
 const LOW_SIGNAL_PATH_RE =
@@ -138,11 +139,63 @@ const LOW_SIGNAL_PATH_RE =
 const EVIDENCE_TEXT_RE =
   /\b(data|evidence|official|methodology|report|analysis|research|study|paper|survey|dataset|guideline|findings)\b/i;
 const HIGH_SIGNAL_HOST_RE =
-  /(^|\.)((gov|edu|ac)\.[a-z.]+|who\.int|oecd\.org|worldbank\.org|imf\.org|iea\.org|ipcc\.ch|nature\.com|science\.org|nejm\.org|thelancet\.com|ourworldindata\.org|census\.gov|eia\.gov|energy\.gov|europa\.eu)$/i;
+  /(^|\.)((who\.int|oecd\.org|worldbank\.org|imf\.org|iea\.org|ipcc\.ch|nature\.com|science\.org|nejm\.org|thelancet\.com|ourworldindata\.org|census\.gov|eia\.gov|energy\.gov|europa\.eu))$/i;
 const COMMERCIAL_NOISE_RE =
   /\b(price prediction|forecast for \d{4}|buy now|best deals?|coupon|promo|sponsored|affiliate|gambling|casino|click here)\b/i;
 const FINANCE_ANALYSIS_RE =
   /\b(sec filing|10-k|10-q|annual report|earnings|guidance|balance sheet|cash flow|quarterly report)\b/i;
+const TIME_SENSITIVE_QUERY_RE =
+  /\b(latest|recent|current|today|this year|year to date|ytd|trend|outlook|forecast|update|news|breaking|now|202[0-9])\b/i;
+const YEAR_RE = /\b(19[6-9][0-9]|20[0-4][0-9]|2050)\b/g;
+
+const isHighSignalHost = (host: string) => {
+  const normalized = host.toLowerCase();
+  if (!normalized) return false;
+  if (
+    normalized.endsWith('.gov') ||
+    normalized.endsWith('.edu') ||
+    normalized.endsWith('.gov.uk') ||
+    normalized.endsWith('.gc.ca') ||
+    normalized.endsWith('.gouv.fr')
+  ) {
+    return true;
+  }
+  return HIGH_SIGNAL_HOST_RE.test(normalized);
+};
+
+const normalizeTitleKey = (title: string) =>
+  title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .slice(0, 120);
+
+const extractLikelyYear = (value: string) => {
+  if (!value) return 0;
+  const matches = value.match(YEAR_RE);
+  if (!matches || matches.length === 0) return 0;
+  let maxYear = 0;
+  for (const match of matches) {
+    const year = Number.parseInt(match, 10);
+    if (!Number.isFinite(year)) continue;
+    if (year < 1960 || year > 2050) continue;
+    if (year > maxYear) maxYear = year;
+  }
+  return maxYear;
+};
+
+const recencyScore = (query: string, candidates: string[]) => {
+  if (!TIME_SENSITIVE_QUERY_RE.test(query)) return 0;
+  const combined = candidates.filter(Boolean).join(' ');
+  const year = extractLikelyYear(combined);
+  if (!year) return 0;
+  const age = CURRENT_YEAR - year;
+  if (age <= 1) return 0.8;
+  if (age <= 3) return 0.4;
+  if (age >= 7) return -0.8;
+  if (age >= 5) return -0.4;
+  return 0;
+};
 
 const keywordOverlapScore = (queryTokens: string[], text: string) => {
   if (queryTokens.length === 0 || !text) return 0;
@@ -186,13 +239,14 @@ const rankSeedSources = (
     if (EVIDENCE_TEXT_RE.test(title) || EVIDENCE_TEXT_RE.test(snippet)) {
       score += 0.9;
     }
-    if (HIGH_SIGNAL_HOST_RE.test(host)) score += 1.0;
+    if (isHighSignalHost(host)) score += 0.7;
     if (FINANCE_ANALYSIS_RE.test(title) || FINANCE_ANALYSIS_RE.test(snippet)) {
-      score += 0.5;
+      score += 0.35;
     }
     if (COMMERCIAL_NOISE_RE.test(title) || COMMERCIAL_NOISE_RE.test(snippet)) {
-      score -= 1.6;
+      score -= 0.9;
     }
+    score += recencyScore(query, [title, snippet, normalized]);
     if (!snippet) score -= 0.45;
     if (LOW_SIGNAL_PATH_RE.test(path)) score -= 1.4;
     if (LOW_SIGNAL_HOST_RE.test(host)) score -= 1.0;
@@ -208,6 +262,7 @@ const rankSeedSources = (
   const hostCap = mode === 'max' ? 3 : 2;
   const selected: { title: string; url: string }[] = [];
   const selectedSet = new Set<string>();
+  const selectedTitleKeys = new Set<string>();
   const hostCounts = new Map<string, number>();
   const coveredFacets = new Set<string>();
 
@@ -217,10 +272,13 @@ const rankSeedSources = (
       const hostKey = source.host || '';
       const hostCount = hostCounts.get(hostKey) || 0;
       if (hostKey && hostCount >= hostCap) continue;
+      const titleKey = normalizeTitleKey(source.title);
+      if (titleKey && selectedTitleKeys.has(titleKey)) continue;
       const freshCoverage = source.coverage.filter((token) => !coveredFacets.has(token));
       if (freshCoverage.length === 0) continue;
       selected.push({ title: source.title, url: source.url });
       selectedSet.add(source.url.replace(/\/$/, ''));
+      if (titleKey) selectedTitleKeys.add(titleKey);
       if (hostKey) hostCounts.set(hostKey, hostCount + 1);
       freshCoverage.forEach((token) => coveredFacets.add(token));
     }
@@ -231,8 +289,11 @@ const rankSeedSources = (
     const hostKey = source.host || '';
     const hostCount = hostCounts.get(hostKey) || 0;
     if (hostKey && hostCount >= hostCap) continue;
+    const titleKey = normalizeTitleKey(source.title);
+    if (titleKey && selectedTitleKeys.has(titleKey)) continue;
     selected.push({ title: source.title, url: source.url });
     selectedSet.add(source.url.replace(/\/$/, ''));
+    if (titleKey) selectedTitleKeys.add(titleKey);
     if (hostKey) hostCounts.set(hostKey, hostCount + 1);
   }
 
@@ -241,8 +302,11 @@ const rankSeedSources = (
       if (selected.length >= limit) break;
       const key = source.url.replace(/\/$/, '');
       if (selectedSet.has(key)) continue;
+      const titleKey = normalizeTitleKey(source.title);
+      if (titleKey && selectedTitleKeys.has(titleKey)) continue;
       selected.push({ title: source.title, url: source.url });
       selectedSet.add(key);
+      if (titleKey) selectedTitleKeys.add(titleKey);
     }
   }
 
@@ -290,17 +354,18 @@ const rankCollectedSources = (
     if (EVIDENCE_TEXT_RE.test(title) || EVIDENCE_TEXT_RE.test(description)) {
       score += 0.9;
     }
-    if (HIGH_SIGNAL_HOST_RE.test(host)) score += 1.1;
+    if (isHighSignalHost(host)) score += 0.8;
     if (FINANCE_ANALYSIS_RE.test(title) || FINANCE_ANALYSIS_RE.test(description)) {
-      score += 0.5;
+      score += 0.35;
     }
     if (
       COMMERCIAL_NOISE_RE.test(title) ||
       COMMERCIAL_NOISE_RE.test(description) ||
       COMMERCIAL_NOISE_RE.test(content.slice(0, 800))
     ) {
-      score -= 1.8;
+      score -= 1.0;
     }
+    score += recencyScore(query, [title, description, path, content.slice(0, 900)]);
     if (LOW_SIGNAL_PATH_RE.test(path)) score -= 1.6;
     if (LOW_SIGNAL_HOST_RE.test(host)) score -= 1.1;
 
@@ -324,11 +389,12 @@ const rankCollectedSources = (
   }
 
   const sorted = Array.from(bestByUrl.values()).sort((a, b) => b.__score - a.__score);
-  const hostCap = mode === 'max' ? 4 : 3;
+  const hostCap = mode === 'max' ? 3 : 2;
   const selected: Array<
     DeepResearchSource & { __host: string; __score: number; __coverage: string[] }
   > = [];
   const selectedSet = new Set<string>();
+  const selectedTitleKeys = new Set<string>();
   const hostCounts = new Map<string, number>();
   const coveredFacets = new Set<string>();
 
@@ -340,10 +406,13 @@ const rankCollectedSources = (
       const hostCount = hostCounts.get(host) || 0;
       if (host && hostCount >= hostCap) continue;
       if (source.status === 'error') continue;
+      const titleKey = normalizeTitleKey(source.title);
+      if (titleKey && selectedTitleKeys.has(titleKey)) continue;
       const freshCoverage = source.__coverage.filter((token) => !coveredFacets.has(token));
       if (freshCoverage.length === 0) continue;
       selected.push(source);
       selectedSet.add(key);
+      if (titleKey) selectedTitleKeys.add(titleKey);
       if (host) hostCounts.set(host, hostCount + 1);
       freshCoverage.forEach((token) => coveredFacets.add(token));
     }
@@ -356,8 +425,11 @@ const rankCollectedSources = (
     const hostCount = hostCounts.get(host) || 0;
     if (host && hostCount >= hostCap) continue;
     if (source.status === 'error') continue;
+    const titleKey = normalizeTitleKey(source.title);
+    if (titleKey && selectedTitleKeys.has(titleKey)) continue;
     selected.push(source);
     selectedSet.add(key);
+    if (titleKey) selectedTitleKeys.add(titleKey);
     if (host) hostCounts.set(host, hostCount + 1);
   }
 
@@ -366,8 +438,11 @@ const rankCollectedSources = (
       if (selected.length >= limit) break;
       const key = source.url.replace(/\/$/, '');
       if (selectedSet.has(key)) continue;
+      const titleKey = normalizeTitleKey(source.title);
+      if (titleKey && selectedTitleKeys.has(titleKey)) continue;
       selected.push(source);
       selectedSet.add(key);
+      if (titleKey) selectedTitleKeys.add(titleKey);
     }
   }
 
@@ -407,13 +482,16 @@ const buildRelatedQueries = (
     add(suggestion);
   }
 
+  const isFinanceQuery = /\b(stock|equity|earnings|company|market|valuation|investor|revenue|profit|quarter|fiscal|sec)\b/i.test(
+    normalizedQuery,
+  );
+
   const fallbackModifiers = [
     'overview',
     'analysis',
     'latest report',
     'official report',
     'government data',
-    'regulatory filing',
     'peer reviewed',
     'statistics',
     'case study',
@@ -422,6 +500,7 @@ const buildRelatedQueries = (
     'trade-offs',
     'methodology',
     'trends',
+    ...(isFinanceQuery ? ['regulatory filing'] : []),
   ];
 
   for (const modifier of fallbackModifiers) {
@@ -1095,15 +1174,15 @@ export const runDeepResearchCollector = async (
       summaryLimit: 12,
     },
     max: {
-      maxSources: 18,
+      maxSources: 16,
       maxCharsPerSource: 12000,
       maxDurationMs: 18 * 60 * 1000,
-      maxPages: 44,
+      maxPages: 40,
       maxDepth: 2,
       maxLinksPerPage: 10,
       maxPagesPerHost: 6,
       relatedQueries: 4,
-      summaryLimit: 18,
+      summaryLimit: 16,
     },
   } as const;
 
