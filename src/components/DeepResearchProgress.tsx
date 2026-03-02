@@ -4,7 +4,6 @@ const ORDER = [
   'search',
   'sandbox',
   'setup',
-  'browser',
   'crawl',
   'analysis',
   'finalize',
@@ -46,7 +45,9 @@ const toUserFacing = (value: string | undefined) => {
 };
 
 const DeepResearchProgress = ({ progress }: { progress: ProgressItem[] }) => {
-  const sorted = [...progress].sort((a, b) => {
+  const sorted = progress
+    .filter((item) => item.id !== 'browser')
+    .sort((a, b) => {
     const aIndex = ORDER.indexOf(a.id as (typeof ORDER)[number]);
     const bIndex = ORDER.indexOf(b.id as (typeof ORDER)[number]);
     if (aIndex === -1 && bIndex === -1) return 0;

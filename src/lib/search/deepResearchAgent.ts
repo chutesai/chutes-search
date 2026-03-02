@@ -126,7 +126,6 @@ const ensureProgressDefaults = (progress: DeepResearchProgress[]) => {
     { id: 'search', label: 'Finding sources' },
     { id: 'sandbox', label: 'Preparing sandbox' },
     { id: 'setup', label: 'Installing Browser' },
-    { id: 'browser', label: 'Launching browser' },
     { id: 'crawl', label: 'Crawling pages' },
     { id: 'analysis', label: 'Synthesizing notes' },
     { id: 'finalize', label: 'Drafting report' },

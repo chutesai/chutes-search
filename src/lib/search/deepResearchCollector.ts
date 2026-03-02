@@ -1068,14 +1068,6 @@ const parseProgressLines = (
         });
         continue;
       }
-      if (payload.stage === 'browser') {
-        onProgress({
-          id: 'browser',
-          label: 'Launching browser',
-          status: payload.status === 'complete' ? 'complete' : 'running',
-          detail: payload.message,
-        });
-      }
     } catch {
       continue;
     }
