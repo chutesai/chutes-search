@@ -92,6 +92,13 @@ export const POST = async (req: Request) => {
       return new Promise<Response>((resolve) => {
         let message = '';
         let sources: any[] = [];
+        let resolved = false;
+
+        const safeResolve = (response: Response) => {
+          if (resolved) return;
+          resolved = true;
+          resolve(response);
+        };
 
         emitter.on('data', (data: string) => {
           try {
@@ -102,14 +109,31 @@ export const POST = async (req: Request) => {
         });
 
         emitter.on('end', () => {
-          resolve(Response.json({ message, sources }, { status: 200 }));
+          safeResolve(Response.json({ message, sources }, { status: 200 }));
         });
 
         emitter.on('error', (error: any) => {
-          resolve(Response.json(
-            { error: 'Research failed', details: typeof error === 'string' ? error : undefined },
-            { status: 500 },
-          ));
+          const details =
+            typeof error === 'string'
+              ? error
+              : error?.message
+                ? String(error.message)
+                : 'Research failed';
+          const fallbackMessage =
+            message.trim().length > 0
+              ? message
+              : 'I encountered an internal issue while finishing deep research. Here is a partial result based on sources collected so far.';
+          safeResolve(
+            Response.json(
+              {
+                message: fallbackMessage,
+                sources,
+                partial: true,
+                error: details,
+              },
+              { status: 200 },
+            ),
+          );
         });
       });
     }

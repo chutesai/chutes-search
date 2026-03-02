@@ -76,7 +76,7 @@ type CollectorLogContext = {
   agentApiKey?: string;
 };
 
-const DEFAULT_MAX_DURATION_MS = 8 * 60 * 1000;
+const DEFAULT_MAX_DURATION_MS = 3 * 60 * 1000;
 
 const sanitizeUrl = (url: string) => {
   try {
@@ -1163,24 +1163,24 @@ export const runDeepResearchCollector = async (
   const correlationId = ctx.correlationId;
   const modeDefaults = {
     light: {
-      maxSources: 10,
-      maxCharsPerSource: 8000,
-      maxDurationMs: 12 * 60 * 1000,
-      maxPages: 22,
+      maxSources: 9,
+      maxCharsPerSource: 7000,
+      maxDurationMs: 4 * 60 * 1000,
+      maxPages: 16,
       maxDepth: 1,
-      maxLinksPerPage: 8,
+      maxLinksPerPage: 7,
       maxPagesPerHost: 4,
       relatedQueries: 1,
-      summaryLimit: 12,
+      summaryLimit: 11,
     },
     max: {
       maxSources: 16,
-      maxCharsPerSource: 12000,
-      maxDurationMs: 18 * 60 * 1000,
-      maxPages: 40,
+      maxCharsPerSource: 10000,
+      maxDurationMs: 4 * 60 * 1000,
+      maxPages: 28,
       maxDepth: 2,
-      maxLinksPerPage: 10,
-      maxPagesPerHost: 6,
+      maxLinksPerPage: 9,
+      maxPagesPerHost: 5,
       relatedQueries: 4,
       summaryLimit: 16,
     },
