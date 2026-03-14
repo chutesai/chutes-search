@@ -3,9 +3,11 @@ import type { NextRequest } from 'next/server';
 import { getCanonicalSearchHostRedirect } from '@/lib/canonicalHost';
 
 export function middleware(request: NextRequest) {
-  const canonicalHost = getCanonicalSearchHostRedirect(
-    request.headers.get('host'),
-  );
+  const requestHost =
+    request.headers.get('x-forwarded-host') ||
+    request.headers.get('host') ||
+    request.nextUrl.host;
+  const canonicalHost = getCanonicalSearchHostRedirect(requestHost);
   if (!canonicalHost) {
     return NextResponse.next();
   }
