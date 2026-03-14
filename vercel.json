@@ -1,0 +1,26 @@
+{
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "chutes-search.com"
+        }
+      ],
+      "destination": "https://search.chutes.ai/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.chutes-search.com"
+        }
+      ],
+      "destination": "https://search.chutes.ai/:path*",
+      "permanent": true
+    }
+  ]
+}
