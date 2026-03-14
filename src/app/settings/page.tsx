@@ -9,6 +9,14 @@ import { ImagesIcon, VideoIcon } from 'lucide-react';
 import Link from 'next/link';
 import { PROVIDER_METADATA } from '@/lib/providers';
 import AuthControls from '@/components/auth/AuthControls';
+import {
+  DEFAULT_QUALITY_MODEL,
+  DEFAULT_SPEED_MODEL,
+  persistSearchModeModelPreference,
+  QUALITY_MODELS,
+  readSearchModeModelPreferences,
+  SPEED_MODELS,
+} from '@/lib/searchModeModels';
 
 interface SettingsType {
   chatModelProviders: {
@@ -153,6 +161,11 @@ const Page = () => {
   const [measureUnit, setMeasureUnit] = useState<'Imperial' | 'Metric'>(
     'Metric',
   );
+  const [selectedSpeedModel, setSelectedSpeedModel] =
+    useState<string>(DEFAULT_SPEED_MODEL);
+  const [selectedQualityModel, setSelectedQualityModel] = useState<string>(
+    DEFAULT_QUALITY_MODEL,
+  );
   const [savingStates, setSavingStates] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -206,6 +219,9 @@ const Page = () => {
       setChatModels(data.chatModelProviders || {});
       setEmbeddingModels(data.embeddingModelProviders || {});
 
+      const searchModeModelPreferences =
+        readSearchModeModelPreferences(localStorage);
+
       setAutomaticImageSearch(
         localStorage.getItem('autoImageSearch') === 'true',
       );
@@ -218,6 +234,8 @@ const Page = () => {
       setMeasureUnit(
         localStorage.getItem('measureUnit')! as 'Imperial' | 'Metric',
       );
+      setSelectedSpeedModel(searchModeModelPreferences.speed);
+      setSelectedQualityModel(searchModeModelPreferences.quality);
 
       setIsLoading(false);
     };
@@ -390,6 +408,24 @@ const Page = () => {
     }
   };
 
+  const saveSearchModePreference = (
+    key: 'speed' | 'quality',
+    value: string,
+  ) => {
+    const persistedValue = persistSearchModeModelPreference(
+      localStorage,
+      key,
+      value,
+    );
+
+    if (key === 'speed') {
+      setSelectedSpeedModel(persistedValue);
+      return;
+    }
+
+    setSelectedQualityModel(persistedValue);
+  };
+
   return (
     <div className="max-w-3xl mx-auto">
       <div className="flex flex-col pt-4">
@@ -458,6 +494,46 @@ const Page = () => {
                       value: 'Imperial',
                     },
                   ]}
+                />
+              </div>
+            </SettingsSection>
+
+            <SettingsSection title="Search Models">
+              <div className="flex flex-col space-y-1">
+                <p className="text-black/70 dark:text-white/70 text-sm">
+                  Speed Mode Model
+                </p>
+                <p className="text-xs text-black/60 dark:text-white/60">
+                  Used whenever the search preset is set to Speed.
+                </p>
+                <Select
+                  value={selectedSpeedModel}
+                  onChange={(e) =>
+                    saveSearchModePreference('speed', e.target.value)
+                  }
+                  options={SPEED_MODELS.map((model) => ({
+                    value: model,
+                    label: model,
+                  }))}
+                />
+              </div>
+              <div className="flex flex-col space-y-1">
+                <p className="text-black/70 dark:text-white/70 text-sm">
+                  Quality Mode Model
+                </p>
+                <p className="text-xs text-black/60 dark:text-white/60">
+                  Used whenever the search preset is set to Quality. Balanced
+                  remains intentionally hidden.
+                </p>
+                <Select
+                  value={selectedQualityModel}
+                  onChange={(e) =>
+                    saveSearchModePreference('quality', e.target.value)
+                  }
+                  options={QUALITY_MODELS.map((model) => ({
+                    value: model,
+                    label: model,
+                  }))}
                 />
               </div>
             </SettingsSection>
@@ -687,180 +763,180 @@ const Page = () => {
             </SettingsSection> */}
 
             {false && (
-            <SettingsSection title="API Keys">
-              <div className="flex flex-col space-y-4">
-                <div className="flex flex-col space-y-1">
-                  <p className="text-black/70 dark:text-white/70 text-sm">
-                    OpenAI API Key
-                  </p>
-                  <Input
-                    type="text"
-                    placeholder="OpenAI API Key"
-                    value={config?.openaiApiKey ?? ''}
-                    isSaving={savingStates['openaiApiKey']}
-                    onChange={(e) => {
-                      setConfig((prev) => ({
-                        ...prev!,
-                        openaiApiKey: e.target.value,
-                      }));
-                    }}
-                    onSave={(value) => saveConfig('openaiApiKey', value)}
-                  />
-                </div>
+              <SettingsSection title="API Keys">
+                <div className="flex flex-col space-y-4">
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-black/70 dark:text-white/70 text-sm">
+                      OpenAI API Key
+                    </p>
+                    <Input
+                      type="text"
+                      placeholder="OpenAI API Key"
+                      value={config?.openaiApiKey ?? ''}
+                      isSaving={savingStates['openaiApiKey']}
+                      onChange={(e) => {
+                        setConfig((prev) => ({
+                          ...prev!,
+                          openaiApiKey: e.target.value,
+                        }));
+                      }}
+                      onSave={(value) => saveConfig('openaiApiKey', value)}
+                    />
+                  </div>
 
-                <div className="flex flex-col space-y-1">
-                  <p className="text-black/70 dark:text-white/70 text-sm">
-                    Ollama API URL
-                  </p>
-                  <Input
-                    type="text"
-                    placeholder="Ollama API URL"
-                    value={config?.ollamaApiUrl ?? ''}
-                    isSaving={savingStates['ollamaApiUrl']}
-                    onChange={(e) => {
-                      setConfig((prev) => ({
-                        ...prev!,
-                        ollamaApiUrl: e.target.value,
-                      }));
-                    }}
-                    onSave={(value) => saveConfig('ollamaApiUrl', value)}
-                  />
-                </div>
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-black/70 dark:text-white/70 text-sm">
+                      Ollama API URL
+                    </p>
+                    <Input
+                      type="text"
+                      placeholder="Ollama API URL"
+                      value={config?.ollamaApiUrl ?? ''}
+                      isSaving={savingStates['ollamaApiUrl']}
+                      onChange={(e) => {
+                        setConfig((prev) => ({
+                          ...prev!,
+                          ollamaApiUrl: e.target.value,
+                        }));
+                      }}
+                      onSave={(value) => saveConfig('ollamaApiUrl', value)}
+                    />
+                  </div>
 
-                <div className="flex flex-col space-y-1">
-                  <p className="text-black/70 dark:text-white/70 text-sm">
-                    Ollama API Key (Can be left blank)
-                  </p>
-                  <Input
-                    type="text"
-                    placeholder="Ollama API Key"
-                    value={config?.ollamaApiKey ?? ''}
-                    isSaving={savingStates['ollamaApiKey']}
-                    onChange={(e) => {
-                      setConfig((prev) => ({
-                        ...prev!,
-                        ollamaApiKey: e.target.value,
-                      }));
-                    }}
-                    onSave={(value) => saveConfig('ollamaApiKey', value)}
-                  />
-                </div>
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-black/70 dark:text-white/70 text-sm">
+                      Ollama API Key (Can be left blank)
+                    </p>
+                    <Input
+                      type="text"
+                      placeholder="Ollama API Key"
+                      value={config?.ollamaApiKey ?? ''}
+                      isSaving={savingStates['ollamaApiKey']}
+                      onChange={(e) => {
+                        setConfig((prev) => ({
+                          ...prev!,
+                          ollamaApiKey: e.target.value,
+                        }));
+                      }}
+                      onSave={(value) => saveConfig('ollamaApiKey', value)}
+                    />
+                  </div>
 
-                <div className="flex flex-col space-y-1">
-                  <p className="text-black/70 dark:text-white/70 text-sm">
-                    GROQ API Key
-                  </p>
-                  <Input
-                    type="text"
-                    placeholder="GROQ API Key"
-                    value={config?.groqApiKey ?? ''}
-                    isSaving={savingStates['groqApiKey']}
-                    onChange={(e) => {
-                      setConfig((prev) => ({
-                        ...prev!,
-                        groqApiKey: e.target.value,
-                      }));
-                    }}
-                    onSave={(value) => saveConfig('groqApiKey', value)}
-                  />
-                </div>
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-black/70 dark:text-white/70 text-sm">
+                      GROQ API Key
+                    </p>
+                    <Input
+                      type="text"
+                      placeholder="GROQ API Key"
+                      value={config?.groqApiKey ?? ''}
+                      isSaving={savingStates['groqApiKey']}
+                      onChange={(e) => {
+                        setConfig((prev) => ({
+                          ...prev!,
+                          groqApiKey: e.target.value,
+                        }));
+                      }}
+                      onSave={(value) => saveConfig('groqApiKey', value)}
+                    />
+                  </div>
 
-                <div className="flex flex-col space-y-1">
-                  <p className="text-black/70 dark:text-white/70 text-sm">
-                    Anthropic API Key
-                  </p>
-                  <Input
-                    type="text"
-                    placeholder="Anthropic API key"
-                    value={config?.anthropicApiKey ?? ''}
-                    isSaving={savingStates['anthropicApiKey']}
-                    onChange={(e) => {
-                      setConfig((prev) => ({
-                        ...prev!,
-                        anthropicApiKey: e.target.value,
-                      }));
-                    }}
-                    onSave={(value) => saveConfig('anthropicApiKey', value)}
-                  />
-                </div>
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-black/70 dark:text-white/70 text-sm">
+                      Anthropic API Key
+                    </p>
+                    <Input
+                      type="text"
+                      placeholder="Anthropic API key"
+                      value={config?.anthropicApiKey ?? ''}
+                      isSaving={savingStates['anthropicApiKey']}
+                      onChange={(e) => {
+                        setConfig((prev) => ({
+                          ...prev!,
+                          anthropicApiKey: e.target.value,
+                        }));
+                      }}
+                      onSave={(value) => saveConfig('anthropicApiKey', value)}
+                    />
+                  </div>
 
-                <div className="flex flex-col space-y-1">
-                  <p className="text-black/70 dark:text-white/70 text-sm">
-                    Gemini API Key
-                  </p>
-                  <Input
-                    type="text"
-                    placeholder="Gemini API key"
-                    value={config?.geminiApiKey ?? ''}
-                    isSaving={savingStates['geminiApiKey']}
-                    onChange={(e) => {
-                      setConfig((prev) => ({
-                        ...prev!,
-                        geminiApiKey: e.target.value,
-                      }));
-                    }}
-                    onSave={(value) => saveConfig('geminiApiKey', value)}
-                  />
-                </div>
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-black/70 dark:text-white/70 text-sm">
+                      Gemini API Key
+                    </p>
+                    <Input
+                      type="text"
+                      placeholder="Gemini API key"
+                      value={config?.geminiApiKey ?? ''}
+                      isSaving={savingStates['geminiApiKey']}
+                      onChange={(e) => {
+                        setConfig((prev) => ({
+                          ...prev!,
+                          geminiApiKey: e.target.value,
+                        }));
+                      }}
+                      onSave={(value) => saveConfig('geminiApiKey', value)}
+                    />
+                  </div>
 
-                <div className="flex flex-col space-y-1">
-                  <p className="text-black/70 dark:text-white/70 text-sm">
-                    Deepseek API Key
-                  </p>
-                  <Input
-                    type="text"
-                    placeholder="Deepseek API Key"
-                    value={config?.deepseekApiKey ?? ''}
-                    isSaving={savingStates['deepseekApiKey']}
-                    onChange={(e) => {
-                      setConfig((prev) => ({
-                        ...prev!,
-                        deepseekApiKey: e.target.value,
-                      }));
-                    }}
-                    onSave={(value) => saveConfig('deepseekApiKey', value)}
-                  />
-                </div>
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-black/70 dark:text-white/70 text-sm">
+                      Deepseek API Key
+                    </p>
+                    <Input
+                      type="text"
+                      placeholder="Deepseek API Key"
+                      value={config?.deepseekApiKey ?? ''}
+                      isSaving={savingStates['deepseekApiKey']}
+                      onChange={(e) => {
+                        setConfig((prev) => ({
+                          ...prev!,
+                          deepseekApiKey: e.target.value,
+                        }));
+                      }}
+                      onSave={(value) => saveConfig('deepseekApiKey', value)}
+                    />
+                  </div>
 
-                <div className="flex flex-col space-y-1">
-                  <p className="text-black/70 dark:text-white/70 text-sm">
-                    AI/ML API Key
-                  </p>
-                  <Input
-                    type="text"
-                    placeholder="AI/ML API Key"
-                    value={config?.aimlApiKey ?? ''}
-                    isSaving={savingStates['aimlApiKey']}
-                    onChange={(e) => {
-                      setConfig((prev) => ({
-                        ...prev!,
-                        aimlApiKey: e.target.value,
-                      }));
-                    }}
-                    onSave={(value) => saveConfig('aimlApiKey', value)}
-                  />
-                </div>
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-black/70 dark:text-white/70 text-sm">
+                      AI/ML API Key
+                    </p>
+                    <Input
+                      type="text"
+                      placeholder="AI/ML API Key"
+                      value={config?.aimlApiKey ?? ''}
+                      isSaving={savingStates['aimlApiKey']}
+                      onChange={(e) => {
+                        setConfig((prev) => ({
+                          ...prev!,
+                          aimlApiKey: e.target.value,
+                        }));
+                      }}
+                      onSave={(value) => saveConfig('aimlApiKey', value)}
+                    />
+                  </div>
 
-                <div className="flex flex-col space-y-1">
-                  <p className="text-black/70 dark:text-white/70 text-sm">
-                    LM Studio API URL
-                  </p>
-                  <Input
-                    type="text"
-                    placeholder="LM Studio API URL"
-                    value={config?.lmStudioApiUrl ?? ''}
-                    isSaving={savingStates['lmStudioApiUrl']}
-                    onChange={(e) => {
-                      setConfig((prev) => ({
-                        ...prev!,
-                        lmStudioApiUrl: e.target.value,
-                      }));
-                    }}
-                    onSave={(value) => saveConfig('lmStudioApiUrl', value)}
-                  />
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-black/70 dark:text-white/70 text-sm">
+                      LM Studio API URL
+                    </p>
+                    <Input
+                      type="text"
+                      placeholder="LM Studio API URL"
+                      value={config?.lmStudioApiUrl ?? ''}
+                      isSaving={savingStates['lmStudioApiUrl']}
+                      onChange={(e) => {
+                        setConfig((prev) => ({
+                          ...prev!,
+                          lmStudioApiUrl: e.target.value,
+                        }));
+                      }}
+                      onSave={(value) => saveConfig('lmStudioApiUrl', value)}
+                    />
+                  </div>
                 </div>
-              </div>
-            </SettingsSection>
+              </SettingsSection>
             )}
           </div>
         )

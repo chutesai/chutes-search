@@ -5,8 +5,8 @@
  * serverless function invocations), the full session is AES-256-GCM encrypted
  * and stored directly in the cookie.
  *
- * Cookie values prefixed with "cc5_" are cookie-based sessions.
- * Plain hex strings are legacy DB session IDs (backward compat for Render).
+ * Cookie values prefixed with "cc5_" are fallback cookie-based sessions.
+ * Plain session ids are DB-backed sessions and are the preferred format.
  */
 
 import { type ReadonlyRequestCookies } from 'next/dist/server/web/spec-extension/adapters/request-cookies';
@@ -89,11 +89,12 @@ const SESSION_COOKIE_OPTS = {
   maxAge: 30 * 24 * 60 * 60,
 };
 
-function setCookie(
-  cookieStore: ReadonlyRequestCookies,
-  value: string,
-) {
-  (cookieStore as any).set(AUTH_SESSION_COOKIE_NAME, value, SESSION_COOKIE_OPTS);
+function setCookie(cookieStore: ReadonlyRequestCookies, value: string) {
+  (cookieStore as any).set(
+    AUTH_SESSION_COOKIE_NAME,
+    value,
+    SESSION_COOKIE_OPTS,
+  );
 }
 
 function clearCookie(cookieStore: ReadonlyRequestCookies) {
@@ -105,7 +106,7 @@ function clearCookie(cookieStore: ReadonlyRequestCookies) {
 
 /**
  * Resolve an auth session from the cookie store.
- * Handles both cookie-based (cc5_...) and legacy DB-based sessions.
+ * Handles both fallback cookie-based (cc5_...) and DB-based sessions.
  * Automatically refreshes expired access tokens and updates the cookie.
  */
 export async function getAuthSession(
@@ -114,12 +115,24 @@ export async function getAuthSession(
   const cookieValue = cookieStore.get(AUTH_SESSION_COOKIE_NAME)?.value;
   if (!cookieValue) return null;
 
-  // --- Cookie-based session ---
+  // --- Fallback cookie-based session ---
   if (cookieValue.startsWith(COOKIE_SESSION_PREFIX)) {
     let session = unsealSessionFromCookie(cookieValue);
     if (!session) {
       clearCookie(cookieStore);
       return null;
+    }
+
+    // Migrate legacy cookie-backed sessions to the preferred compact DB-backed
+    // cookie whenever the DB row already exists.
+    try {
+      const dbSession = await refreshAuthSessionIfNeeded(session.sessionId);
+      if (dbSession) {
+        setCookie(cookieStore, dbSession.sessionId);
+        return dbSession;
+      }
+    } catch {
+      // If the lookup fails, keep using the fallback cookie session below.
     }
 
     // Check if access token needs refresh
@@ -187,8 +200,8 @@ export async function getAuthSession(
       clearCookie(cookieStore);
       return null;
     }
-    // Upgrade: re-seal as cookie-based so future requests skip DB
-    setCookie(cookieStore, sealSessionToCookie(session));
+    // Refresh cookie lifetime without inflating it with token payloads.
+    setCookie(cookieStore, session.sessionId);
     return session;
   } catch {
     clearCookie(cookieStore);
@@ -197,8 +210,9 @@ export async function getAuthSession(
 }
 
 /**
- * Create a new auth session and return the sealed cookie value.
- * Also writes to DB for backward compatibility with Render.
+ * Create a new auth session and return the cookie value.
+ * Prefer a compact DB-backed session id; fall back to a sealed cookie session
+ * only when the DB write fails.
  */
 export async function createSessionAndSeal(params: {
   userInfo: { sub: string; username?: string; created_at?: string };
@@ -210,38 +224,36 @@ export async function createSessionAndSeal(params: {
     token_type?: string;
   };
 }): Promise<string> {
-  // Best-effort DB write (may fail on serverless with ephemeral /tmp)
-  let sessionId: string;
   try {
-    sessionId = await dbCreateAuthSession({
+    return await dbCreateAuthSession({
       userInfo: params.userInfo,
       token: params.token,
     });
   } catch {
-    sessionId = require('crypto').randomBytes(32).toString('hex');
+    const sessionId = require('crypto').randomBytes(32).toString('hex');
     // Still try to upsert the user for chats association
     try {
       await upsertUserFromUserInfo(params.userInfo);
     } catch {
       // ignore
     }
+
+    const session: AuthSession = {
+      sessionId,
+      user: {
+        id: params.userInfo.sub,
+        username: params.userInfo.username ?? null,
+      },
+      accessToken: params.token.access_token,
+      refreshToken: params.token.refresh_token ?? null,
+      accessTokenExpiresAt:
+        typeof params.token.expires_in === 'number'
+          ? nowSeconds() + params.token.expires_in
+          : null,
+      scope: params.token.scope?.trim() || null,
+      tokenType: params.token.token_type ?? null,
+    };
+
+    return sealSessionToCookie(session);
   }
-
-  const session: AuthSession = {
-    sessionId,
-    user: {
-      id: params.userInfo.sub,
-      username: params.userInfo.username ?? null,
-    },
-    accessToken: params.token.access_token,
-    refreshToken: params.token.refresh_token ?? null,
-    accessTokenExpiresAt:
-      typeof params.token.expires_in === 'number'
-        ? nowSeconds() + params.token.expires_in
-        : null,
-    scope: params.token.scope?.trim() || null,
-    tokenType: params.token.token_type ?? null,
-  };
-
-  return sealSessionToCookie(session);
 }

@@ -14,10 +14,12 @@ import {
 } from '@/lib/config';
 import { searchHandlers } from '@/lib/search';
 import { buildChutesCandidates, LlmCandidate } from '@/lib/llm/fallbacks';
-import {
-  consumeFreeSearchQuota,
-} from '@/lib/rateLimit';
+import { consumeFreeSearchQuota } from '@/lib/rateLimit';
 import { cookies } from 'next/headers';
+import {
+  resolveOptimizationModeModelName,
+  type SearchModeModelPreferences,
+} from '@/lib/searchModeModels';
 
 interface chatModel {
   provider: string;
@@ -33,6 +35,7 @@ interface embeddingModel {
 
 interface ChatRequestBody {
   optimizationMode: 'speed' | 'balanced' | 'quality';
+  optimizationModels?: SearchModeModelPreferences;
   focusMode: string;
   deepResearchMode?: 'light' | 'max';
   chatModel?: chatModel;
@@ -46,9 +49,11 @@ interface ChatRequestBody {
 export const POST = async (req: Request) => {
   const requestStartTime = Date.now();
   const logTiming = (step: string) => {
-    console.log(`[search] ${new Date().toISOString()} | +${Date.now() - requestStartTime}ms | ${step}`);
+    console.log(
+      `[search] ${new Date().toISOString()} | +${Date.now() - requestStartTime}ms | ${step}`,
+    );
   };
-  
+
   try {
     logTiming('Request received');
     const body: ChatRequestBody = await req.json();
@@ -135,32 +140,41 @@ export const POST = async (req: Request) => {
 
     // Override model based on optimization mode
     if (body.optimizationMode) {
-      // Note: Some models may have different response formats; keep fallbacks configured.
-      const optimizationModels: Record<string, { provider: string; model: string }> = {
-        'speed': { provider: 'custom_openai', model: 'Qwen/Qwen3-Next-80B-A3B-Instruct' },
-        'balanced': { provider: 'custom_openai', model: 'moonshotai/Kimi-K2.5-TEE' },
-        'quality': { provider: 'custom_openai', model: 'moonshotai/Kimi-K2.5-TEE' },
+      const optimizedModel = {
+        provider: 'custom_openai',
+        model: resolveOptimizationModeModelName(
+          body.optimizationMode,
+          body.optimizationModels,
+        ),
       };
-
-      const optimizedModel = optimizationModels[body.optimizationMode];
       if (optimizedModel) {
         // For custom_openai (Chutes), we can use any model directly without checking the provider map
         // since Chutes dynamically supports all available models
         if (optimizedModel.provider === 'custom_openai') {
           chatModelProvider = optimizedModel.provider;
           chatModel = optimizedModel.model;
-          console.log(`Using optimized model for ${body.optimizationMode}: ${optimizedModel.model}`);
+          console.log(
+            `Using optimized model for ${body.optimizationMode}: ${optimizedModel.model}`,
+          );
         } else if (chatModelProviders[optimizedModel.provider]) {
           // For other providers, check if the specific model exists
-          if (chatModelProviders[optimizedModel.provider][optimizedModel.model]) {
+          if (
+            chatModelProviders[optimizedModel.provider][optimizedModel.model]
+          ) {
             chatModelProvider = optimizedModel.provider;
             chatModel = optimizedModel.model;
-            console.log(`Using optimized model for ${body.optimizationMode}: ${optimizedModel.provider}/${optimizedModel.model}`);
+            console.log(
+              `Using optimized model for ${body.optimizationMode}: ${optimizedModel.provider}/${optimizedModel.model}`,
+            );
           } else {
-            console.log(`Optimized model ${optimizedModel.provider}/${optimizedModel.model} not available, using default`);
+            console.log(
+              `Optimized model ${optimizedModel.provider}/${optimizedModel.model} not available, using default`,
+            );
           }
         } else {
-          console.log(`Optimized model provider ${optimizedModel.provider} not available, using default`);
+          console.log(
+            `Optimized model provider ${optimizedModel.provider} not available, using default`,
+          );
         }
       }
     }
@@ -192,7 +206,11 @@ export const POST = async (req: Request) => {
       );
 
       // When signed in, never fall back to the app CHUTES_API_KEY.
-      if (isAuthenticated && !body.chatModel?.customOpenAIKey && !useUserToken) {
+      if (
+        isAuthenticated &&
+        !body.chatModel?.customOpenAIKey &&
+        !useUserToken
+      ) {
         return Response.json(
           {
             message:

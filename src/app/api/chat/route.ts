@@ -19,13 +19,13 @@ import {
 } from '@/lib/config';
 import { searchHandlers } from '@/lib/search';
 import { buildChutesCandidates, LlmCandidate } from '@/lib/llm/fallbacks';
-import {
-  ANON_SESSION_COOKIE_NAME,
-} from '@/lib/auth/constants';
-import {
-  consumeFreeSearchQuota,
-} from '@/lib/rateLimit';
+import { ANON_SESSION_COOKIE_NAME } from '@/lib/auth/constants';
+import { consumeFreeSearchQuota } from '@/lib/rateLimit';
 import { encryptField } from '@/lib/crypto/fieldEncryption';
+import {
+  resolveOptimizationModeModelName,
+  type SearchModeModelPreferences,
+} from '@/lib/searchModeModels';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -49,6 +49,7 @@ type EmbeddingModel = {
 type Body = {
   message: Message;
   optimizationMode: 'speed' | 'balanced' | 'quality';
+  optimizationModels?: SearchModeModelPreferences;
   focusMode: string;
   deepResearchMode?: 'light' | 'max';
   history: Array<[string, string]>;
@@ -73,9 +74,11 @@ const handleEmitterEvents = async (
   const safeWrite = (payload: unknown) => {
     if (closed) return;
     try {
-      void writer.write(encoder.encode(JSON.stringify(payload) + '\n')).catch(() => {
-        closed = true;
-      });
+      void writer
+        .write(encoder.encode(JSON.stringify(payload) + '\n'))
+        .catch(() => {
+          closed = true;
+        });
     } catch {
       closed = true;
     }
@@ -224,8 +227,11 @@ const handleHistorySave = async (
 
 export const POST = async (req: Request) => {
   const requestStart = Date.now();
-  const log = (step: string) => console.log(`[chat] ${new Date().toISOString()} | +${Date.now() - requestStart}ms | ${step}`);
-  
+  const log = (step: string) =>
+    console.log(
+      `[chat] ${new Date().toISOString()} | +${Date.now() - requestStart}ms | ${step}`,
+    );
+
   try {
     log('Request received');
     const cookieStore = await cookies();
@@ -321,16 +327,15 @@ export const POST = async (req: Request) => {
 
     // Determine model based on optimization mode (if using Chutes/custom_openai).
     // Note: Some models may have different response formats; keep fallbacks configured.
-    const optimizationModels: Record<string, string> = {
-      'speed': 'Qwen/Qwen3-Next-80B-A3B-Instruct',
-      'balanced': 'moonshotai/Kimi-K2.5-TEE',
-      'quality': 'moonshotai/Kimi-K2.5-TEE',
-    };
-
-    const isChutesProvider = body.chatModel?.provider === 'custom_openai' || !body.chatModel?.provider;
-    const optimizedModelName = isChutesProvider && body.optimizationMode
-      ? optimizationModels[body.optimizationMode]
-      : null;
+    const isChutesProvider =
+      body.chatModel?.provider === 'custom_openai' || !body.chatModel?.provider;
+    const optimizedModelName =
+      isChutesProvider && body.optimizationMode
+        ? resolveOptimizationModeModelName(
+            body.optimizationMode,
+            body.optimizationModels,
+          )
+        : null;
 
     const chatModelProvider =
       chatModelProviders[
@@ -355,7 +360,10 @@ export const POST = async (req: Request) => {
     let embedding = embeddingModel.model;
 
     // Use Chutes for custom_openai provider or when optimization mode is set
-    if (body.chatModel?.provider === 'custom_openai' || (isChutesProvider && optimizedModelName)) {
+    if (
+      body.chatModel?.provider === 'custom_openai' ||
+      (isChutesProvider && optimizedModelName)
+    ) {
       // Some token endpoints omit `scope` (or return it as an empty string) even when
       // the access token still has the expected permissions. Treat missing scope as
       // "unknown" and allow invoke; if the token truly lacks permission, the request
@@ -364,8 +372,12 @@ export const POST = async (req: Request) => {
       const hasInvoke =
         !scopeStr || scopeStr.split(/\s+/).includes('chutes:invoke');
       const tokenExpiry = authSession?.accessTokenExpiresAt ?? null;
-      const tokenValid = tokenExpiry ? tokenExpiry > Math.floor(Date.now() / 1000) + 30 : true;
-      const useUserToken = Boolean(authSession?.accessToken && hasInvoke && tokenValid);
+      const tokenValid = tokenExpiry
+        ? tokenExpiry > Math.floor(Date.now() / 1000) + 30
+        : true;
+      const useUserToken = Boolean(
+        authSession?.accessToken && hasInvoke && tokenValid,
+      );
 
       const baseURL = getCustomOpenaiApiUrl();
       // When a user is signed in, never fall back to the app key.
@@ -373,8 +385,7 @@ export const POST = async (req: Request) => {
         return Response.json(
           {
             type: 'error',
-            data:
-              'Your session is missing permission to run inference. Please sign in again.',
+            data: 'Your session is missing permission to run inference. Please sign in again.',
             message:
               'Your session is missing permission to run inference. Please sign in again.',
             error: 'AUTH_INVOKE_REQUIRED',
@@ -383,10 +394,17 @@ export const POST = async (req: Request) => {
         );
       }
 
-      const apiKey = useUserToken ? authSession!.accessToken : getCustomOpenaiApiKey();
+      const apiKey = useUserToken
+        ? authSession!.accessToken
+        : getCustomOpenaiApiKey();
       // Use optimization mode model if available, otherwise use the requested model
-      const primaryModelName = optimizedModelName || body.chatModel?.name || getCustomOpenaiModelName();
-      log(`Using model: ${primaryModelName} (optimizationMode: ${body.optimizationMode})`);
+      const primaryModelName =
+        optimizedModelName ||
+        body.chatModel?.name ||
+        getCustomOpenaiModelName();
+      log(
+        `Using model: ${primaryModelName} (optimizationMode: ${body.optimizationMode})`,
+      );
 
       // Fallback models - prefer models that work reliably with structured prompts.
       const fallbackModelNames = [
@@ -474,7 +492,9 @@ export const POST = async (req: Request) => {
       );
     }
 
-    log(`Starting searchAndAnswer with focusMode=${body.focusMode}, optimizationMode=${body.optimizationMode}`);
+    log(
+      `Starting searchAndAnswer with focusMode=${body.focusMode}, optimizationMode=${body.optimizationMode}`,
+    );
     const stream = await handler.searchAndAnswer(
       message.content,
       history,
@@ -493,7 +513,14 @@ export const POST = async (req: Request) => {
     const writer = responseStream.writable.getWriter();
     const encoder = new TextEncoder();
 
-    handleEmitterEvents(stream, writer, encoder, aiMessageId, message.chatId, authSession?.user.id ?? null);
+    handleEmitterEvents(
+      stream,
+      writer,
+      encoder,
+      aiMessageId,
+      message.chatId,
+      authSession?.user.id ?? null,
+    );
     handleHistorySave(message, humanMessageId, body.focusMode, body.files, {
       sessionId,
       userId: authSession?.user.id ?? null,

@@ -2,11 +2,12 @@ import type { BaseChatModel } from '@langchain/core/language_models/chat_models'
 import type { Embeddings } from '@langchain/core/embeddings';
 import { getAvailableEmbeddingModelProviders } from '@/lib/providers';
 import { buildChutesCandidates } from '@/lib/llm/fallbacks';
-import {
-  getCustomOpenaiApiUrl,
-  getCustomOpenaiModelName,
-} from '@/lib/config';
+import { getCustomOpenaiApiUrl, getCustomOpenaiModelName } from '@/lib/config';
 import { searchHandlers } from '@/lib/search';
+import {
+  resolveOptimizationModeModelName,
+  type SearchModeModelPreferences,
+} from '@/lib/searchModeModels';
 
 export const maxDuration = 300;
 
@@ -14,6 +15,7 @@ interface ResearchRequestBody {
   query: string;
   mode?: 'light' | 'max';
   optimizationMode?: 'speed' | 'balanced' | 'quality';
+  optimizationModels?: SearchModeModelPreferences;
   stream?: boolean;
 }
 
@@ -23,7 +25,10 @@ export const POST = async (req: Request) => {
     const authHeader = req.headers.get('authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return Response.json(
-        { error: 'Missing or invalid Authorization header. Use: Authorization: Bearer <chutes-api-key>' },
+        {
+          error:
+            'Missing or invalid Authorization header. Use: Authorization: Bearer <chutes-api-key>',
+        },
         { status: 401 },
       );
     }
@@ -43,12 +48,11 @@ export const POST = async (req: Request) => {
 
     // Build LLM candidates using the caller's API key
     const baseURL = getCustomOpenaiApiUrl();
-    const optimizationModels: Record<string, string> = {
-      speed: 'Qwen/Qwen3-Next-80B-A3B-Instruct',
-      balanced: 'moonshotai/Kimi-K2.5-TEE',
-      quality: 'moonshotai/Kimi-K2.5-TEE',
-    };
-    const primaryModel = optimizationModels[optimizationMode] || getCustomOpenaiModelName();
+    const primaryModel =
+      resolveOptimizationModeModelName(
+        optimizationMode,
+        body.optimizationModels,
+      ) || getCustomOpenaiModelName();
     const fallbackModels = [
       'deepseek-ai/DeepSeek-V3',
       'Qwen/Qwen2.5-72B-Instruct',
@@ -66,12 +70,18 @@ export const POST = async (req: Request) => {
     // Get embedding model (uses server-side config, not caller's key)
     const embeddingModelProviders = await getAvailableEmbeddingModelProviders();
     const embeddingProvider = Object.keys(embeddingModelProviders)[0];
-    const embeddingModelName = Object.keys(embeddingModelProviders[embeddingProvider] || {})[0];
-    const embeddings = embeddingModelProviders[embeddingProvider]?.[embeddingModelName]
-      ?.model as Embeddings | undefined;
+    const embeddingModelName = Object.keys(
+      embeddingModelProviders[embeddingProvider] || {},
+    )[0];
+    const embeddings = embeddingModelProviders[embeddingProvider]?.[
+      embeddingModelName
+    ]?.model as Embeddings | undefined;
 
     if (!llm || !embeddings) {
-      return Response.json({ error: 'Failed to initialize models' }, { status: 500 });
+      return Response.json(
+        { error: 'Failed to initialize models' },
+        { status: 500 },
+      );
     }
 
     const searchHandler = searchHandlers['deepResearch'];
@@ -166,21 +176,27 @@ export const POST = async (req: Request) => {
     const readableStream = new ReadableStream({
       start(controller) {
         controller.enqueue(
-          encoder.encode(JSON.stringify({ type: 'init', data: 'Stream connected' }) + '\n'),
+          encoder.encode(
+            JSON.stringify({ type: 'init', data: 'Stream connected' }) + '\n',
+          ),
         );
 
         // Heartbeat to prevent Vercel streaming idle timeout (~25s)
         const heartbeat = setInterval(() => {
           if (signal.aborted) return;
           try {
-            controller.enqueue(encoder.encode(JSON.stringify({ type: 'keepAlive' }) + '\n'));
+            controller.enqueue(
+              encoder.encode(JSON.stringify({ type: 'keepAlive' }) + '\n'),
+            );
           } catch {}
         }, 15000);
 
         signal.addEventListener('abort', () => {
           clearInterval(heartbeat);
           emitter.removeAllListeners();
-          try { controller.close(); } catch {}
+          try {
+            controller.close();
+          } catch {}
         });
 
         emitter.on('data', (data: string) => {
@@ -196,7 +212,9 @@ export const POST = async (req: Request) => {
         emitter.on('end', () => {
           clearInterval(heartbeat);
           if (signal.aborted) return;
-          controller.enqueue(encoder.encode(JSON.stringify({ type: 'done' }) + '\n'));
+          controller.enqueue(
+            encoder.encode(JSON.stringify({ type: 'done' }) + '\n'),
+          );
           controller.close();
         });
 

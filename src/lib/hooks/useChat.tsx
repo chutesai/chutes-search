@@ -1,7 +1,14 @@
 'use client';
 
 import { Message } from '@/components/ChatWindow';
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import crypto from 'crypto';
 import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
@@ -12,6 +19,7 @@ import {
   incrementFreeSearchState,
   readFreeSearchState,
 } from '@/lib/freeSearch';
+import { readSearchModeModelPreferences } from '@/lib/searchModeModels';
 
 type ChatContext = {
   messages: Message[];
@@ -391,7 +399,9 @@ export const ChatProvider = ({
     refreshAuth();
   }, [refreshAuth]);
 
-  const [freeSearchGate, setFreeSearchGate] = useState<ChatContext['freeSearchGate']>({
+  const [freeSearchGate, setFreeSearchGate] = useState<
+    ChatContext['freeSearchGate']
+  >({
     open: false,
     count: 0,
     limit: FREE_SEARCH_LIMIT,
@@ -737,8 +747,10 @@ export const ChatProvider = ({
         chatId: chatId!,
         files: fileIds,
         focusMode: focusMode,
-        deepResearchMode: focusMode === 'deepResearch' ? deepResearchMode : undefined,
+        deepResearchMode:
+          focusMode === 'deepResearch' ? deepResearchMode : undefined,
         optimizationMode: optimizationMode,
+        optimizationModels: readSearchModeModelPreferences(localStorage),
         history: rewrite
           ? chatHistory.slice(0, messageIndex === -1 ? undefined : messageIndex)
           : chatHistory,
@@ -765,8 +777,14 @@ export const ChatProvider = ({
       if (res.status === 429 && payload?.error === 'RATE_LIMIT_EXCEEDED') {
         // Server-side quota enforcement (IP-based) can be stricter/more accurate than localStorage.
         // Show the sign-in gate dialog so the UI doesn't get stuck waiting for stream events.
-        const used = typeof payload?.details?.used === 'number' ? payload.details.used : FREE_SEARCH_LIMIT;
-        const limit = typeof payload?.details?.limit === 'number' ? payload.details.limit : FREE_SEARCH_LIMIT;
+        const used =
+          typeof payload?.details?.used === 'number'
+            ? payload.details.used
+            : FREE_SEARCH_LIMIT;
+        const limit =
+          typeof payload?.details?.limit === 'number'
+            ? payload.details.limit
+            : FREE_SEARCH_LIMIT;
         setFreeSearchGate({
           open: true,
           count: Math.min(used, limit),
@@ -789,9 +807,7 @@ export const ChatProvider = ({
       }
 
       const message =
-        payload?.message ||
-        payload?.error ||
-        `Request failed (${res.status})`;
+        payload?.message || payload?.error || `Request failed (${res.status})`;
       toast.error(String(message));
       setLoading(false);
       return;
