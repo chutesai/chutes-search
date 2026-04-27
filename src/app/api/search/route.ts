@@ -67,9 +67,30 @@ export const POST = async (req: Request) => {
     }
 
     const cookieStore = await cookies();
-    const authSession = await getAuthSession(cookieStore);
+    const cookieAuthSession = await getAuthSession(cookieStore);
 
-    // Check if user is authenticated (server-side session cookie only).
+    // Bearer-token fallback: trusted callers (e.g. the Chutes chat frontend)
+    // forward the user's chutes_idp access token via Authorization header
+    // because their session cookie isn't share-able cross-domain. The chutes
+    // inference API will reject the token downstream if it's invalid, so we
+    // don't double-validate here — we just trust it for rate-limit bypass.
+    const authHeader = req.headers.get('authorization');
+    const bearerAccessToken =
+      authHeader && /^Bearer\s+/i.test(authHeader)
+        ? authHeader.replace(/^Bearer\s+/i, '').trim() || null
+        : null;
+
+    // Effective auth state — cookie session wins; otherwise a Bearer token
+    // counts as authenticated for rate-limiting and inference purposes.
+    const authSession = cookieAuthSession ?? (bearerAccessToken
+      ? {
+          accessToken: bearerAccessToken,
+          // Unknown scope/expiry — treat as valid; the LLM call will fail
+          // if the token is rejected by the chutes inference API.
+          scope: null,
+          accessTokenExpiresAt: null,
+        }
+      : null);
     const isAuthenticated = !!authSession;
 
     // Deep Research is only available to signed-in users.
