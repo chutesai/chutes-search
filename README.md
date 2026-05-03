@@ -84,6 +84,45 @@ The project is configured for Vercel with `output: 'standalone'`. Set the enviro
 
 The build runs `drizzle-kit push` automatically to sync the database schema.
 
+### IDP OAuth client is shared with chutes-frontend
+
+> ⚠️ Read this before adding/removing redirect_uris on the IDP app.
+
+The OAuth client this app uses (`CHUTES_IDP_CLIENT_ID = cid_1tqa40d4r5vy6f6mrueal8sp`, IDP app `Chutes Frontend OAuth v2`, app_id `8e99c39a-b79b-42b4-90ee-2ca686e7142b`) is **NOT exclusive to chutes-search** — it is also used by `chutes-frontend` (`/home/flori/Dev/chutes/chutes-frontend`, deployed at `chutes.ai/chat`, `chutes-frontend-orcin/dev/staging.vercel.app`, `chat.chutes.ai`, `chutes-frontend-chat.vercel.app`).
+
+The IDP enforces a hard cap of **10 redirect_uris per app**. Today's slate (post the 2026-05-03 cleanup):
+
+```
+chutes-search                        chutes-frontend
+─────────────────────                ─────────────────────
+chutes-search.com                    chutes.ai
+chutes-search.vercel.app             chutes-frontend-orcin.vercel.app
+search.chutes.ai                     chutes-frontend-dev.vercel.app
+                                     chutes-frontend-staging.vercel.app
+                                     chat.chutes.ai
+                                     chutes-frontend-chat.vercel.app
+
+shared:  http://localhost:3000/api/auth/callback
+```
+
+That's exactly 10. **If you need to add a new chutes-search front-door (e.g. a preview alias, a custom domain), you must remove a stale redirect_uri first.** The IDP returns `400 "Redirect URI not registered for this application"` on `/idp/authorize` when the OAuth flow asks for a URI that isn't on the allow-list — manifesting as a sign-in dead end.
+
+To update:
+
+```bash
+# Get the current state (replace <ACCESS_TOKEN> with a Chutes IDP user access token)
+curl https://api.chutes.ai/idp/apps/8e99c39a-b79b-42b4-90ee-2ca686e7142b \
+  -H "Authorization: Bearer <ACCESS_TOKEN>"
+
+# Patch (full replacement of the redirect_uris array, max 10 entries)
+curl -X PATCH https://api.chutes.ai/idp/apps/8e99c39a-b79b-42b4-90ee-2ca686e7142b \
+  -H "Authorization: Bearer <ACCESS_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"redirect_uris": ["...", "..."]}'
+```
+
+The full Chutes IDP app registry lives in `../chutes_idp/internal.md` (gitignored). When you change the registered redirect_uris, update both that file AND the equivalent section in `../chutes-frontend/README.md` so the next dev who looks at either side sees the same picture. Don't drop a chutes-frontend URI without checking it's actually decommissioned (`curl -I https://<host>` should return 404, not 200) — and vice versa.
+
 ## Credits
 
 This project is a fork of [Perplexica](https://github.com/ItzCrazyKns/Perplexica) by [ItzCrazyKns](https://github.com/ItzCrazyKns). Perplexica is an outstanding open-source AI search engine that made this project possible. All original Perplexica contributors deserve recognition for their work.
