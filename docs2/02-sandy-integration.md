@@ -335,10 +335,10 @@ The deep research response prompt instructs the LLM to produce:
 
 The report generation uses the same multi-candidate fallback system as regular searches. For Deep Research MAX mode, a separate set of high-quality summary models is used:
 
+- `deepseek-ai/DeepSeek-V3.2-TEE`
+- `zai-org/GLM-5.1-TEE`
 - `moonshotai/Kimi-K2.6-TEE`
 - `Qwen/Qwen3-235B-A22B-Thinking-2507`
-- `zai-org/GLM-5.1-TEE`
-- `deepseek-ai/DeepSeek-V3.2-TEE`
 - `model-router` via Model Router
 
 If a model returns a retryable upstream failure, deleted-model 404, or token-cap error before any output has been streamed, the system retries with the next candidate.

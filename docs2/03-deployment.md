@@ -100,7 +100,7 @@ exec node server.js # Start Next.js standalone server
 | ---------------------- | ----------- | ---------------------------------------- | -------------------------------------------------- |
 | `CHUTES_API_KEY`       | Recommended | -                                        | API key for anonymous free searches (3/day per IP) |
 | `CHUTES_API_URL`       | No          | `https://llm.chutes.ai/v1`               | Chutes LLM API base URL                            |
-| `CHUTES_MODEL_NAME`    | No          | `moonshotai/Kimi-K2.6-TEE`               | Default model when none is specified               |
+| `CHUTES_MODEL_NAME`    | No          | `deepseek-ai/DeepSeek-V3.2-TEE`          | Default model when none is specified               |
 | `MODEL_ROUTER_API_URL` | No          | `https://model-router-ten.vercel.app/v1` | OpenAI-compatible Model Router fallback URL        |
 | `CHUTES_AUTH_SECRET`   | **Yes**     | -                                        | Secret for encrypting session/token data at rest   |
 | `DATA_DIR`             | No          | `./data`                                 | Directory for SQLite database storage              |

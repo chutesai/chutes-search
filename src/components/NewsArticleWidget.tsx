@@ -7,6 +7,19 @@ interface Article {
   thumbnail: string;
 }
 
+const FALLBACK_ARTICLES: Article[] = [
+  {
+    title: 'Chutes | Serverless AI Compute for Open-Source Models',
+    content:
+      'Deploy, scale, and run open-source AI models with serverless GPU compute.',
+    url: 'https://chutes.ai/',
+    thumbnail: 'https://www.google.com/s2/favicons?domain=chutes.ai&sz=128',
+  },
+];
+
+const selectArticle = (articles: Article[]) =>
+  articles[Math.floor(Math.random() * articles.length)];
+
 // Helper to get a safe image URL
 const getSafeImageUrl = (thumbnail: string): string => {
   try {
@@ -31,7 +44,6 @@ const getFaviconUrl = (articleUrl: string): string => {
 const NewsArticleWidget = () => {
   const [article, setArticle] = useState<Article | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
   const [imgSrc, setImgSrc] = useState<string | null>(null);
   const [imgError, setImgError] = useState(false);
 
@@ -43,11 +55,13 @@ const NewsArticleWidget = () => {
           (a: Article) => a.title && a.url,
         );
         if (articles.length === 0) {
-          setError(true);
+          const selected = selectArticle(FALLBACK_ARTICLES);
+          setArticle(selected);
+          setImgSrc(getSafeImageUrl(selected.thumbnail));
           setLoading(false);
           return;
         }
-        const selected = articles[Math.floor(Math.random() * articles.length)];
+        const selected = selectArticle(articles);
         setArticle(selected);
         if (selected?.thumbnail) {
           setImgSrc(getSafeImageUrl(selected.thumbnail));
@@ -55,7 +69,9 @@ const NewsArticleWidget = () => {
         setLoading(false);
       })
       .catch(() => {
-        setError(true);
+        const selected = selectArticle(FALLBACK_ARTICLES);
+        setArticle(selected);
+        setImgSrc(getSafeImageUrl(selected.thumbnail));
         setLoading(false);
       });
   }, []);
@@ -86,8 +102,6 @@ const NewsArticleWidget = () => {
             </div>
           </div>
         </>
-      ) : error ? (
-        <div className="w-full text-xs text-red-400">Could not load news.</div>
       ) : article ? (
         <a
           href={`/?q=Summary: ${article.url}`}

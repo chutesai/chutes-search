@@ -76,7 +76,7 @@ chutes-search preserves Perplexica's core architecture (SearxNG-backed search, L
 | **Deep Research**       | Not present                  | Sandy sandbox crawling with Playwright                  |
 | **LLM routing**         | Single provider at a time    | Multi-candidate fallback with rate-limit retry          |
 | **Default provider**    | User-configured              | Chutes LLM API (OpenAI-compatible)                      |
-| **Optimization modes**  | Basic speed/balanced/quality | Model-per-mode mapping (Qwen3, Kimi-K2.5)               |
+| **Optimization modes**  | Basic speed/balanced/quality | Model-per-mode mapping (Gemma/DeepSeek)                 |
 | **Agent summarization** | Not present                  | Claude Code agent in sandbox for source synthesis       |
 | **Search fallback**     | SearxNG only                 | SearxNG primary, Serper API fallback                    |
 | **User isolation**      | None                         | Session-scoped chat history (anonymous + authenticated) |
@@ -190,9 +190,9 @@ When using the Chutes provider, the optimization mode maps to specific models:
 
 | Optimization Mode | Default Model              |
 | ----------------- | -------------------------- |
-| Speed             | `Qwen/Qwen3.6-27B-TEE`     |
-| Balanced          | `moonshotai/Kimi-K2.6-TEE` |
-| Quality           | `moonshotai/Kimi-K2.6-TEE` |
+| Speed             | `google/gemma-4-31B-turbo-TEE` |
+| Balanced          | `deepseek-ai/DeepSeek-V3.2-TEE` |
+| Quality           | `deepseek-ai/DeepSeek-V3.2-TEE` |
 
 ### LLM Fallback Chain
 
@@ -201,12 +201,13 @@ The `buildChutesCandidates()` function (`src/lib/llm/fallbacks.ts`) creates an o
 Default fallback order:
 
 1. Primary model (selected by optimization mode)
-2. `deepseek-ai/DeepSeek-V3.2-TEE`
+2. `google/gemma-4-31B-turbo-TEE`
 3. `zai-org/GLM-5.1-TEE`
-4. `MiniMaxAI/MiniMax-M2.5-TEE`
-5. `Qwen/Qwen3.5-397B-A17B-TEE`
-6. `moonshotai/Kimi-K2.5-TEE`
-7. `model-router` via Model Router
+4. `deepseek-ai/DeepSeek-V3.2-TEE`
+5. `MiniMaxAI/MiniMax-M2.5-TEE`
+6. `Qwen/Qwen3.5-397B-A17B-TEE`
+7. `moonshotai/Kimi-K2.5-TEE`
+8. `model-router` via Model Router
 
 ---
 

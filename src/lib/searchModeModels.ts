@@ -34,19 +34,19 @@ export const LIVE_CHUTES_MODEL_IDS = [
 ] as const;
 
 export const SPEED_MODELS = [
-  'Qwen/Qwen3.6-27B-TEE',
-  'Qwen/Qwen3-32B-TEE',
   'google/gemma-4-31B-turbo-TEE',
   'unsloth/Mistral-Nemo-Instruct-2407-TEE',
+  'Qwen/Qwen3-32B-TEE',
+  'Qwen/Qwen3.6-27B-TEE',
 ] as const;
 
 export const QUALITY_MODELS = [
-  'moonshotai/Kimi-K2.6-TEE',
-  'Qwen/Qwen3-235B-A22B-Thinking-2507',
+  'deepseek-ai/DeepSeek-V3.2-TEE',
   'Qwen/Qwen3.5-397B-A17B-TEE',
   'zai-org/GLM-5.1-TEE',
-  'deepseek-ai/DeepSeek-V3.2-TEE',
+  'moonshotai/Kimi-K2.6-TEE',
   'MiniMaxAI/MiniMax-M2.5-TEE',
+  'Qwen/Qwen3-235B-A22B-Thinking-2507',
   'moonshotai/Kimi-K2.5-TEE',
   'zai-org/GLM-5-TEE',
   'zai-org/GLM-5-Turbo',
@@ -57,22 +57,24 @@ export const DEFAULT_QUALITY_MODEL = QUALITY_MODELS[0];
 export const DEFAULT_CHUTES_MODEL = DEFAULT_QUALITY_MODEL;
 
 export const SEARCH_FALLBACK_MODELS = [
-  'deepseek-ai/DeepSeek-V3.2-TEE',
+  'google/gemma-4-31B-turbo-TEE',
   'zai-org/GLM-5.1-TEE',
+  'deepseek-ai/DeepSeek-V3.2-TEE',
   'MiniMaxAI/MiniMax-M2.5-TEE',
   'Qwen/Qwen3.5-397B-A17B-TEE',
   'moonshotai/Kimi-K2.5-TEE',
 ] as const;
 
 export const DEEP_RESEARCH_SUMMARY_MODELS = [
+  'deepseek-ai/DeepSeek-V3.2-TEE',
+  'zai-org/GLM-5.1-TEE',
   'moonshotai/Kimi-K2.6-TEE',
   'Qwen/Qwen3-235B-A22B-Thinking-2507',
-  'zai-org/GLM-5.1-TEE',
-  'deepseek-ai/DeepSeek-V3.2-TEE',
 ] as const;
 
 export const AUXILIARY_LLM_MODELS = [
-  'Qwen/Qwen3.6-27B-TEE',
+  'google/gemma-4-31B-turbo-TEE',
+  'unsloth/Mistral-Nemo-Instruct-2407-TEE',
   'zai-org/GLM-5.1-TEE',
   'deepseek-ai/DeepSeek-V3.2-TEE',
 ] as const;

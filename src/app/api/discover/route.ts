@@ -16,6 +16,34 @@ const CACHE_DIR = path.join(process.cwd(), 'cache');
 const FS_CACHE_DURATION = 1800000; // 30 minutes for filesystem cache
 const IS_SERVERLESS = process.env.LAMBDA_TASK_ROOT || process.env.VERCEL || !process.cwd().includes('/');
 
+type DiscoverArticle = {
+  title: string;
+  url: string;
+  content?: string;
+  thumbnail?: string;
+};
+
+const DISCOVER_PREVIEW_FALLBACK: DiscoverArticle[] = [
+  {
+    title: 'Chutes | Serverless AI Compute for Open-Source Models',
+    url: 'https://chutes.ai/',
+    content: 'Deploy, scale, and run open-source AI models with serverless GPU compute.',
+    thumbnail: 'https://www.google.com/s2/favicons?domain=chutes.ai&sz=128',
+  },
+  {
+    title: 'Latest technology coverage from WIRED',
+    url: 'https://www.wired.com/tag/technology/',
+    content: 'Current reporting on technology, science, and business.',
+    thumbnail: 'https://www.google.com/s2/favicons?domain=wired.com&sz=128',
+  },
+  {
+    title: 'Latest technology coverage from Reuters',
+    url: 'https://www.reuters.com/technology/',
+    content: 'Current reporting on technology and AI markets.',
+    thumbnail: 'https://www.google.com/s2/favicons?domain=reuters.com&sz=128',
+  },
+];
+
 // Ensure cache directory exists
 async function ensureCacheDir() {
   if (IS_SERVERLESS) {
@@ -211,7 +239,7 @@ export const GET = async (req: Request) => {
 
     const selectedTopic = websitesForTopic[topic];
 
-    let data: { title: string; url: string; content?: string; thumbnail?: string }[] = [];
+    let data: DiscoverArticle[] = [];
 
     if (mode === 'normal') {
       const seenUrls = new Set<string>();
@@ -540,7 +568,12 @@ export const GET = async (req: Request) => {
         }
       } catch (err) {
         console.warn(`[discover] Failed to fetch preview data:`, err);
-        data = []; // Return empty array on error
+        data = [...DISCOVER_PREVIEW_FALLBACK];
+      }
+
+      if (data.length === 0) {
+        console.warn('[discover] Preview data was empty, returning fallback data');
+        data = [...DISCOVER_PREVIEW_FALLBACK];
       }
     }
 
