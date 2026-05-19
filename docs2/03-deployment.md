@@ -41,19 +41,19 @@ services:
 
 ### Services
 
-| Service | Image | Internal Port | External Port | Purpose |
-|---|---|---|---|---|
-| `searxng` | `searxng/searxng:latest` | 8080 | 4000 | Metasearch engine |
-| `app` | Built from `app.dockerfile` | 3000 | 3000 | chutes-search application |
+| Service   | Image                       | Internal Port | External Port | Purpose                   |
+| --------- | --------------------------- | ------------- | ------------- | ------------------------- |
+| `searxng` | `searxng/searxng:latest`    | 8080          | 4000          | Metasearch engine         |
+| `app`     | Built from `app.dockerfile` | 3000          | 3000          | chutes-search application |
 
 ### Volumes
 
-| Volume | Mount Point | Purpose |
-|---|---|---|
-| `backend-dbstore` | `/home/perplexica/data` | SQLite database persistence |
-| `uploads` | `/home/perplexica/uploads` | User file uploads |
-| `./config.toml` | `/home/perplexica/config.toml` | Runtime configuration (bind mount) |
-| `./searxng` | `/etc/searxng` | SearxNG settings (bind mount) |
+| Volume            | Mount Point                    | Purpose                            |
+| ----------------- | ------------------------------ | ---------------------------------- |
+| `backend-dbstore` | `/home/perplexica/data`        | SQLite database persistence        |
+| `uploads`         | `/home/perplexica/uploads`     | User file uploads                  |
+| `./config.toml`   | `/home/perplexica/config.toml` | Runtime configuration (bind mount) |
+| `./searxng`       | `/etc/searxng`                 | SearxNG settings (bind mount)      |
 
 ---
 
@@ -96,72 +96,73 @@ exec node server.js # Start Next.js standalone server
 
 ### Core Application
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `CHUTES_API_KEY` | Recommended | - | API key for anonymous free searches (3/day per IP) |
-| `CHUTES_API_URL` | No | `https://llm.chutes.ai/v1` | Chutes LLM API base URL |
-| `CHUTES_MODEL_NAME` | No | `deepseek-ai/DeepSeek-V3.1` | Default model when none is specified |
-| `CHUTES_AUTH_SECRET` | **Yes** | - | Secret for encrypting session/token data at rest |
-| `DATA_DIR` | No | `./data` | Directory for SQLite database storage |
+| Variable               | Required    | Default                                  | Description                                        |
+| ---------------------- | ----------- | ---------------------------------------- | -------------------------------------------------- |
+| `CHUTES_API_KEY`       | Recommended | -                                        | API key for anonymous free searches (3/day per IP) |
+| `CHUTES_API_URL`       | No          | `https://llm.chutes.ai/v1`               | Chutes LLM API base URL                            |
+| `CHUTES_MODEL_NAME`    | No          | `moonshotai/Kimi-K2.6-TEE`               | Default model when none is specified               |
+| `MODEL_ROUTER_API_URL` | No          | `https://model-router-ten.vercel.app/v1` | OpenAI-compatible Model Router fallback URL        |
+| `CHUTES_AUTH_SECRET`   | **Yes**     | -                                        | Secret for encrypting session/token data at rest   |
+| `DATA_DIR`             | No          | `./data`                                 | Directory for SQLite database storage              |
 
 ### Authentication (Chutes IDP)
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `CHUTES_IDP_CLIENT_ID` | **Yes** | - | OAuth2 client ID for the app registration |
-| `CHUTES_IDP_CLIENT_SECRET` | No | - | Client secret (omit for public clients) |
-| `CHUTES_IDP_SCOPES` | No | `openid profile chutes:invoke` | OAuth2 scopes to request |
-| `CHUTES_IDP_REDIRECT_URI` | No | `https://<host>/api/auth/callback` | OAuth2 callback URL |
-| `CHUTES_IDP_AUTHORIZATION_ENDPOINT` | No | `https://api.chutes.ai/idp/authorize` | IDP authorization URL |
-| `CHUTES_IDP_TOKEN_ENDPOINT` | No | `https://api.chutes.ai/idp/token` | IDP token exchange URL |
-| `CHUTES_IDP_USERINFO_ENDPOINT` | No | `https://api.chutes.ai/idp/userinfo` | IDP userinfo URL |
+| Variable                            | Required | Default                               | Description                               |
+| ----------------------------------- | -------- | ------------------------------------- | ----------------------------------------- |
+| `CHUTES_IDP_CLIENT_ID`              | **Yes**  | -                                     | OAuth2 client ID for the app registration |
+| `CHUTES_IDP_CLIENT_SECRET`          | No       | -                                     | Client secret (omit for public clients)   |
+| `CHUTES_IDP_SCOPES`                 | No       | `openid profile chutes:invoke`        | OAuth2 scopes to request                  |
+| `CHUTES_IDP_REDIRECT_URI`           | No       | `https://<host>/api/auth/callback`    | OAuth2 callback URL                       |
+| `CHUTES_IDP_AUTHORIZATION_ENDPOINT` | No       | `https://api.chutes.ai/idp/authorize` | IDP authorization URL                     |
+| `CHUTES_IDP_TOKEN_ENDPOINT`         | No       | `https://api.chutes.ai/idp/token`     | IDP token exchange URL                    |
+| `CHUTES_IDP_USERINFO_ENDPOINT`      | No       | `https://api.chutes.ai/idp/userinfo`  | IDP userinfo URL                          |
 
 ### Web Search
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `SEARXNG_API_URL` | No | From config.toml | Single SearxNG instance URL |
-| `SEARXNG_API_URLS` | No | - | Comma-separated list of SearxNG URLs (load balancing) |
-| `SERPER_API_KEY` | Recommended | - | Serper.dev API key for Google search fallback |
+| Variable           | Required    | Default          | Description                                           |
+| ------------------ | ----------- | ---------------- | ----------------------------------------------------- |
+| `SEARXNG_API_URL`  | No          | From config.toml | Single SearxNG instance URL                           |
+| `SEARXNG_API_URLS` | No          | -                | Comma-separated list of SearxNG URLs (load balancing) |
+| `SERPER_API_KEY`   | Recommended | -                | Serper.dev API key for Google search fallback         |
 
 When multiple SearxNG URLs are configured, a random instance is selected per request.
 
 ### Deep Research (Sandy Sandboxes)
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `SANDY_BASE_URL` | **Yes** (for deep research) | - | Sandy API endpoint URL |
-| `SANDY_API_KEY` | If Sandy requires auth | - | Bearer token for Sandy API |
+| Variable         | Required                    | Default | Description                |
+| ---------------- | --------------------------- | ------- | -------------------------- |
+| `SANDY_BASE_URL` | **Yes** (for deep research) | -       | Sandy API endpoint URL     |
+| `SANDY_API_KEY`  | If Sandy requires auth      | -       | Bearer token for Sandy API |
 
 ### Agent Summarization (Janus Router)
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `SANDY_AGENT_API_BASE_URL` | No | - | Janus model router URL for agent inference |
-| `SANDY_AGENT_ROUTER_URL` | No | - | Alternative name for the above |
-| `JANUS_ROUTER_URL` | No | - | Third alternative for the router URL |
-| `SANDY_AGENT_MODEL` | No | `janus-router` (if router URL is set) | Model name for agent summarization |
-| `SANDY_AGENT_SYSTEM_PROMPT` | No | - | Custom system prompt for the Claude Code agent |
-| `JANUS_SYSTEM_PROMPT` | No | - | Alternative name for the system prompt |
+| Variable                    | Required | Default                               | Description                                    |
+| --------------------------- | -------- | ------------------------------------- | ---------------------------------------------- |
+| `SANDY_AGENT_API_BASE_URL`  | No       | -                                     | Janus model router URL for agent inference     |
+| `SANDY_AGENT_ROUTER_URL`    | No       | -                                     | Alternative name for the above                 |
+| `JANUS_ROUTER_URL`          | No       | -                                     | Third alternative for the router URL           |
+| `SANDY_AGENT_MODEL`         | No       | `janus-router` (if router URL is set) | Model name for agent summarization             |
+| `SANDY_AGENT_SYSTEM_PROMPT` | No       | -                                     | Custom system prompt for the Claude Code agent |
+| `JANUS_SYSTEM_PROMPT`       | No       | -                                     | Alternative name for the system prompt         |
 
 ### LLM Providers (from config.toml or environment)
 
-| Variable | Description |
-|---|---|
-| `OPENAI_API_KEY` | OpenAI API key |
-| `ANTHROPIC_API_KEY` | Anthropic API key |
-| `GROQ_API_KEY` | Groq API key |
-| `GEMINI_API_KEY` | Google Gemini API key |
-| `DEEPSEEK_API_KEY` | DeepSeek API key |
-| `AIMLAPI_API_KEY` | AI/ML API key |
-| `OLLAMA_API_URL` | Ollama server URL |
-| `LM_STUDIO_API_URL` | LM Studio server URL |
+| Variable            | Description           |
+| ------------------- | --------------------- |
+| `OPENAI_API_KEY`    | OpenAI API key        |
+| `ANTHROPIC_API_KEY` | Anthropic API key     |
+| `GROQ_API_KEY`      | Groq API key          |
+| `GEMINI_API_KEY`    | Google Gemini API key |
+| `DEEPSEEK_API_KEY`  | DeepSeek API key      |
+| `AIMLAPI_API_KEY`   | AI/ML API key         |
+| `OLLAMA_API_URL`    | Ollama server URL     |
+| `LM_STUDIO_API_URL` | LM Studio server URL  |
 
 ### Rate Limiting
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `CHUTES_RATE_LIMIT_SALT` | No | Falls back to `CHUTES_AUTH_SECRET` | HMAC secret for IP hashing |
+| Variable                 | Required | Default                            | Description                |
+| ------------------------ | -------- | ---------------------------------- | -------------------------- |
+| `CHUTES_RATE_LIMIT_SALT` | No       | Falls back to `CHUTES_AUTH_SECRET` | HMAC secret for IP hashing |
 
 ---
 
@@ -227,17 +228,18 @@ search:
   autocomplete: 'google'
   formats:
     - html
-    - json         # Required for API access
+    - json # Required for API access
 
 server:
-  secret_key: '...'  # Overwritten by SEARXNG_SECRET env var
+  secret_key: '...' # Overwritten by SEARXNG_SECRET env var
 
 engines:
   - name: wolframalpha
-    disabled: false    # Explicitly enabled for Wolfram Alpha focus mode
+    disabled: false # Explicitly enabled for Wolfram Alpha focus mode
 ```
 
 Key settings:
+
 - **JSON format**: Must be enabled for chutes-search to communicate with SearxNG via its API.
 - **Autocomplete**: Google autocomplete provides search suggestions that feed into related query generation for deep research.
 - **Wolfram Alpha**: Explicitly enabled for the Wolfram Alpha focus mode.
@@ -324,9 +326,9 @@ The Docker Compose network (`perplexica-network`) allows the app container to re
 
 ### External Access
 
-| Service | Default URL | Notes |
-|---|---|---|
-| chutes-search UI | `http://localhost:3000` | Main application |
+| Service          | Default URL             | Notes                               |
+| ---------------- | ----------------------- | ----------------------------------- |
+| chutes-search UI | `http://localhost:3000` | Main application                    |
 | SearxNG (direct) | `http://localhost:4000` | Useful for debugging search results |
 
 ### Port Forwarding
@@ -351,6 +353,7 @@ The application writes structured logs to stdout/stderr with timing information:
 ### Event Log Table
 
 Anonymized application events are stored in the `event_logs` SQLite table. These include:
+
 - Deep research lifecycle events (start, progress, complete, error)
 - Rate limit events (no user queries or IPs logged)
 - Agent execution failures

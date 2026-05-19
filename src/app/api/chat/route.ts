@@ -16,6 +16,8 @@ import {
   getCustomOpenaiApiKey,
   getCustomOpenaiApiUrl,
   getCustomOpenaiModelName,
+  getModelRouterApiUrl,
+  getModelRouterModelName,
 } from '@/lib/config';
 import { searchHandlers } from '@/lib/search';
 import { buildChutesCandidates, LlmCandidate } from '@/lib/llm/fallbacks';
@@ -23,7 +25,9 @@ import { ANON_SESSION_COOKIE_NAME } from '@/lib/auth/constants';
 import { consumeFreeSearchQuota } from '@/lib/rateLimit';
 import { encryptField } from '@/lib/crypto/fieldEncryption';
 import {
+  DEEP_RESEARCH_SUMMARY_MODELS,
   resolveOptimizationModeModelName,
+  SEARCH_FALLBACK_MODELS,
   type SearchModeModelPreferences,
 } from '@/lib/searchModeModels';
 
@@ -406,31 +410,23 @@ export const POST = async (req: Request) => {
         `Using model: ${primaryModelName} (optimizationMode: ${body.optimizationMode})`,
       );
 
-      // Fallback models - prefer models that work reliably with structured prompts.
-      const fallbackModelNames = [
-        'deepseek-ai/DeepSeek-V3',
-        'Qwen/Qwen2.5-72B-Instruct',
-        'NousResearch/Hermes-4-70B',
-      ];
       const chutesCandidates = buildChutesCandidates({
-        modelNames: [primaryModelName, ...fallbackModelNames],
+        modelNames: [primaryModelName, ...SEARCH_FALLBACK_MODELS],
         apiKey,
         baseURL,
+        modelRouterBaseURL: getModelRouterApiUrl(),
+        modelRouterModelName: getModelRouterModelName(),
       });
-      // Deep research MAX summary models - keep a stable set of high-quality fallbacks.
-      const deepResearchSummaryModels = [
-        'deepseek-ai/DeepSeek-V3',
-        'Qwen/Qwen2.5-72B-Instruct',
-        'NousResearch/Hermes-4-70B',
-      ];
       const useDeepResearchSummary =
         body.focusMode === 'deepResearch' && body.deepResearchMode === 'max';
 
       llmCandidates = useDeepResearchSummary
         ? buildChutesCandidates({
-            modelNames: deepResearchSummaryModels,
+            modelNames: [...DEEP_RESEARCH_SUMMARY_MODELS],
             apiKey,
             baseURL,
+            modelRouterBaseURL: getModelRouterApiUrl(),
+            modelRouterModelName: getModelRouterModelName(),
           })
         : chutesCandidates;
 

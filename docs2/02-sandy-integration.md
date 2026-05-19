@@ -80,25 +80,25 @@ sequenceDiagram
 
 The `deepResearchMode` parameter controls the scope and resource allocation of the research:
 
-| Parameter | Light Mode | Max Mode |
-|---|---|---|
-| Max web search sources | 10 | 18 |
-| Max chars per source | 8,000 | 12,000 |
-| Max duration | 12 min | 18 min |
-| Max pages crawled | 22 | 48 |
-| Max crawl depth | 1 (seed pages only) | 2 (follow links) |
-| Max links per page | 8 | 12 |
-| Max pages per host | 4 | 8 |
-| Related queries | 1 | 3 |
-| Summary source limit | 12 | 20 |
+| Parameter              | Light Mode          | Max Mode         |
+| ---------------------- | ------------------- | ---------------- |
+| Max web search sources | 10                  | 18               |
+| Max chars per source   | 8,000               | 12,000           |
+| Max duration           | 12 min              | 18 min           |
+| Max pages crawled      | 22                  | 48               |
+| Max crawl depth        | 1 (seed pages only) | 2 (follow links) |
+| Max links per page     | 8                   | 12               |
+| Max pages per host     | 4                   | 8                |
+| Related queries        | 1                   | 3                |
+| Summary source limit   | 12                  | 20               |
 
 These values are further scaled by the optimization mode:
 
 | Optimization | Scale Factor | Duration Scale | Chars Scale |
-|---|---|---|---|
-| Speed | 0.7x | 0.7x | 0.8x |
-| Balanced | 0.85x | 0.9x | 1.0x |
-| Quality | 1.0x | 1.1x | 1.1x |
+| ------------ | ------------ | -------------- | ----------- |
+| Speed        | 0.7x         | 0.7x           | 0.8x        |
+| Balanced     | 0.85x        | 0.9x           | 1.0x        |
+| Quality      | 1.0x         | 1.1x           | 1.1x        |
 
 ---
 
@@ -106,15 +106,15 @@ These values are further scaled by the optimization mode:
 
 The Sandy client is implemented in `src/lib/sandy.ts` and provides these operations:
 
-| Function | Sandy API Endpoint | Purpose |
-|---|---|---|
-| `createSandbox()` | `POST /api/sandboxes` | Create a new sandbox (agent-ready flavor, priority 1, non-preemptable) |
-| `getSandboxStatus()` | `GET /api/sandboxes/{id}` | Check if sandbox is healthy and ready |
-| `terminateSandbox()` | `POST /api/sandboxes/{id}/terminate` | Destroy the sandbox |
-| `execInSandbox()` | `POST /api/sandboxes/{id}/exec` | Run a shell command inside the sandbox |
-| `writeSandboxFile()` | `POST /api/sandboxes/{id}/files/write` | Write a file into the sandbox filesystem |
-| `readSandboxFile()` | `GET /api/sandboxes/{id}/files/read` | Read a file from the sandbox filesystem |
-| `listSandboxFiles()` | `GET /api/sandboxes/{id}/files/list` | List files in a sandbox directory |
+| Function             | Sandy API Endpoint                     | Purpose                                                                |
+| -------------------- | -------------------------------------- | ---------------------------------------------------------------------- |
+| `createSandbox()`    | `POST /api/sandboxes`                  | Create a new sandbox (agent-ready flavor, priority 1, non-preemptable) |
+| `getSandboxStatus()` | `GET /api/sandboxes/{id}`              | Check if sandbox is healthy and ready                                  |
+| `terminateSandbox()` | `POST /api/sandboxes/{id}/terminate`   | Destroy the sandbox                                                    |
+| `execInSandbox()`    | `POST /api/sandboxes/{id}/exec`        | Run a shell command inside the sandbox                                 |
+| `writeSandboxFile()` | `POST /api/sandboxes/{id}/files/write` | Write a file into the sandbox filesystem                               |
+| `readSandboxFile()`  | `GET /api/sandboxes/{id}/files/read`   | Read a file from the sandbox filesystem                                |
+| `listSandboxFiles()` | `GET /api/sandboxes/{id}/files/list`   | List files in a sandbox directory                                      |
 
 ### Retry and Error Handling
 
@@ -174,7 +174,7 @@ The sandbox is created with these parameters:
 
 ### Warmup Phase
 
-After creation, the collector performs up to 5 warmup attempts with exponential backoff (2s * attempt + random jitter). Each attempt checks:
+After creation, the collector performs up to 5 warmup attempts with exponential backoff (2s \* attempt + random jitter). Each attempt checks:
 
 1. Sandbox health via `GET /api/sandboxes/{id}`.
 2. Command execution via `exec "true"`.
@@ -244,6 +244,7 @@ flowchart TD
 ```
 
 System dependencies installed via apt-get:
+
 - libnss3, libnspr4, libdbus-1-3, libatk1.0-0, libatk-bridge2.0-0
 - libcups2, libdrm2, libxkbcommon0, libatspi2.0-0
 - libxcomposite1, libxdamage1, libxfixes3, libxrandr2, libgbm1, libasound2
@@ -258,14 +259,14 @@ After crawling, the collector can optionally run a Claude Code agent inside the 
 
 ### Configuration
 
-| Environment Variable | Purpose |
-|---|---|
-| `SANDY_AGENT_API_BASE_URL` | Base URL for the agent's LLM API (Janus router) |
-| `SANDY_AGENT_ROUTER_URL` | Alternative name for the router URL |
-| `JANUS_ROUTER_URL` | Third alternative for the router URL |
-| `SANDY_AGENT_MODEL` | Model name (defaults to `janus-router` if a router URL is set) |
-| `SANDY_AGENT_SYSTEM_PROMPT` | Custom system prompt appended to the Claude Code invocation |
-| `JANUS_SYSTEM_PROMPT` | Alternative name for the system prompt |
+| Environment Variable        | Purpose                                                        |
+| --------------------------- | -------------------------------------------------------------- |
+| `SANDY_AGENT_API_BASE_URL`  | Base URL for the agent's LLM API (Janus router)                |
+| `SANDY_AGENT_ROUTER_URL`    | Alternative name for the router URL                            |
+| `JANUS_ROUTER_URL`          | Third alternative for the router URL                           |
+| `SANDY_AGENT_MODEL`         | Model name (defaults to `janus-router` if a router URL is set) |
+| `SANDY_AGENT_SYSTEM_PROMPT` | Custom system prompt appended to the Claude Code invocation    |
+| `JANUS_SYSTEM_PROMPT`       | Alternative name for the system prompt                         |
 
 ### Agent Execution
 
@@ -282,13 +283,13 @@ claude -p --output-format text --no-session-persistence --model "janus-router" \
 
 The agent environment is configured with:
 
-| Variable | Value |
-|---|---|
-| `ANTHROPIC_BASE_URL` | Janus router URL (or `https://claude.chutes.ai`) |
-| `ANTHROPIC_AUTH_TOKEN` | User's access token (from auth session) |
-| `ANTHROPIC_API_KEY` | Same as auth token |
-| `API_TIMEOUT_MS` | 600000 (10 minutes) |
-| `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` | 1 |
+| Variable                                   | Value                                            |
+| ------------------------------------------ | ------------------------------------------------ |
+| `ANTHROPIC_BASE_URL`                       | Janus router URL (or `https://claude.chutes.ai`) |
+| `ANTHROPIC_AUTH_TOKEN`                     | User's access token (from auth session)          |
+| `ANTHROPIC_API_KEY`                        | Same as auth token                               |
+| `API_TIMEOUT_MS`                           | 600000 (10 minutes)                              |
+| `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` | 1                                                |
 
 ### Agent Prompt Structure
 
@@ -334,11 +335,13 @@ The deep research response prompt instructs the LLM to produce:
 
 The report generation uses the same multi-candidate fallback system as regular searches. For Deep Research MAX mode, a separate set of high-quality summary models is used:
 
-- `deepseek-ai/DeepSeek-V3`
-- `Qwen/Qwen2.5-72B-Instruct`
-- `NousResearch/Hermes-4-70B`
+- `moonshotai/Kimi-K2.6-TEE`
+- `Qwen/Qwen3-235B-A22B-Thinking-2507`
+- `zai-org/GLM-5.1-TEE`
+- `deepseek-ai/DeepSeek-V3.2-TEE`
+- `model-router` via Model Router
 
-If a model returns a 429 rate limit error before any output has been streamed, the system retries with the next candidate.
+If a model returns a retryable upstream failure, deleted-model 404, or token-cap error before any output has been streamed, the system retries with the next candidate.
 
 ---
 
@@ -346,16 +349,16 @@ If a model returns a 429 rate limit error before any output has been streamed, t
 
 The Deep Research progress is displayed in the frontend via the `DeepResearchProgress` component (`src/components/DeepResearchProgress.tsx`). Progress steps are rendered in this fixed order:
 
-| Step ID | Label | Description |
-|---|---|---|
-| `search` | Finding sources | Initial SearxNG/Serper web search |
-| `sandbox` | Preparing sandbox | Sandy sandbox creation and warmup |
-| `setup` | Installing Browser | Playwright and Chromium installation |
-| `browser` | Launching browser | Chromium headless launch |
-| `crawl` | Crawling pages | Page-by-page BFS crawling with progress bar |
-| `analysis` | Synthesizing notes | Agent-based source summarization |
-| `finalize` | Drafting report | LLM report generation |
-| `cleanup` | Cleaning up sandbox | Sandbox termination |
+| Step ID    | Label               | Description                                 |
+| ---------- | ------------------- | ------------------------------------------- |
+| `search`   | Finding sources     | Initial SearxNG/Serper web search           |
+| `sandbox`  | Preparing sandbox   | Sandy sandbox creation and warmup           |
+| `setup`    | Installing Browser  | Playwright and Chromium installation        |
+| `browser`  | Launching browser   | Chromium headless launch                    |
+| `crawl`    | Crawling pages      | Page-by-page BFS crawling with progress bar |
+| `analysis` | Synthesizing notes  | Agent-based source summarization            |
+| `finalize` | Drafting report     | LLM report generation                       |
+| `cleanup`  | Cleaning up sandbox | Sandbox termination                         |
 
 Each step shows one of four states: pending, running (with spinner), complete (checkmark), or error (warning icon). The crawl step includes a percentage-based progress bar.
 
@@ -365,16 +368,16 @@ Each step shows one of four states: pending, running (with spinner), complete (c
 
 The deep research system is designed with graceful degradation at every stage:
 
-| Failure Point | Fallback Behavior |
-|---|---|
-| Sandy sandbox creation fails | Fall back to standard web search |
-| Sandbox warmup fails (502s) | Retry 5x, then fall back to web search |
-| Playwright install fails | Return search snippets instead |
-| Browser launch fails | Try local install, then return search snippets |
-| Crawler times out | Return partial results collected so far |
-| Crawler output unreadable | Try chunked read via exec, then use search snippets |
-| Output JSON parse fails | Try chunked re-read, then use search snippets |
-| Agent summarization fails | Use raw crawled content instead |
-| Report LLM rate limited | Retry with fallback model |
+| Failure Point                | Fallback Behavior                                   |
+| ---------------------------- | --------------------------------------------------- |
+| Sandy sandbox creation fails | Fall back to standard web search                    |
+| Sandbox warmup fails (502s)  | Retry 5x, then fall back to web search              |
+| Playwright install fails     | Return search snippets instead                      |
+| Browser launch fails         | Try local install, then return search snippets      |
+| Crawler times out            | Return partial results collected so far             |
+| Crawler output unreadable    | Try chunked read via exec, then use search snippets |
+| Output JSON parse fails      | Try chunked re-read, then use search snippets       |
+| Agent summarization fails    | Use raw crawled content instead                     |
+| Report LLM rate limited      | Retry with fallback model                           |
 
 All errors are logged to the `event_logs` table with anonymized details for debugging.

@@ -2,10 +2,16 @@ import type { BaseChatModel } from '@langchain/core/language_models/chat_models'
 import type { Embeddings } from '@langchain/core/embeddings';
 import { getAvailableEmbeddingModelProviders } from '@/lib/providers';
 import { buildChutesCandidates } from '@/lib/llm/fallbacks';
-import { getCustomOpenaiApiUrl, getCustomOpenaiModelName } from '@/lib/config';
+import {
+  getCustomOpenaiApiUrl,
+  getCustomOpenaiModelName,
+  getModelRouterApiUrl,
+  getModelRouterModelName,
+} from '@/lib/config';
 import { searchHandlers } from '@/lib/search';
 import {
   resolveOptimizationModeModelName,
+  SEARCH_FALLBACK_MODELS,
   type SearchModeModelPreferences,
 } from '@/lib/searchModeModels';
 
@@ -53,15 +59,12 @@ export const POST = async (req: Request) => {
         optimizationMode,
         body.optimizationModels,
       ) || getCustomOpenaiModelName();
-    const fallbackModels = [
-      'deepseek-ai/DeepSeek-V3',
-      'Qwen/Qwen2.5-72B-Instruct',
-      'NousResearch/Hermes-4-70B',
-    ];
     const chutesCandidates = buildChutesCandidates({
-      modelNames: [primaryModel, ...fallbackModels],
+      modelNames: [primaryModel, ...SEARCH_FALLBACK_MODELS],
       apiKey,
       baseURL,
+      modelRouterBaseURL: getModelRouterApiUrl(),
+      modelRouterModelName: getModelRouterModelName(),
     });
 
     const llmCandidates = chutesCandidates;

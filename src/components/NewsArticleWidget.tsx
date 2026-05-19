@@ -10,8 +10,9 @@ interface Article {
 // Helper to get a safe image URL
 const getSafeImageUrl = (thumbnail: string): string => {
   try {
-    const url = new URL(thumbnail);
-    return url.origin + url.pathname + (url.searchParams.get('id') ? `?id=${url.searchParams.get('id')}` : '');
+    const url = new URL(thumbnail.replace(/&amp;/g, '&'));
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+    return url.toString();
   } catch {
     return thumbnail;
   }
@@ -38,7 +39,9 @@ const NewsArticleWidget = () => {
     fetch('/api/discover?mode=preview')
       .then((res) => res.json())
       .then((data) => {
-        const articles = (data.blogs || []).filter((a: Article) => a.title && a.url);
+        const articles = (data.blogs || []).filter(
+          (a: Article) => a.title && a.url,
+        );
         if (articles.length === 0) {
           setError(true);
           setLoading(false);

@@ -11,13 +11,17 @@ import {
   getCustomOpenaiApiKey,
   getCustomOpenaiApiUrl,
   getCustomOpenaiModelName,
+  getModelRouterApiUrl,
+  getModelRouterModelName,
 } from '@/lib/config';
 import { searchHandlers } from '@/lib/search';
 import { buildChutesCandidates, LlmCandidate } from '@/lib/llm/fallbacks';
 import { consumeFreeSearchQuota } from '@/lib/rateLimit';
 import { cookies } from 'next/headers';
 import {
+  DEEP_RESEARCH_SUMMARY_MODELS,
   resolveOptimizationModeModelName,
+  SEARCH_FALLBACK_MODELS,
   type SearchModeModelPreferences,
 } from '@/lib/searchModeModels';
 
@@ -82,15 +86,17 @@ export const POST = async (req: Request) => {
 
     // Effective auth state — cookie session wins; otherwise a Bearer token
     // counts as authenticated for rate-limiting and inference purposes.
-    const authSession = cookieAuthSession ?? (bearerAccessToken
-      ? {
-          accessToken: bearerAccessToken,
-          // Unknown scope/expiry — treat as valid; the LLM call will fail
-          // if the token is rejected by the chutes inference API.
-          scope: null,
-          accessTokenExpiresAt: null,
-        }
-      : null);
+    const authSession =
+      cookieAuthSession ??
+      (bearerAccessToken
+        ? {
+            accessToken: bearerAccessToken,
+            // Unknown scope/expiry — treat as valid; the LLM call will fail
+            // if the token is rejected by the chutes inference API.
+            scope: null,
+            accessTokenExpiresAt: null,
+          }
+        : null);
     const isAuthenticated = !!authSession;
 
     // Deep Research is only available to signed-in users.
@@ -251,31 +257,23 @@ export const POST = async (req: Request) => {
         body.chatModel?.customOpenAIBaseURL || getCustomOpenaiApiUrl();
       const primaryModelName =
         body.chatModel?.name || chatModel || getCustomOpenaiModelName();
-      // Fallback models - prefer models that work reliably with structured prompts.
-      const fallbackModelNames = [
-        'deepseek-ai/DeepSeek-V3',
-        'Qwen/Qwen2.5-72B-Instruct',
-        'NousResearch/Hermes-4-70B',
-      ];
       const chutesCandidates = buildChutesCandidates({
-        modelNames: [primaryModelName, ...fallbackModelNames],
+        modelNames: [primaryModelName, ...SEARCH_FALLBACK_MODELS],
         apiKey,
         baseURL,
+        modelRouterBaseURL: getModelRouterApiUrl(),
+        modelRouterModelName: getModelRouterModelName(),
       });
-      // Deep research MAX summary models - keep a stable set of high-quality fallbacks.
-      const deepResearchSummaryModels = [
-        'deepseek-ai/DeepSeek-V3',
-        'Qwen/Qwen2.5-72B-Instruct',
-        'NousResearch/Hermes-4-70B',
-      ];
       const useDeepResearchSummary =
         body.focusMode === 'deepResearch' && body.deepResearchMode === 'max';
 
       llmCandidates = useDeepResearchSummary
         ? buildChutesCandidates({
-            modelNames: deepResearchSummaryModels,
+            modelNames: [...DEEP_RESEARCH_SUMMARY_MODELS],
             apiKey,
             baseURL,
+            modelRouterBaseURL: getModelRouterApiUrl(),
+            modelRouterModelName: getModelRouterModelName(),
           })
         : chutesCandidates;
       llm = llmCandidates[0]?.model;
