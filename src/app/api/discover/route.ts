@@ -44,6 +44,52 @@ const DISCOVER_PREVIEW_FALLBACK: DiscoverArticle[] = [
   },
 ];
 
+const PREVIEW_SITE_THUMBNAILS: Record<string, string> = {
+  'techcrunch.com':
+    'https://techcrunch.com/wp-content/uploads/2022/12/tc-logo-2021.svg',
+  'venturebeat.com':
+    'https://venturebeat.com/wp-content/themes/vbnews/img/favicon.ico',
+  'bloomberg.com':
+    'https://assets.bwbx.io/images/users/iqjWHBFdfxIU/i5PGsA7G0NRA/v0/1200x630.png',
+  'artnews.com':
+    'https://www.artnews.com/wp-content/themes/vip/pmc-artnews/assets/dist/img/favicon.ico',
+  'artsy.net': 'https://www.artsy.net/images/favicon.ico',
+  'espn.com': 'https://a.espncdn.com/favicon.ico',
+  'hollywoodreporter.com':
+    'https://www.hollywoodreporter.com/wp-content/themes/pmc-hollywood-reporter/assets/app/icons/favicon.ico',
+  'variety.com':
+    'https://variety.com/wp-content/themes/vip/pmc-variety-2020/assets/app/icons/favicon.ico',
+  'wired.com': 'https://www.wired.com/favicon.ico',
+  'arstechnica.com': 'https://cdn.arstechnica.net/favicon.ico',
+  'wsj.com': 'https://www.wsj.com/favicon.ico',
+  'sportsillustrated.com': 'https://www.si.com/favicon.ico',
+  'mit.edu': 'https://web.mit.edu/favicon.ico',
+};
+
+const PREVIEW_HIGH_QUALITY_OVERRIDES: Record<string, string> = {
+  'bloomberg.com':
+    'https://assets.bwbx.io/images/users/iqjWHBFdfxIU/i5PGsA7G0NRA/v0/1200x630.png',
+  'techcrunch.com':
+    'https://techcrunch.com/wp-content/uploads/2022/12/tc-logo-2021.svg',
+};
+
+const applyPreviewFallbackThumbnails = (articles: DiscoverArticle[]) => {
+  articles.forEach((item) => {
+    if (item.thumbnail) return;
+
+    try {
+      const url = new URL(item.url);
+      const domain = url.hostname.replace('www.', '');
+      item.thumbnail =
+        PREVIEW_HIGH_QUALITY_OVERRIDES[domain] ||
+        PREVIEW_SITE_THUMBNAILS[domain] ||
+        `https://${domain}/favicon.ico`;
+    } catch {
+      item.thumbnail = 'https://www.google.com/s2/favicons?domain=chutes.ai&sz=128';
+    }
+  });
+};
+
 // Ensure cache directory exists
 async function ensureCacheDir() {
   if (IS_SERVERLESS) {
@@ -501,71 +547,7 @@ export const GET = async (req: Request) => {
       const randomQuery = selectedTopic.query[Math.floor(Math.random() * selectedTopic.query.length)];
       try {
         data = (await rateLimitedSearchSerper(`${randomQuery} site:${randomLink}`)).results;
-
-        // Fetch OG images for preview mode as well
-        const articlesWithoutThumbnails = data.filter(item => !item.thumbnail);
-        if (articlesWithoutThumbnails.length > 0) {
-          console.log(`[discover] Fetching OG images for preview mode (${articlesWithoutThumbnails.length} articles)`);
-          try {
-            const ogImages = await fetchMultipleOGImages(
-              articlesWithoutThumbnails.map(item => item.url),
-              1 // Single request for preview mode
-            );
-
-            console.log(`[discover] Preview OG image results:`, ogImages);
-
-            data.forEach(item => {
-              const ogImage = ogImages[item.url];
-              if (ogImage) {
-                item.thumbnail = ogImage;
-              }
-            });
-
-            // Robust fallback chain for preview mode
-            const previewSiteThumbnails: Record<string, string> = {
-              'techcrunch.com': 'https://techcrunch.com/wp-content/uploads/2022/12/tc-logo-2021.svg',
-              'venturebeat.com': 'https://venturebeat.com/wp-content/themes/vbnews/img/favicon.ico',
-              'bloomberg.com': 'https://assets.bwbx.io/images/users/iqjWHBFdfxIU/i5PGsA7G0NRA/v0/1200x630.png',
-              'artnews.com': 'https://www.artnews.com/wp-content/themes/vip/pmc-artnews/assets/dist/img/favicon.ico',
-              'artsy.net': 'https://www.artsy.net/images/favicon.ico',
-              'espn.com': 'https://a.espncdn.com/favicon.ico',
-              'hollywoodreporter.com': 'https://www.hollywoodreporter.com/wp-content/themes/pmc-hollywood-reporter/assets/app/icons/favicon.ico',
-              'variety.com': 'https://variety.com/wp-content/themes/vip/pmc-variety-2020/assets/app/icons/favicon.ico',
-              'wired.com': 'https://www.wired.com/favicon.ico',
-              'arstechnica.com': 'https://cdn.arstechnica.net/favicon.ico',
-              'wsj.com': 'https://www.wsj.com/favicon.ico',
-              'sportsillustrated.com': 'https://www.si.com/favicon.ico',
-              'mit.edu': 'https://web.mit.edu/favicon.ico',
-            };
-
-            const previewHighQualityOverrides: Record<string, string> = {
-              'bloomberg.com': 'https://assets.bwbx.io/images/users/iqjWHBFdfxIU/i5PGsA7G0NRA/v0/1200x630.png',
-              'techcrunch.com': 'https://techcrunch.com/wp-content/uploads/2022/12/tc-logo-2021.svg',
-            };
-
-            data.forEach(item => {
-              if (!item.thumbnail) {
-                try {
-                  const url = new URL(item.url);
-                  const domain = url.hostname.replace('www.', '');
-
-                  if (previewHighQualityOverrides[domain]) {
-                    item.thumbnail = previewHighQualityOverrides[domain];
-                  } else if (previewSiteThumbnails[domain]) {
-                    item.thumbnail = previewSiteThumbnails[domain];
-                  } else {
-                    const faviconUrl = `https://${domain}/favicon.ico`;
-                    item.thumbnail = faviconUrl;
-                  }
-                } catch (error) {
-                  item.thumbnail = 'https://via.placeholder.com/150x100?text=Image';
-                }
-              }
-            });
-          } catch (error) {
-            console.warn('[discover] Failed to fetch OG images for preview:', error);
-          }
-        }
+        applyPreviewFallbackThumbnails(data);
       } catch (err) {
         console.warn(`[discover] Failed to fetch preview data:`, err);
         data = [...DISCOVER_PREVIEW_FALLBACK];
