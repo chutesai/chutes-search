@@ -29,7 +29,10 @@ interface chatModel {
   provider: string;
   name: string;
   customOpenAIKey?: string;
-  customOpenAIBaseURL?: string;
+  // SECURITY: customOpenAIBaseURL is intentionally NOT accepted from the request body.
+  // Allowing client-supplied base URLs caused an SSRF that exfiltrated the server's
+  // CHUTES_API_KEY (see bounty report 2026-05-20). The base URL is now always taken
+  // from the CHUTES_API_URL env var via getCustomOpenaiApiUrl().
 }
 
 interface embeddingModel {
@@ -253,8 +256,7 @@ export const POST = async (req: Request) => {
         : isAuthenticated
           ? authSession!.accessToken
           : getCustomOpenaiApiKey();
-      const baseURL =
-        body.chatModel?.customOpenAIBaseURL || getCustomOpenaiApiUrl();
+      const baseURL = getCustomOpenaiApiUrl();
       const primaryModelName =
         body.chatModel?.name || chatModel || getCustomOpenaiModelName();
       const chutesCandidates = buildChutesCandidates({
