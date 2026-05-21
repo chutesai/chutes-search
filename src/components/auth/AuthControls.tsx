@@ -2,37 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { LogIn, LogOut } from 'lucide-react';
-
-type MeResponse = {
-  user: { id: string; username: string | null } | null;
-  scope?: string | null;
-  hasInvoke?: boolean;
-};
+import { useAuthMe } from '@/lib/hooks/useAuthMe';
 
 export default function AuthControls() {
-  const [me, setMe] = useState<MeResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { me, loading } = useAuthMe();
   const [returnTo, setReturnTo] = useState<string>('/');
-
-  useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      setLoading(true);
-      try {
-        const res = await fetch('/api/auth/me', { cache: 'no-store' });
-        const data = (await res.json()) as MeResponse;
-        if (!cancelled) setMe(data);
-      } catch {
-        if (!cancelled) setMe({ user: null });
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     // Avoid Next.js build-time restrictions around useSearchParams().

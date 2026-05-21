@@ -2,31 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { LogIn, LogOut } from 'lucide-react';
-
-type MeResponse = {
-  user: { id: string; username: string | null } | null;
-};
+import { useAuthMe } from '@/lib/hooks/useAuthMe';
 
 export default function AuthIconButton() {
-  const [me, setMe] = useState<MeResponse | null>(null);
+  const { me } = useAuthMe();
   const [returnTo, setReturnTo] = useState<string>('/');
-
-  useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      try {
-        const res = await fetch('/api/auth/me', { cache: 'no-store' });
-        const data = (await res.json()) as MeResponse;
-        if (!cancelled) setMe(data);
-      } catch {
-        if (!cancelled) setMe({ user: null });
-      }
-    };
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     setReturnTo(window.location.pathname + window.location.search);

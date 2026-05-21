@@ -10,7 +10,10 @@
  */
 
 import { type ReadonlyRequestCookies } from 'next/dist/server/web/spec-extension/adapters/request-cookies';
-import { AUTH_SESSION_COOKIE_NAME } from './constants';
+import {
+  AUTH_SESSION_COOKIE_NAME,
+  AUTH_SESSION_MAX_AGE_SECONDS,
+} from './constants';
 import { sealJson, unsealJson } from './seal';
 import { getChutesAuthSecret } from './secret';
 import {
@@ -86,7 +89,7 @@ const SESSION_COOKIE_OPTS = {
   httpOnly: true,
   sameSite: 'lax' as const,
   secure: process.env.NODE_ENV === 'production',
-  maxAge: 30 * 24 * 60 * 60,
+  maxAge: AUTH_SESSION_MAX_AGE_SECONDS,
 };
 
 function setCookie(cookieStore: ReadonlyRequestCookies, value: string) {

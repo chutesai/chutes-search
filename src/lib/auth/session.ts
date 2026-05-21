@@ -11,6 +11,7 @@ import {
   type ChutesIdpTokenResponse,
   type ChutesIdpUserInfo,
 } from './chutesIdp';
+import { AUTH_SESSION_MAX_AGE_SECONDS } from './constants';
 
 export type AuthSession = {
   sessionId: string;
@@ -25,7 +26,7 @@ export type AuthSession = {
   tokenType: string | null;
 };
 
-const SESSION_LIFETIME_SECONDS = 30 * 24 * 60 * 60;
+const SESSION_LIFETIME_SECONDS = AUTH_SESSION_MAX_AGE_SECONDS;
 
 function nowSeconds() {
   return Math.floor(Date.now() / 1000);
@@ -123,10 +124,10 @@ export async function getAuthSessionById(
     return null;
   }
 
-  // Sliding expiration: keep sessions alive for 30 days after last successful usage.
+  // Sliding expiration: keep sessions alive after last successful usage.
   const now = nowSeconds();
   const remaining = row.expiresAt - now;
-  // Avoid writing on every request; bump expiry when less than ~29 days remain.
+  // Avoid writing on every request; bump expiry at most roughly once per day.
   const refreshWindow = SESSION_LIFETIME_SECONDS - 24 * 60 * 60;
   if (remaining < refreshWindow) {
     const nextExpiresAt = now + SESSION_LIFETIME_SECONDS;
