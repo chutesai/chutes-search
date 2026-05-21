@@ -2,7 +2,10 @@ import crypto from 'crypto';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { Embeddings } from '@langchain/core/embeddings';
 import { BaseMessage } from '@langchain/core/messages';
-import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts';
+import {
+  ChatPromptTemplate,
+  MessagesPlaceholder,
+} from '@langchain/core/prompts';
 import { RunnableMap, RunnableSequence } from '@langchain/core/runnables';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 import eventEmitter from 'events';
@@ -14,14 +17,16 @@ import {
   DeepResearchMode,
 } from './deepResearchCollector';
 import { runWebSearch } from './runWebSearch';
-import { isRateLimitError, isRetryableUpstreamError, LlmCandidate } from '@/lib/llm/fallbacks';
+import { isFallbackableUpstreamError, LlmCandidate } from '@/lib/llm/fallbacks';
 import { anonymizeLogText, logEvent, serializeError } from '@/lib/eventLog';
 import type { SearchRequestContext } from '@/lib/search/metaSearchAgent';
 
 const createTimer = (prefix: string) => {
   const start = Date.now();
   return (step: string) => {
-    console.log(`[${prefix}] ${new Date().toISOString()} | +${Date.now() - start}ms | ${step}`);
+    console.log(
+      `[${prefix}] ${new Date().toISOString()} | +${Date.now() - start}ms | ${step}`,
+    );
   };
 };
 
@@ -44,7 +49,11 @@ const lowValueSentencePattern =
   /\b(cookie|privacy|sign in|login|sign up|register|subscribe|newsletter)\b/i;
 
 const buildFocusedExcerpt = (text: string, query: string, maxChars: number) => {
-  const normalized = (text || '').replace(/\r/g, ' ').replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim();
+  const normalized = (text || '')
+    .replace(/\r/g, ' ')
+    .replace(/\n+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (!normalized) return '';
 
   const queryFacets = tokenizeForMatch(query).slice(0, 14);
@@ -61,7 +70,9 @@ const buildFocusedExcerpt = (text: string, query: string, maxChars: number) => {
     .map((unit, index) => {
       const tokens = tokenizeForMatch(unit);
       const tokenSet = new Set(tokens);
-      const facetHits = queryFacets.filter((facet) => tokenSet.has(facet)).length;
+      const facetHits = queryFacets.filter((facet) =>
+        tokenSet.has(facet),
+      ).length;
       let score = facetHits * 2.4;
       score += Math.min(1.2, tokenSet.size / 28);
       if (evidenceSentencePattern.test(unit)) score += 0.8;
@@ -72,11 +83,18 @@ const buildFocusedExcerpt = (text: string, query: string, maxChars: number) => {
     })
     .sort((a, b) => b.score - a.score);
 
-  const selected: Array<{ unit: string; index: number; score: number; tokens: string[] }> = [];
+  const selected: Array<{
+    unit: string;
+    index: number;
+    score: number;
+    tokens: string[];
+  }> = [];
   const selectedTokenSet = new Set<string>();
   for (const candidate of scored) {
     if (selected.length >= 12) break;
-    const novelTokens = candidate.tokens.filter((token) => !selectedTokenSet.has(token)).length;
+    const novelTokens = candidate.tokens.filter(
+      (token) => !selectedTokenSet.has(token),
+    ).length;
     if (selected.length > 0 && novelTokens < 2 && candidate.score < 2.2) {
       continue;
     }
@@ -116,7 +134,11 @@ const processDocs = (docs: Document[], query: string, maxCharsPerDoc: number) =>
     .map((doc, index) => {
       const title = String(doc.metadata.title || 'Untitled source');
       const url = String(doc.metadata.url || '');
-      const body = buildFocusedExcerpt(doc.pageContent || '', query, maxCharsPerDoc);
+      const body = buildFocusedExcerpt(
+        doc.pageContent || '',
+        query,
+        maxCharsPerDoc,
+      );
       return `${index + 1}. ${title}\nURL: ${url}\n${body}`;
     })
     .join('\n\n');
@@ -166,7 +188,10 @@ class DeepResearchAgent {
 
     const run = async () => {
       const emitProgress = (progress: DeepResearchProgress) => {
-        emitter.emit('data', JSON.stringify({ type: 'progress', data: progress }));
+        emitter.emit(
+          'data',
+          JSON.stringify({ type: 'progress', data: progress }),
+        );
       };
 
       logEvent({
@@ -178,7 +203,8 @@ class DeepResearchAgent {
 
       const logProgressEvent = (progress: DeepResearchProgress) => {
         // Keep logs useful but low-volume. Record completion and errors, not every tick.
-        if (progress.status === 'running' || progress.status === 'pending') return;
+        if (progress.status === 'running' || progress.status === 'pending')
+          return;
         logEvent({
           level: progress.status === 'error' ? 'error' : 'info',
           event: `deep_research.progress.${progress.id}`,
@@ -186,7 +212,9 @@ class DeepResearchAgent {
           metadata: {
             status: progress.status,
             percent: progress.percent,
-            detail: progress.detail ? anonymizeLogText(progress.detail) : undefined,
+            detail: progress.detail
+              ? anonymizeLogText(progress.detail)
+              : undefined,
           },
         });
       };
@@ -201,7 +229,12 @@ class DeepResearchAgent {
         };
 
         let docs: Document[] = [];
-        let sources: { title: string; url: string; content: string; description?: string }[] = [];
+        let sources: {
+          title: string;
+          url: string;
+          content: string;
+          description?: string;
+        }[] = [];
 
         try {
           const collected = await runDeepResearchCollector(
@@ -252,18 +285,19 @@ class DeepResearchAgent {
           }));
         }
 
-        const safeDocs = docs.length > 0
-          ? docs
-          : sources.map(
-              (source) =>
-                new Document({
-                  pageContent: source.content || source.description || '',
-                  metadata: {
-                    title: source.title,
-                    url: source.url,
-                  },
-                }),
-            );
+        const safeDocs =
+          docs.length > 0
+            ? docs
+            : sources.map(
+                (source) =>
+                  new Document({
+                    pageContent: source.content || source.description || '',
+                    metadata: {
+                      title: source.title,
+                      url: source.url,
+                    },
+                  }),
+              );
         const docLimitByMode = {
           light: { speed: 8, balanced: 11, quality: 12 },
           max: { speed: 13, balanced: 16, quality: 18 },
@@ -335,10 +369,14 @@ class DeepResearchAgent {
             const chain = RunnableSequence.from([
               RunnableMap.from({
                 systemInstructions: () => systemInstructions,
-                query: (input: { query: string; chat_history: BaseMessage[] }) =>
-                  input.query,
-                chat_history: (input: { query: string; chat_history: BaseMessage[] }) =>
-                  input.chat_history,
+                query: (input: {
+                  query: string;
+                  chat_history: BaseMessage[];
+                }) => input.query,
+                chat_history: (input: {
+                  query: string;
+                  chat_history: BaseMessage[];
+                }) => input.chat_history,
                 date: () => new Date().toISOString(),
                 context: () => context,
               }),
@@ -395,7 +433,7 @@ class DeepResearchAgent {
             return;
           } catch (err: any) {
             const canRetry =
-              (isRateLimitError(err) || isRetryableUpstreamError(err)) &&
+              isFallbackableUpstreamError(err) &&
               !state.hasOutput &&
               i < summaryCandidates.length - 1;
             if (canRetry) {
@@ -412,7 +450,10 @@ class DeepResearchAgent {
                 level: 'warn',
                 event: 'deep_research.retryable_retry',
                 correlationId: runId,
-                metadata: { candidate: candidate.name, next: summaryCandidates[i + 1]?.name },
+                metadata: {
+                  candidate: candidate.name,
+                  next: summaryCandidates[i + 1]?.name,
+                },
               });
               continue;
             }

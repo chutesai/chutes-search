@@ -3,11 +3,17 @@ import generateSuggestions from '@/lib/chains/suggestionGeneratorAgent';
 import {
   getCustomOpenaiApiUrl,
   getCustomOpenaiModelName,
+  getModelRouterApiUrl,
+  getModelRouterModelName,
 } from '@/lib/config';
+import {
+  buildChutesCandidates,
+  runWithLlmCandidates,
+} from '@/lib/llm/fallbacks';
 import { getAvailableChatModelProviders } from '@/lib/providers';
+import { AUXILIARY_LLM_MODELS } from '@/lib/searchModeModels';
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { AIMessage, BaseMessage, HumanMessage } from '@langchain/core/messages';
-import { ChatOpenAI } from '@langchain/openai';
 import { cookies } from 'next/headers';
 
 interface ChatModel {
@@ -67,17 +73,34 @@ export const POST = async (req: Request) => {
           { status: 401 },
         );
       }
-      llm = new ChatOpenAI({
+      const candidates = buildChutesCandidates({
+        modelNames: [
+          body.chatModel?.model || getCustomOpenaiModelName(),
+          ...AUXILIARY_LLM_MODELS,
+        ],
         apiKey: authSession.accessToken,
-        modelName: getCustomOpenaiModelName(),
-        temperature: 0.7,
-        configuration: {
-          baseURL: getCustomOpenaiApiUrl(),
-          defaultHeaders: {
-            'X-Identifier': 'chutes-search',
-          },
+        baseURL: getCustomOpenaiApiUrl(),
+        modelRouterBaseURL: getModelRouterApiUrl(),
+        modelRouterModelName: getModelRouterModelName(),
+      });
+
+      const suggestions = await runWithLlmCandidates(
+        candidates,
+        (candidate) =>
+          generateSuggestions(
+            {
+              chat_history: chatHistory,
+            },
+            candidate.model,
+          ),
+        (_err, candidate, nextCandidate) => {
+          console.warn(
+            `[suggestions] LLM candidate ${candidate.name} failed, retrying with ${nextCandidate.name}`,
+          );
         },
-      }) as unknown as BaseChatModel;
+      );
+
+      return Response.json({ suggestions }, { status: 200 });
     } else if (chatModelProvider && chatModel) {
       llm = chatModel.model;
     }

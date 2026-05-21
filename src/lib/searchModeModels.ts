@@ -13,27 +13,71 @@ export type SearchModeModelPreferenceValues = {
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
 
+// Synced with https://llm.chutes.ai/v1/models on 2026-05-19.
+// Keep these lists intentionally small: they drive user-visible mode defaults
+// and server fallback chains, so deleted model IDs cause production 404s.
+export const LIVE_CHUTES_MODEL_IDS = [
+  'Qwen/Qwen3-32B-TEE',
+  'google/gemma-4-31B-turbo-TEE',
+  'zai-org/GLM-5.1-TEE',
+  'moonshotai/Kimi-K2.5-TEE',
+  'Qwen/Qwen3.5-397B-A17B-TEE',
+  'zai-org/GLM-5-Turbo',
+  'deepseek-ai/DeepSeek-V3.2-TEE',
+  'moonshotai/Kimi-K2.6-TEE',
+  'MiniMaxAI/MiniMax-M2.5-TEE',
+  'zai-org/GLM-5-TEE',
+  'Qwen/Qwen3.6-27B-TEE',
+  'Qwen/Qwen2.5-Coder-32B-Instruct-TEE',
+  'unsloth/Mistral-Nemo-Instruct-2407-TEE',
+  'Qwen/Qwen3-235B-A22B-Thinking-2507',
+] as const;
+
 export const SPEED_MODELS = [
-  'Qwen/Qwen3-Next-80B-A3B-Instruct',
-  'unsloth/gemma-3-27b-it',
-  'unsloth/Mistral-Nemo-Instruct-2407',
-  'XiaomiMiMo/MiMo-V2-Flash-TEE',
-  'openai/gpt-oss-120b-TEE',
-  'chutesai/Mistral-Small-3.2-24B-Instruct-2506',
-  'openai/gpt-oss-20b',
-  'NousResearch/Hermes-4-14B',
+  'google/gemma-4-31B-turbo-TEE',
+  'unsloth/Mistral-Nemo-Instruct-2407-TEE',
+  'Qwen/Qwen3-32B-TEE',
+  'Qwen/Qwen3.6-27B-TEE',
 ] as const;
 
 export const QUALITY_MODELS = [
-  'moonshotai/Kimi-K2.5-TEE',
   'deepseek-ai/DeepSeek-V3.2-TEE',
-  'zai-org/GLM-5-TEE',
+  'Qwen/Qwen3.5-397B-A17B-TEE',
+  'zai-org/GLM-5.1-TEE',
+  'moonshotai/Kimi-K2.6-TEE',
   'MiniMaxAI/MiniMax-M2.5-TEE',
-  'Qwen/Qwen3-VL-235B-A22B-Instruct',
+  'Qwen/Qwen3-235B-A22B-Thinking-2507',
+  'moonshotai/Kimi-K2.5-TEE',
+  'zai-org/GLM-5-TEE',
+  'zai-org/GLM-5-Turbo',
 ] as const;
 
 export const DEFAULT_SPEED_MODEL = SPEED_MODELS[0];
 export const DEFAULT_QUALITY_MODEL = QUALITY_MODELS[0];
+export const DEFAULT_CHUTES_MODEL = DEFAULT_QUALITY_MODEL;
+
+export const SEARCH_FALLBACK_MODELS = [
+  'google/gemma-4-31B-turbo-TEE',
+  'zai-org/GLM-5.1-TEE',
+  'deepseek-ai/DeepSeek-V3.2-TEE',
+  'MiniMaxAI/MiniMax-M2.5-TEE',
+  'Qwen/Qwen3.5-397B-A17B-TEE',
+  'moonshotai/Kimi-K2.5-TEE',
+] as const;
+
+export const DEEP_RESEARCH_SUMMARY_MODELS = [
+  'deepseek-ai/DeepSeek-V3.2-TEE',
+  'zai-org/GLM-5.1-TEE',
+  'moonshotai/Kimi-K2.6-TEE',
+  'Qwen/Qwen3-235B-A22B-Thinking-2507',
+] as const;
+
+export const AUXILIARY_LLM_MODELS = [
+  'google/gemma-4-31B-turbo-TEE',
+  'unsloth/Mistral-Nemo-Instruct-2407-TEE',
+  'zai-org/GLM-5.1-TEE',
+  'deepseek-ai/DeepSeek-V3.2-TEE',
+] as const;
 
 export const SEARCH_MODE_MODEL_STORAGE_KEYS = {
   speed: 'searchMode.speedModel',

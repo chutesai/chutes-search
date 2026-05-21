@@ -51,7 +51,6 @@ const Searchvideos = ({
             const chatModelProvider = localStorage.getItem('chatModelProvider');
             const chatModel = localStorage.getItem('chatModel');
 
-            const customOpenAIBaseURL = localStorage.getItem('openAIBaseURL');
             const customOpenAIKey = localStorage.getItem('openAIApiKey');
 
             const res = await fetch(`/api/videos`, {
@@ -66,7 +65,6 @@ const Searchvideos = ({
                   provider: chatModelProvider,
                   model: chatModel,
                   ...(chatModelProvider === 'custom_openai' && {
-                    customOpenAIBaseURL: customOpenAIBaseURL,
                     customOpenAIKey: customOpenAIKey,
                   }),
                 },

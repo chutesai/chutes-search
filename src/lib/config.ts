@@ -1,4 +1,5 @@
 import toml from '@iarna/toml';
+import { DEFAULT_CHUTES_MODEL } from './searchModeModels';
 
 // Use dynamic imports for Node.js modules to prevent client-side errors
 let fs: any;
@@ -119,7 +120,8 @@ export const getSearxngApiEndpoint = () =>
       .split(',')
       .map((u) => u.trim())
       .filter((u) => /^https?:\/\//.test(u));
-    const single = process.env.SEARXNG_API_URL || loadConfig().API_ENDPOINTS.SEARXNG || '';
+    const single =
+      process.env.SEARXNG_API_URL || loadConfig().API_ENDPOINTS.SEARXNG || '';
     const all = [...urlsFromEnv, ...(single ? [single] : [])];
     if (all.length === 0) return '';
     const idx = Math.floor(Math.random() * all.length);
@@ -131,7 +133,8 @@ export const getSearxngApiEndpoints = () => {
     .split(',')
     .map((u) => u.trim())
     .filter((u) => /^https?:\/\//.test(u));
-  const single = process.env.SEARXNG_API_URL || loadConfig().API_ENDPOINTS.SEARXNG || '';
+  const single =
+    process.env.SEARXNG_API_URL || loadConfig().API_ENDPOINTS.SEARXNG || '';
   const all = [...urlsFromEnv, ...(single ? [single] : [])];
   return all;
 };
@@ -149,13 +152,23 @@ export const getAimlApiKey = () =>
   process.env.AIMLAPI_API_KEY || loadConfig().MODELS.AIMLAPI.API_KEY;
 
 export const getCustomOpenaiApiKey = () =>
-  (process.env.CHUTES_API_KEY || loadConfig().MODELS.CUSTOM_OPENAI.API_KEY);
+  process.env.CHUTES_API_KEY || loadConfig().MODELS.CUSTOM_OPENAI.API_KEY;
 
 export const getCustomOpenaiApiUrl = () =>
-  (process.env.CHUTES_API_URL || loadConfig().MODELS.CUSTOM_OPENAI.API_URL || 'https://llm.chutes.ai/v1');
+  process.env.CHUTES_API_URL ||
+  loadConfig().MODELS.CUSTOM_OPENAI.API_URL ||
+  'https://llm.chutes.ai/v1';
 
 export const getCustomOpenaiModelName = () =>
-  (process.env.CHUTES_MODEL_NAME || loadConfig().MODELS.CUSTOM_OPENAI.MODEL_NAME || 'deepseek-ai/DeepSeek-V3.1');
+  process.env.CHUTES_MODEL_NAME ||
+  loadConfig().MODELS.CUSTOM_OPENAI.MODEL_NAME ||
+  DEFAULT_CHUTES_MODEL;
+
+export const getModelRouterApiUrl = () =>
+  process.env.MODEL_ROUTER_API_URL || 'https://model-router-ten.vercel.app/v1';
+
+export const getModelRouterModelName = () =>
+  process.env.MODEL_ROUTER_MODEL_NAME || 'model-router';
 
 export const getLMStudioApiEndpoint = () =>
   process.env.LM_STUDIO_API_URL || loadConfig().MODELS.LM_STUDIO.API_URL;

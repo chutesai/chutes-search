@@ -11,6 +11,7 @@ import {
   getCustomOpenaiApiUrl,
   getCustomOpenaiModelName,
 } from '../config';
+import { LIVE_CHUTES_MODEL_IDS } from '../searchModeModels';
 import { ChatOpenAI } from '@langchain/openai';
 import {
   loadOllamaChatModels,
@@ -111,28 +112,41 @@ export const getAvailableChatModelProviders = async () => {
   const customOpenAiApiKey = getCustomOpenaiApiKey();
   const customOpenAiApiUrl = getCustomOpenaiApiUrl();
   const customOpenAiModelName = getCustomOpenaiModelName();
+  const liveChutesModels = new Set<string>(LIVE_CHUTES_MODEL_IDS);
 
-  models['custom_openai'] = {
-    ...(customOpenAiApiKey && customOpenAiApiUrl && customOpenAiModelName
-      ? {
-          [customOpenAiModelName]: {
-            displayName: customOpenAiModelName,
-            model: new ChatOpenAI({
-              apiKey: customOpenAiApiKey,
-              modelName: customOpenAiModelName,
-              temperature: 0.7,
-              maxRetries: 1,
-              configuration: {
-                baseURL: customOpenAiApiUrl,
-                defaultHeaders: {
-                  'X-Identifier': 'chutes-search',
+  const orderedCustomOpenAiModels = [
+    customOpenAiModelName,
+    ...LIVE_CHUTES_MODEL_IDS,
+  ].filter((modelName, index, values) => {
+    if (!modelName || !liveChutesModels.has(modelName)) {
+      return false;
+    }
+    return values.indexOf(modelName) === index;
+  });
+
+  models['custom_openai'] =
+    customOpenAiApiKey && customOpenAiApiUrl
+      ? Object.fromEntries(
+          orderedCustomOpenAiModels.map((modelName) => [
+            modelName,
+            {
+              displayName: modelName,
+              model: new ChatOpenAI({
+                apiKey: customOpenAiApiKey,
+                modelName,
+                temperature: 0.7,
+                maxRetries: 1,
+                configuration: {
+                  baseURL: customOpenAiApiUrl,
+                  defaultHeaders: {
+                    'X-Identifier': 'chutes-search',
+                  },
                 },
-              },
-            }) as unknown as BaseChatModel,
-          },
-        }
-      : {}),
-  };
+              }) as unknown as BaseChatModel,
+            },
+          ]),
+        )
+      : {};
 
   return models;
 };

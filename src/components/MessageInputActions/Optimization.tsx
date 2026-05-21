@@ -8,6 +8,10 @@ import {
 } from '@headlessui/react';
 import { Fragment } from 'react';
 import { useChat } from '@/lib/hooks/useChat';
+import {
+  DEFAULT_QUALITY_MODEL,
+  DEFAULT_SPEED_MODEL,
+} from '@/lib/searchModeModels';
 
 const OptimizationModes = [
   {
@@ -15,7 +19,7 @@ const OptimizationModes = [
     title: 'Speed',
     description: 'Prioritize speed and get the quickest possible answer.',
     icon: <Zap size={20} className="text-[#FF9800]" />,
-    model: 'Qwen/Qwen3-Next-80B-A3B-Instruct',
+    model: DEFAULT_SPEED_MODEL,
   },
   {
     key: 'balanced', // keep identifier as 'balanced' but label it as Quality
@@ -27,7 +31,7 @@ const OptimizationModes = [
         className="text-[#2196F3] dark:text-[#BBDEFB] fill-[#BBDEFB] dark:fill-[#2196F3]"
       />
     ),
-    model: 'moonshotai/Kimi-K2.5-TEE',
+    model: DEFAULT_QUALITY_MODEL,
   },
 ];
 
@@ -43,11 +47,7 @@ const Optimization = ({
   const { optimizationMode, setOptimizationMode } = useChat();
 
   return (
-    <Popover
-      className={cn(
-        'relative w-auto',
-      )}
-    >
+    <Popover className={cn('relative w-auto')}>
       <PopoverButton
         type="button"
         aria-label={`Response mode: ${OptimizationModes.find((mode) => mode.key === optimizationMode)?.title ?? 'Speed'}`}
@@ -65,8 +65,9 @@ const Optimization = ({
             <>
               <p className="text-xs font-medium">
                 {
-                  OptimizationModes.find((mode) => mode.key === optimizationMode)
-                    ?.title
+                  OptimizationModes.find(
+                    (mode) => mode.key === optimizationMode,
+                  )?.title
                 }
               </p>
               <ChevronDown size={20} />

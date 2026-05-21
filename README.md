@@ -56,7 +56,8 @@ SERPER_API_KEY=          # Serper.dev API key for web search
 # Chutes AI (LLM inference)
 CHUTES_API_KEY=          # Chutes API key (used for anonymous/free searches)
 CHUTES_API_URL=          # e.g. https://llm.chutes.ai/v1
-CHUTES_MODEL_NAME=       # e.g. deepseek-ai/DeepSeek-V3.1
+CHUTES_MODEL_NAME=       # e.g. deepseek-ai/DeepSeek-V3.2-TEE
+MODEL_ROUTER_API_URL=    # optional fallback, defaults to https://model-router-ten.vercel.app/v1
 
 # Chutes IDP (OAuth, optional)
 CHUTES_IDP_CLIENT_ID=    # OAuth client ID

@@ -24,13 +24,15 @@ import formatChatHistoryAsString from '../utils/formatHistory';
 import eventEmitter from 'events';
 import { StreamEvent } from '@langchain/core/tracers/log_stream';
 import { runWebSearch } from './runWebSearch';
-import { isRateLimitError, isRetryableUpstreamError, LlmCandidate } from '@/lib/llm/fallbacks';
+import { isFallbackableUpstreamError, LlmCandidate } from '@/lib/llm/fallbacks';
 
 // Timing utility for performance debugging
 const createTimer = (prefix: string) => {
   const start = Date.now();
   return (step: string) => {
-    console.log(`[${prefix}] ${new Date().toISOString()} | +${Date.now() - start}ms | ${step}`);
+    console.log(
+      `[${prefix}] ${new Date().toISOString()} | +${Date.now() - start}ms | ${step}`,
+    );
   };
 };
 
@@ -86,7 +88,7 @@ class MetaSearchAgent implements MetaSearchAgentType {
       RunnableLambda.from(async (input: string) => {
         const timer = createTimer('retriever');
         timer('LLM query analysis complete, parsing result');
-        
+
         const linksOutputParser = new LineListOutputParser({
           key: 'links',
         });
@@ -234,7 +236,9 @@ class MetaSearchAgent implements MetaSearchAgentType {
 
           timer(`Starting web search (len=${question.length})`);
           const res = await runWebSearch(question, this.config.activeEngines);
-          timer(`Web search complete: ${res.results?.length || 0} results, engine: ${res.engine}`);
+          timer(
+            `Web search complete: ${res.results?.length || 0} results, engine: ${res.engine}`,
+          );
 
           if (res.error && (res.results?.length ?? 0) === 0) {
             throw new Error(res.error);
@@ -486,7 +490,12 @@ class MetaSearchAgent implements MetaSearchAgentType {
   private async streamChainEvents(
     stream: AsyncGenerator<StreamEvent, any, any>,
     emitter: eventEmitter,
-    state: { hasResponse: boolean; completed: boolean; sourcesEmitted: boolean; sourcesCount: number },
+    state: {
+      hasResponse: boolean;
+      completed: boolean;
+      sourcesEmitted: boolean;
+      sourcesCount: number;
+    },
   ) {
     for await (const event of stream) {
       if (
@@ -514,7 +523,10 @@ class MetaSearchAgent implements MetaSearchAgentType {
         );
         state.hasResponse = true;
       }
-      if (event.event === 'on_chain_end' && event.name === 'FinalResponseGenerator') {
+      if (
+        event.event === 'on_chain_end' &&
+        event.name === 'FinalResponseGenerator'
+      ) {
         state.completed = true;
         return;
       }
@@ -543,7 +555,12 @@ class MetaSearchAgent implements MetaSearchAgentType {
     const run = async () => {
       for (let i = 0; i < candidates.length; i += 1) {
         const candidate = candidates[i];
-        const state = { hasResponse: false, completed: false, sourcesEmitted: false, sourcesCount: 0 };
+        const state = {
+          hasResponse: false,
+          completed: false,
+          sourcesEmitted: false,
+          sourcesCount: 0,
+        };
 
         try {
           timer(`Creating answering chain (${candidate.name})`);
@@ -573,7 +590,7 @@ class MetaSearchAgent implements MetaSearchAgentType {
           return;
         } catch (err: any) {
           const canRetry =
-            (isRateLimitError(err) || isRetryableUpstreamError(err)) &&
+            isFallbackableUpstreamError(err) &&
             !state.hasResponse &&
             i < candidates.length - 1;
           if (canRetry) {

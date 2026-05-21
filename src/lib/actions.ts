@@ -5,7 +5,6 @@ export const getSuggestions = async (chatHisory: Message[]) => {
   const chatModelProvider = localStorage.getItem('chatModelProvider');
 
   const customOpenAIKey = localStorage.getItem('openAIApiKey');
-  const customOpenAIBaseURL = localStorage.getItem('openAIBaseURL');
 
   const res = await fetch(`/api/suggestions`, {
     method: 'POST',
@@ -19,7 +18,6 @@ export const getSuggestions = async (chatHisory: Message[]) => {
         model: chatModel,
         ...(chatModelProvider === 'custom_openai' && {
           customOpenAIKey,
-          customOpenAIBaseURL,
         }),
       },
     }),

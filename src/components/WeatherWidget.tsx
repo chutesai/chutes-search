@@ -1,6 +1,12 @@
 import { Cloud, Sun, CloudRain, CloudSnow, Wind } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+const DEFAULT_LOCATION = {
+  latitude: 40.7128,
+  longitude: -74.006,
+  city: 'New York',
+};
+
 const WeatherWidget = () => {
   const [data, setData] = useState({
     temperature: 0,
@@ -17,14 +23,25 @@ const WeatherWidget = () => {
 
   useEffect(() => {
     const getApproxLocation = async () => {
-      const res = await fetch('https://ipwhois.app/json/');
-      const data = await res.json();
+      try {
+        const res = await fetch('https://ipwhois.app/json/');
+        if (!res.ok) return DEFAULT_LOCATION;
+        const data = await res.json();
+        const latitude = Number(data.latitude);
+        const longitude = Number(data.longitude);
 
-      return {
-        latitude: data.latitude,
-        longitude: data.longitude,
-        city: data.city,
-      };
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+          return DEFAULT_LOCATION;
+        }
+
+        return {
+          latitude,
+          longitude,
+          city: data.city || DEFAULT_LOCATION.city,
+        };
+      } catch {
+        return DEFAULT_LOCATION;
+      }
     };
 
     const getLocation = async (
@@ -87,7 +104,6 @@ const WeatherWidget = () => {
       const data = await res.json();
 
       if (res.status !== 200) {
-        console.error('Error fetching weather data');
         setLoading(false);
         return;
       }
@@ -116,10 +132,16 @@ const WeatherWidget = () => {
   return (
     <div
       className={`bg-light-secondary dark:bg-dark-secondary rounded-xl border border-light-200 dark:border-dark-200 shadow-sm flex flex-row items-center w-full h-24 min-h-[96px] max-h-[96px] px-3 py-2 gap-3 transition-colors duration-200 ${
-        loading ? 'cursor-not-allowed opacity-75' : 'cursor-pointer hover:bg-light-100 dark:hover:bg-dark-100'
+        loading
+          ? 'cursor-not-allowed opacity-75'
+          : 'cursor-pointer hover:bg-light-100 dark:hover:bg-dark-100'
       }`}
       onClick={handleWeatherClick}
-      title={loading ? 'Loading weather data...' : `Click to search for weather and news in ${data.location}`}
+      title={
+        loading
+          ? 'Loading weather data...'
+          : `Click to search for weather and news in ${data.location}`
+      }
       role="button"
       tabIndex={loading ? -1 : 0}
       onKeyDown={(e) => {
