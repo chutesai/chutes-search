@@ -12,7 +12,8 @@
 import { type ReadonlyRequestCookies } from 'next/dist/server/web/spec-extension/adapters/request-cookies';
 import {
   AUTH_SESSION_COOKIE_NAME,
-  AUTH_SESSION_MAX_AGE_SECONDS,
+  COOKIE_SESSION_PREFIX,
+  getAuthSessionCookieMaxAge,
 } from './constants';
 import { sealJson, unsealJson } from './seal';
 import { getChutesAuthSecret } from './secret';
@@ -27,8 +28,6 @@ import {
   upsertUserFromUserInfo,
   createAuthSession as dbCreateAuthSession,
 } from './session';
-
-export const COOKIE_SESSION_PREFIX = 'cc5_';
 
 type CookieSessionPayload = {
   sid: string;
@@ -89,14 +88,16 @@ const SESSION_COOKIE_OPTS = {
   httpOnly: true,
   sameSite: 'lax' as const,
   secure: process.env.NODE_ENV === 'production',
-  maxAge: AUTH_SESSION_MAX_AGE_SECONDS,
 };
 
 function setCookie(cookieStore: ReadonlyRequestCookies, value: string) {
   (cookieStore as any).set(
     AUTH_SESSION_COOKIE_NAME,
     value,
-    SESSION_COOKIE_OPTS,
+    {
+      ...SESSION_COOKIE_OPTS,
+      maxAge: getAuthSessionCookieMaxAge(value),
+    },
   );
 }
 

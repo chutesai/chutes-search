@@ -6,6 +6,7 @@ const pkce = require('./pkce.ts');
 const seal = require('./seal.ts');
 const req = require('./request.ts');
 const idp = require('./chutesIdp.ts');
+const constants = require('./constants.ts');
 
 describe('base64url', () => {
   it('roundtrips bytes', () => {
@@ -77,3 +78,18 @@ describe('authorization url', () => {
   });
 });
 
+describe('auth session cookie lifetime', () => {
+  it('keeps DB-backed session ids long-lived', () => {
+    assert.equal(
+      constants.getAuthSessionCookieMaxAge('session-id'),
+      constants.AUTH_SESSION_MAX_AGE_SECONDS,
+    );
+  });
+
+  it('keeps encrypted fallback token cookies short-lived', () => {
+    assert.equal(
+      constants.getAuthSessionCookieMaxAge(`${constants.COOKIE_SESSION_PREFIX}sealed`),
+      constants.AUTH_FALLBACK_SESSION_MAX_AGE_SECONDS,
+    );
+  });
+});

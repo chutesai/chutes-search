@@ -7,9 +7,9 @@ import {
 } from '@/lib/auth/chutesIdp';
 import {
   ANON_SESSION_COOKIE_NAME,
-  AUTH_SESSION_MAX_AGE_SECONDS,
   AUTH_SESSION_COOKIE_NAME,
   OAUTH_STATE_COOKIE_NAME,
+  getAuthSessionCookieMaxAge,
 } from '@/lib/auth/constants';
 import { createSessionAndSeal } from '@/lib/auth/cookieSession';
 import { getRequestOrigin, getSafeReturnTo } from '@/lib/auth/request';
@@ -86,7 +86,7 @@ export const GET = async (req: Request) => {
       httpOnly: true,
       sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',
-      maxAge: AUTH_SESSION_MAX_AGE_SECONDS,
+      maxAge: getAuthSessionCookieMaxAge(sealedSession),
     });
 
     // Clear one-time OAuth cookie.
