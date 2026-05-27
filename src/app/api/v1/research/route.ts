@@ -10,6 +10,7 @@ import {
 } from '@/lib/config';
 import { searchHandlers } from '@/lib/search';
 import {
+  resolveOptimizationModeMaxTokens,
   resolveOptimizationModeModelName,
   SEARCH_FALLBACK_MODELS,
   type SearchModeModelPreferences,
@@ -65,6 +66,10 @@ export const POST = async (req: Request) => {
       baseURL,
       modelRouterBaseURL: getModelRouterApiUrl(),
       modelRouterModelName: getModelRouterModelName(),
+      maxTokens: resolveOptimizationModeMaxTokens(optimizationMode, {
+        focusMode: 'deepResearch',
+        deepResearchMode: mode,
+      }),
     });
 
     const llmCandidates = chutesCandidates;

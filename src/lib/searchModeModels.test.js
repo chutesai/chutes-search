@@ -38,6 +38,28 @@ describe('search mode model preferences', () => {
     );
   });
 
+  it('caps response tokens by optimization mode while preserving deep research room', () => {
+    assert.equal(
+      searchModeModels.resolveOptimizationModeMaxTokens('speed'),
+      800,
+    );
+    assert.equal(
+      searchModeModels.resolveOptimizationModeMaxTokens('balanced'),
+      1200,
+    );
+    assert.equal(
+      searchModeModels.resolveOptimizationModeMaxTokens('quality'),
+      1600,
+    );
+    assert.equal(
+      searchModeModels.resolveOptimizationModeMaxTokens('speed', {
+        focusMode: 'deepResearch',
+        deepResearchMode: 'max',
+      }),
+      3200,
+    );
+  });
+
   it('only exposes model choices that are present in the live Chutes catalog snapshot', () => {
     const liveModels = new Set(searchModeModels.LIVE_CHUTES_MODEL_IDS);
     const configuredModels = [

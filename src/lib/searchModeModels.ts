@@ -133,3 +133,19 @@ export function resolveOptimizationModeModelName(
 
   return sanitizeSearchModeModel('quality', preferences?.quality);
 }
+
+export function resolveOptimizationModeMaxTokens(
+  optimizationMode: SearchOptimizationMode,
+  options?: {
+    focusMode?: string;
+    deepResearchMode?: 'light' | 'max';
+  },
+): number {
+  if (options?.focusMode === 'deepResearch') {
+    return options.deepResearchMode === 'max' ? 3200 : 2200;
+  }
+
+  if (optimizationMode === 'speed') return 800;
+  if (optimizationMode === 'balanced') return 1200;
+  return 1600;
+}

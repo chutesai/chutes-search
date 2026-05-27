@@ -26,6 +26,7 @@ import { consumeFreeSearchQuota } from '@/lib/rateLimit';
 import { encryptField } from '@/lib/crypto/fieldEncryption';
 import {
   DEEP_RESEARCH_SUMMARY_MODELS,
+  resolveOptimizationModeMaxTokens,
   resolveOptimizationModeModelName,
   SEARCH_FALLBACK_MODELS,
   type SearchModeModelPreferences,
@@ -410,12 +411,20 @@ export const POST = async (req: Request) => {
         `Using model: ${primaryModelName} (optimizationMode: ${body.optimizationMode})`,
       );
 
+      const maxTokens = resolveOptimizationModeMaxTokens(
+        body.optimizationMode,
+        {
+          focusMode: body.focusMode,
+          deepResearchMode: body.deepResearchMode,
+        },
+      );
       const chutesCandidates = buildChutesCandidates({
         modelNames: [primaryModelName, ...SEARCH_FALLBACK_MODELS],
         apiKey,
         baseURL,
         modelRouterBaseURL: getModelRouterApiUrl(),
         modelRouterModelName: getModelRouterModelName(),
+        maxTokens,
       });
       const useDeepResearchSummary =
         body.focusMode === 'deepResearch' && body.deepResearchMode === 'max';
@@ -427,6 +436,7 @@ export const POST = async (req: Request) => {
             baseURL,
             modelRouterBaseURL: getModelRouterApiUrl(),
             modelRouterModelName: getModelRouterModelName(),
+            maxTokens,
           })
         : chutesCandidates;
 
