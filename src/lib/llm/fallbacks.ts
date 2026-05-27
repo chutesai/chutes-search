@@ -38,6 +38,7 @@ const buildCandidate = ({
     modelName,
     temperature,
     maxRetries,
+    streamUsage: false,
     configuration: {
       baseURL,
       defaultHeaders: {

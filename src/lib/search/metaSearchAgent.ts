@@ -36,6 +36,51 @@ const createTimer = (prefix: string) => {
   };
 };
 
+let suppressLangChainChunkWarningInstalled = false;
+const suppressLangChainChunkWarnings = () => {
+  if (suppressLangChainChunkWarningInstalled) return;
+  suppressLangChainChunkWarningInstalled = true;
+
+  const originalWarn = console.warn.bind(console);
+  console.warn = (...args: unknown[]) => {
+    const first = args[0];
+    if (
+      typeof first === 'string' &&
+      first.includes('already exists in this message chunk') &&
+      first.includes('unsupported type')
+    ) {
+      return;
+    }
+
+    originalWarn(...args);
+  };
+};
+
+export const extractStreamText = (chunk: unknown): string => {
+  if (typeof chunk === 'string') return chunk;
+  if (chunk == null) return '';
+
+  const content = (chunk as any).content ?? chunk;
+  if (typeof content === 'string') return content;
+
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === 'string') return part;
+        if (typeof part?.text === 'string') return part.text;
+        if (typeof part?.content === 'string') return part.content;
+        return '';
+      })
+      .join('');
+  }
+
+  if (typeof (content as any)?.text === 'string') {
+    return (content as any).text;
+  }
+
+  return '';
+};
+
 export type SearchRequestContext = {
   userAccessToken?: string;
 };
@@ -517,9 +562,12 @@ class MetaSearchAgent implements MetaSearchAgentType {
         event.event === 'on_chain_stream' &&
         event.name === 'FinalResponseGenerator'
       ) {
+        const text = extractStreamText(event.data.chunk);
+        if (!text) continue;
+
         emitter.emit(
           'data',
-          JSON.stringify({ type: 'response', data: event.data.chunk }),
+          JSON.stringify({ type: 'response', data: text }),
         );
         state.hasResponse = true;
       }
@@ -545,6 +593,8 @@ class MetaSearchAgent implements MetaSearchAgentType {
     llmCandidates?: LlmCandidate[],
     _requestContext?: SearchRequestContext,
   ) {
+    suppressLangChainChunkWarnings();
+
     const emitter = new eventEmitter();
     const timer = createTimer('searchAndAnswer');
     const candidates =
@@ -586,6 +636,17 @@ class MetaSearchAgent implements MetaSearchAgentType {
           timer(`Stream events started (${candidate.name})`);
 
           await this.streamChainEvents(stream, emitter, state);
+          if (!state.hasResponse) {
+            if (i < candidates.length - 1) {
+              timer(
+                `Empty response from ${candidate.name}, retrying with ${candidates[i + 1].name}`,
+              );
+              continue;
+            }
+
+            throw new Error('The selected model returned an empty response.');
+          }
+
           emitter.emit('end');
           return;
         } catch (err: any) {
