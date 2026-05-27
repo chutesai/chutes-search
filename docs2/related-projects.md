@@ -129,4 +129,4 @@ flowchart TB
 | LLM inference (search) | Chutes LLM API | OpenAI-compatible REST API |
 | Deep Research crawling | Sandy | REST API (create, exec, files, terminate) |
 | Agent summarization | Sandy + Janus Router | Claude Code CLI in sandbox, routed through Janus |
-| Web search | SearxNG / Serper | REST API (JSON format) |
+| Web search | SearxNG / Desearch | REST API (JSON format) |

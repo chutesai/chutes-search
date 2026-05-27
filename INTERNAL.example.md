@@ -28,7 +28,8 @@ Configure these via your hosting provider / secret manager. Values shown here ar
 
 ### Web Search
 
-- `SERPER_API_KEY` (optional but recommended): used for Serper search fallback.
+- `DESEARCH_API_KEY` (required for production web search): used for Desearch search fallback.
+- `SERPER_API_KEY` (optional): used only for image search.
 - `SEARXNG_API_URL` / `SEARXNG_API_URLS` (optional): used for SearxNG search.
 
 ### Deep Research (Sandbox)
@@ -53,4 +54,3 @@ Server-side enforcement:
 
 Client-side enforcement:
 - LocalStorage counter (best-effort UX gate).
-

@@ -3,7 +3,7 @@ const { test } = require('node:test');
 const { runWebSearch } = require('./runWebSearch');
 
 test('prefers searxng when it returns results', async () => {
-  let serperCalled = false;
+  let desearchCalled = false;
 
   const res = await runWebSearch('query', ['web'], {
     searchSearxngFn: async () => ({
@@ -17,8 +17,8 @@ test('prefers searxng when it returns results', async () => {
       ],
       suggestions: ['suggestion'],
     }),
-    searchSerperFn: async () => {
-      serperCalled = true;
+    searchDesearchFn: async () => {
+      desearchCalled = true;
       return { results: [], suggestions: [] };
     },
   });
@@ -28,47 +28,47 @@ test('prefers searxng when it returns results', async () => {
   assert.equal(res.results[0].url, 'https://example.com');
   assert.equal(res.results[0].thumbnail, 'thumb.png');
   assert.deepEqual(res.suggestions, ['suggestion']);
-  assert.equal(serperCalled, false);
+  assert.equal(desearchCalled, false);
 });
 
-test('falls back to serper when searxng has no results', async () => {
+test('falls back to desearch when searxng has no results', async () => {
   const res = await runWebSearch('query', [], {
     searchSearxngFn: async () => ({
       results: [],
       suggestions: ['searx-hint'],
     }),
-    searchSerperFn: async () => ({
+    searchDesearchFn: async () => ({
       results: [
-        { title: 'Serper hit', url: 'https://serper.dev', content: 'body' },
+        { title: 'Desearch hit', url: 'https://desearch.ai', content: 'body' },
       ],
-      suggestions: ['serper-hint'],
+      suggestions: ['desearch-hint'],
     }),
   });
 
-  assert.equal(res.engine, 'serper');
+  assert.equal(res.engine, 'desearch');
   assert.equal(res.results.length, 1);
-  assert.equal(res.results[0].title, 'Serper hit');
+  assert.equal(res.results[0].title, 'Desearch hit');
   assert.deepEqual(
     res.suggestions.sort(),
-    ['searx-hint', 'serper-hint'].sort(),
+    ['searx-hint', 'desearch-hint'].sort(),
   );
 });
 
-test('falls back to serper when searxng throws', async () => {
-  let serperCalls = 0;
+test('falls back to desearch when searxng throws', async () => {
+  let desearchCalls = 0;
 
   const res = await runWebSearch('query', [], {
     searchSearxngFn: async () => {
       throw new Error('boom');
     },
-    searchSerperFn: async () => {
-      serperCalls += 1;
+    searchDesearchFn: async () => {
+      desearchCalls += 1;
       return { results: [], suggestions: [] };
     },
   });
 
-  assert.equal(res.engine, 'serper');
-  assert.equal(serperCalls, 1);
+  assert.equal(res.engine, 'desearch');
+  assert.equal(desearchCalls, 1);
 });
 
 test('surfaces errors when both providers fail', async () => {
@@ -78,14 +78,14 @@ test('surfaces errors when both providers fail', async () => {
       err.response = { status: 429 };
       throw err;
     },
-    searchSerperFn: async () => ({
+    searchDesearchFn: async () => ({
       results: [],
       suggestions: [],
-      error: 'Serper credits exhausted',
+      error: 'Desearch credits exhausted',
     }),
   });
 
-  assert.equal(res.engine, 'serper');
+  assert.equal(res.engine, 'desearch');
   assert.equal(res.results.length, 0);
-  assert.equal(res.error, 'Serper credits exhausted');
+  assert.equal(res.error, 'Desearch credits exhausted');
 });

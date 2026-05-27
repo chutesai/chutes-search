@@ -1,5 +1,5 @@
 import { searchSearxng } from '../searxng';
-import { searchSerper } from '../serper';
+import { searchDesearch } from '../desearch';
 
 type UnifiedResult = {
   title: string;
@@ -8,7 +8,7 @@ type UnifiedResult = {
   thumbnail?: string;
 };
 
-export type SearchEngine = 'searxng' | 'serper';
+export type SearchEngine = 'searxng' | 'desearch';
 
 export type SearchRunResult = {
   engine: SearchEngine;
@@ -18,7 +18,7 @@ export type SearchRunResult = {
 };
 
 type SearchOverrides = {
-  searchSerperFn?: typeof searchSerper;
+  searchDesearchFn?: typeof searchDesearch;
   searchSearxngFn?: typeof searchSearxng;
 };
 
@@ -41,7 +41,7 @@ export const runWebSearch = async (
   log(`Starting web search (queryLen=${query.length})`);
   
   const searxngSearch = overrides?.searchSearxngFn ?? searchSearxng;
-  const serperSearch = overrides?.searchSerperFn ?? searchSerper;
+  const desearchSearch = overrides?.searchDesearchFn ?? searchDesearch;
 
   let searxSuggestions: string[] = [];
   let searxError: string | undefined;
@@ -67,7 +67,7 @@ export const runWebSearch = async (
     log(`SearxNG failed: ${err?.message ?? 'unknown error'}`);
     if (!overrides?.searchSearxngFn) {
       console.warn(
-        '[search] searxng lookup failed, falling back to serper',
+        '[search] searxng lookup failed, falling back to desearch',
         err?.message ?? err,
       );
     }
@@ -78,22 +78,22 @@ export const runWebSearch = async (
         : err?.message ?? 'SearxNG search failed.';
   }
 
-  log('Falling back to Serper...');
-  const serperRes = await serperSearch(query);
-  log(`Serper returned ${serperRes?.results?.length || 0} results`);
+  log('Falling back to Desearch...');
+  const desearchRes = await desearchSearch(query);
+  log(`Desearch returned ${desearchRes?.results?.length || 0} results`);
   
-  const serperSuggestions = serperRes?.suggestions ?? [];
-  const serperResults = Array.isArray(serperRes?.results)
-    ? serperRes.results
+  const desearchSuggestions = desearchRes?.suggestions ?? [];
+  const desearchResults = Array.isArray(desearchRes?.results)
+    ? desearchRes.results
     : [];
 
-  const error = serperRes?.error || searxError;
+  const error = desearchRes?.error || searxError;
 
-  log(`Web search complete, returning ${serperResults.length} results`);
+  log(`Web search complete, returning ${desearchResults.length} results`);
   return {
-    engine: 'serper',
-    results: serperResults,
-    suggestions: [...new Set([...searxSuggestions, ...serperSuggestions])],
+    engine: 'desearch',
+    results: desearchResults,
+    suggestions: [...new Set([...searxSuggestions, ...desearchSuggestions])],
     ...(error ? { error } : {}),
   };
 };

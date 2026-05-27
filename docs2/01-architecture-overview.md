@@ -33,7 +33,7 @@ flowchart TB
 
     subgraph SearchBackends["Search Backends"]
         SEARXNG["SearxNG<br/>(self-hosted metasearch)"]
-        SERPER["Serper API<br/>(Google fallback)"]
+        DESEARCH["Desearch API<br/>(web search fallback)"]
     end
 
     subgraph LLMLayer["LLM Inference"]
@@ -78,7 +78,7 @@ chutes-search preserves Perplexica's core architecture (SearxNG-backed search, L
 | **Default provider**    | User-configured              | Chutes LLM API (OpenAI-compatible)                      |
 | **Optimization modes**  | Basic speed/balanced/quality | Model-per-mode mapping (Gemma/DeepSeek)                 |
 | **Agent summarization** | Not present                  | Claude Code agent in sandbox for source synthesis       |
-| **Search fallback**     | SearxNG only                 | SearxNG primary, Serper API fallback                    |
+| **Search fallback**     | SearxNG only                 | SearxNG primary, Desearch API fallback                  |
 | **User isolation**      | None                         | Session-scoped chat history (anonymous + authenticated) |
 
 ---
@@ -94,7 +94,7 @@ sequenceDiagram
     participant Auth as Auth Session
     participant RL as Rate Limiter
     participant Handler as Focus Mode Handler
-    participant Search as SearxNG / Serper
+    participant Search as SearxNG / Desearch
     participant LLM as LLM (Chutes API)
     participant Sandy as Sandy Sandbox
 
@@ -151,7 +151,7 @@ The standard MetaSearchAgent (used by all modes except deep research) follows th
 
 1. **Query Analysis**: The LLM analyzes the user message in conversation context and decides whether a web search is needed. If not, it returns `not_needed`.
 2. **Query Rephrasing**: The conversation history is used to produce a standalone search query.
-3. **Web Search**: `runWebSearch()` tries SearxNG first, falls back to Serper if SearxNG fails or returns no results.
+3. **Web Search**: `runWebSearch()` tries SearxNG first, falls back to Desearch if SearxNG fails or returns no results.
 4. **Document Processing**: Results are converted to LangChain `Document` objects.
 5. **Reranking**: Based on optimization mode:
    - **Speed**: No embedding-based reranking; top 15 results by position.
@@ -211,7 +211,7 @@ Default fallback order:
 
 ---
 
-## Search Backend: SearxNG + Serper
+## Search Backend: SearxNG + Desearch
 
 Web search is handled by `runWebSearch()` in `src/lib/search/runWebSearch.ts`, which implements a two-tier fallback:
 
@@ -219,13 +219,13 @@ Web search is handled by `runWebSearch()` in `src/lib/search/runWebSearch.ts`, w
 flowchart LR
     Q["Query"] --> SEARXNG["SearxNG<br/>(self-hosted, primary)"]
     SEARXNG -->|results > 0| OK["Return SearxNG results"]
-    SEARXNG -->|failed or empty| SERPER["Serper API<br/>(Google, fallback)"]
-    SERPER --> OK2["Return Serper results"]
+    SEARXNG -->|failed or empty| DESEARCH["Desearch API<br/>(fallback)"]
+    DESEARCH --> OK2["Return Desearch results"]
 ```
 
 **SearxNG Configuration**: Multiple SearxNG instances can be configured via `SEARXNG_API_URLS` (comma-separated). A random instance is chosen per request for load distribution. The bundled `searxng/settings.yml` enables JSON format output, Google autocomplete, and the Wolfram Alpha engine.
 
-**Serper Fallback**: The `SERPER_API_KEY` environment variable enables Serper as a paid Google search backup. Results include organic search, knowledge graph, and top stories.
+**Desearch Fallback**: The `DESEARCH_API_KEY` environment variable enables Desearch as a paid web search backup. Results include structured titles, URLs, snippets, and billing metadata.
 
 ---
 
@@ -302,7 +302,7 @@ The database is stored in the `DATA_DIR` directory (default `./data`) and surviv
 | Backend    | Next.js API routes (Node.js runtime)                         |
 | AI/ML      | LangChain (chains, agents, embeddings), @xenova/transformers |
 | Database   | SQLite (better-sqlite3) + Drizzle ORM                        |
-| Search     | SearxNG (metasearch), Serper (Google API)                    |
+| Search     | SearxNG (metasearch), Desearch (web search API)              |
 | Auth       | Chutes IDP (OAuth2 PKCE)                                     |
 | Sandboxing | Sandy API (Docker/Firecracker sandboxes)                     |
 | Build      | Docker multi-stage (Node 20 slim)                            |

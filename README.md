@@ -29,7 +29,7 @@ Chutes Search serves as both a production search tool and a reference implementa
 
 - **Frontend**: Next.js 15 (App Router)
 - **LLM**: Chutes API (OpenAI-compatible), with fallback chains
-- **Search**: Serper API for web search, SearxNG-compatible
+- **Search**: Desearch API for web search, SearxNG-compatible fallback support
 - **Database**: Neon Postgres via `@neondatabase/serverless` + Drizzle ORM
 - **Auth**: Chutes IDP (OAuth 2.0 PKCE)
 - **Deep Research**: Sandy sandboxes with Claude Code agents
@@ -51,7 +51,8 @@ Chutes Search serves as both a production search tool and a reference implementa
 ```bash
 # Required
 DATABASE_URL=            # Neon Postgres connection string
-SERPER_API_KEY=          # Serper.dev API key for web search
+DESEARCH_API_KEY=        # Desearch API key for web search
+SERPER_API_KEY=          # Optional: Serper.dev API key for image search
 
 # Chutes AI (LLM inference)
 CHUTES_API_KEY=          # Chutes API key (used for anonymous/free searches)

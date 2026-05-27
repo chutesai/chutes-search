@@ -1,9 +1,9 @@
-import { searchSerper } from '@/lib/serper';
+import { searchDesearch } from '@/lib/desearch';
 import { fetchMultipleOGImages } from '@/lib/og-image';
 import fs from 'fs/promises';
 import path from 'path';
 
-// Rate limiting and error handling for Serper API
+// Rate limiting and error handling for Desearch API
 let lastRequestTime = 0;
 const MIN_REQUEST_INTERVAL = 2000; // 2 seconds between requests to be more conservative
 
@@ -155,7 +155,7 @@ async function setFSCache(key: string, data: any[]) {
   }
 }
 
-const rateLimitedSearchSerper = async (query: string) => {
+const rateLimitedSearchDesearch = async (query: string) => {
   const now = Date.now();
   const timeSinceLastRequest = now - lastRequestTime;
 
@@ -166,12 +166,12 @@ const rateLimitedSearchSerper = async (query: string) => {
   lastRequestTime = Date.now();
 
   try {
-    const result = await searchSerper(query);
+    const result = await searchDesearch(query);
     return result;
   } catch (err: any) {
     if (err?.response?.status === 429) {
       console.warn(
-        `[discover] Serper rate limit hit, returning empty results`,
+        `[discover] Desearch rate limit hit, returning empty results`,
       );
       return { results: [], suggestions: [] };
     }
@@ -292,7 +292,7 @@ export const GET = async (req: Request) => {
       const siteSpecificResults: any[] = [];
       const dynamicResults: any[] = [];
 
-      // NEW STRATEGY: 1/3 from specific trusted sites, 2/3 from dynamic Serper news searches
+      // NEW STRATEGY: 1/3 from specific trusted sites, 2/3 from dynamic Desearch news searches
       const TOTAL_ARTICLES = 15;
       const SITE_SPECIFIC_COUNT = Math.floor(TOTAL_ARTICLES / 3); // ~5 articles
       const DYNAMIC_COUNT = TOTAL_ARTICLES - SITE_SPECIFIC_COUNT; // ~10 articles
@@ -309,7 +309,7 @@ export const GET = async (req: Request) => {
         if (siteSpecificResults.length >= SITE_SPECIFIC_COUNT * 2) break; // Get extra to allow for filtering
         try {
           const randomQuery = selectedTopic.query[Math.floor(Math.random() * selectedTopic.query.length)];
-          const result = await rateLimitedSearchSerper(`${randomQuery} site:${link}`);
+          const result = await rateLimitedSearchDesearch(`${randomQuery} site:${link}`);
           siteSpecificResults.push(...result.results.slice(0, 3)); // Take up to 3 per site
           console.log(`[discover] Got ${result.results.length} results from ${link}`);
         } catch (err) {
@@ -338,7 +338,7 @@ export const GET = async (req: Request) => {
       for (const query of selectedQueries) {
         if (dynamicResults.length >= DYNAMIC_COUNT * 2) break; // Get extra to allow for filtering
         try {
-          const result = await rateLimitedSearchSerper(query);
+          const result = await rateLimitedSearchDesearch(query);
           dynamicResults.push(...result.results);
           console.log(
             `[discover] Dynamic search returned ${result.results.length} results`,
@@ -362,7 +362,7 @@ export const GET = async (req: Request) => {
       if (selectedTopic.broadSearch && dynamicResults.length < DYNAMIC_COUNT) {
         console.log(`[discover] Fetching broader results for topic ${topic}`);
         try {
-          const broadResult = await rateLimitedSearchSerper(selectedTopic.broadSearch);
+          const broadResult = await rateLimitedSearchDesearch(selectedTopic.broadSearch);
           dynamicResults.push(...broadResult.results);
           console.log(`[discover] Broad search returned ${broadResult.results.length} results`);
         } catch (err) {
@@ -437,9 +437,9 @@ export const GET = async (req: Request) => {
       });
       console.log(`[discover] Domain distribution:`, domainCounts);
 
-      // If no results from Serper, add mock data for testing
+      // If no results from Desearch, add mock data for testing
       if (data.length === 0) {
-        console.log(`[discover] No results from Serper, adding mock data`);
+        console.log(`[discover] No results from Desearch, adding mock data`);
         data = [
           {
             title: 'Mock Article 1',
@@ -456,7 +456,7 @@ export const GET = async (req: Request) => {
         ];
       }
 
-      // First, fetch OG images for articles without thumbnails from Serper
+      // First, fetch OG images for articles without thumbnails from result pages
       const articlesWithoutThumbnails = data.filter(item => !item.thumbnail);
       if (articlesWithoutThumbnails.length > 0) {
         console.log(`[discover] Fetching OG images for ${articlesWithoutThumbnails.length} articles without thumbnails`);
@@ -546,7 +546,7 @@ export const GET = async (req: Request) => {
       const randomLink = selectedTopic.links[Math.floor(Math.random() * selectedTopic.links.length)];
       const randomQuery = selectedTopic.query[Math.floor(Math.random() * selectedTopic.query.length)];
       try {
-        data = (await rateLimitedSearchSerper(`${randomQuery} site:${randomLink}`)).results;
+        data = (await rateLimitedSearchDesearch(`${randomQuery} site:${randomLink}`)).results;
         applyPreviewFallbackThumbnails(data);
       } catch (err) {
         console.warn(`[discover] Failed to fetch preview data:`, err);
