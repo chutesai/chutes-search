@@ -34,8 +34,8 @@ export const LIVE_CHUTES_MODEL_IDS = [
 ] as const;
 
 export const SPEED_MODELS = [
-  'google/gemma-4-31B-turbo-TEE',
   'unsloth/Mistral-Nemo-Instruct-2407-TEE',
+  'google/gemma-4-31B-turbo-TEE',
   'Qwen/Qwen3-32B-TEE',
   'Qwen/Qwen3.6-27B-TEE',
 ] as const;
