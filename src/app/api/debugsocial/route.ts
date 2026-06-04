@@ -16,6 +16,5 @@ export async function GET(req: NextRequest) {
     tweets: res.tweets.length,
     reddit: res.reddit.length,
     errors: res.errors,
-    sampleReddit: res.reddit.slice(0, 2).map((r) => ({ c: r.community, t: r.title })),
   });
 }
