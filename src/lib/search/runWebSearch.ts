@@ -89,41 +89,12 @@ export const runWebSearch = async (
 
   const terms = significantTerms(query);
   let suggestions: string[] = [];
-  let searxError: string | undefined;
 
-  // 1) SearxNG (configured primary). When it's up it returns relevant results,
-  // so trust any non-empty response.
-  try {
-    log('Trying SearxNG...');
-    const searxngRes = await searxngSearch(query, {
-      engines: activeEngines.length > 0 ? activeEngines : undefined,
-    });
-    log(`SearxNG returned ${searxngRes?.results?.length || 0} results`);
-
-    suggestions = searxngRes?.suggestions ?? [];
-
-    const searxResults = normalizeSearxngResults(searxngRes?.results ?? []);
-    if (searxResults.length > 0) {
-      log('Using SearxNG results');
-      return { engine: 'searxng', results: searxResults, suggestions };
-    }
-  } catch (err: any) {
-    log(`SearxNG failed: ${err?.message ?? 'unknown error'}`);
-    if (!overrides?.searchSearxngFn) {
-      console.warn(
-        '[search] searxng lookup failed, falling back to desearch',
-        err?.message ?? err,
-      );
-    }
-    searxError =
-      err?.response?.status === 429
-        ? 'SearxNG rate limited this request.'
-        : err?.message ?? 'SearxNG search failed.';
-  }
-
-  // 2) Desearch (Bittensor SN22) — the PREFERRED web provider. Trust it only when
-  // enough of its results look relevant to the query.
-  log('Falling back to Desearch...');
+  // 1) Desearch (Bittensor SN22) — the PREFERRED web provider. Tried first so the
+  // common path is a single fast call (the previously-primary SearxNG instance is
+  // down and its connect-timeout added ~8s of dead latency to every query). Trust
+  // Desearch only when enough of its results look relevant to the query.
+  log('Trying Desearch...');
   const desearchRes = await desearchSearch(query);
   const desearchResults = Array.isArray(desearchRes?.results)
     ? desearchRes.results
@@ -132,17 +103,15 @@ export const runWebSearch = async (
   log(
     `Desearch returned ${desearchResults.length} results (${desearchRelevant} relevant to query)`,
   );
-  suggestions = [
-    ...new Set([...suggestions, ...(desearchRes?.suggestions ?? [])]),
-  ];
+  suggestions = [...new Set([...(desearchRes?.suggestions ?? [])])];
 
   if (desearchRelevant >= MIN_RELEVANT_RESULTS) {
     log(`Using Desearch results (${desearchResults.length})`);
     return { engine: 'desearch', results: desearchResults, suggestions };
   }
 
-  // 3) Serper (reliable Google) — quality backstop when SearxNG is down and
-  // Desearch returned mostly off-topic results.
+  // 2) Serper (reliable Google) — quality backstop when Desearch returned mostly
+  // off-topic results (its known intermittent failure mode).
   log('Falling back to Serper...');
   const serperRes = await serperSearch(query);
   const serperResults = Array.isArray(serperRes?.results)
@@ -160,9 +129,36 @@ export const runWebSearch = async (
     };
   }
 
+  // 3) SearxNG — last resort only (its configured instance is currently down, so
+  // this almost never contributes; kept so a future working instance is still used).
+  let searxError: string | undefined;
+  try {
+    log('Falling back to SearxNG (last resort)...');
+    const searxngRes = await searxngSearch(query, {
+      engines: activeEngines.length > 0 ? activeEngines : undefined,
+    });
+    const searxResults = normalizeSearxngResults(searxngRes?.results ?? []);
+    log(`SearxNG returned ${searxResults.length} results`);
+    if (searxResults.length > 0) {
+      return {
+        engine: 'searxng',
+        results: searxResults,
+        suggestions: [
+          ...new Set([...suggestions, ...(searxngRes?.suggestions ?? [])]),
+        ],
+      };
+    }
+  } catch (err: any) {
+    log(`SearxNG failed: ${err?.message ?? 'unknown error'}`);
+    searxError =
+      err?.response?.status === 429
+        ? 'SearxNG rate limited this request.'
+        : err?.message ?? 'SearxNG search failed.';
+  }
+
   // Nothing better available — return whatever Desearch gave (the downstream
   // reranker still filters off-topic results) and surface the most relevant error.
-  const error = serperRes?.error || desearchRes?.error || searxError;
+  const error = desearchRes?.error || serperRes?.error || searxError;
   log(`Web search complete, returning ${desearchResults.length} results`);
   return {
     engine: 'desearch',

@@ -4,39 +4,10 @@ const { runWebSearch } = require('./runWebSearch');
 
 const emptyProvider = async () => ({ results: [], suggestions: [] });
 
-test('prefers searxng when it returns results', async () => {
-  let desearchCalled = false;
-
-  const res = await runWebSearch('ukraine war', ['web'], {
-    searchSearxngFn: async () => ({
-      results: [
-        {
-          title: 'Ukraine war news',
-          url: 'https://example.com',
-          content: 'snippet about ukraine',
-          thumbnail_src: 'thumb.png',
-        },
-      ],
-      suggestions: ['suggestion'],
-    }),
-    searchDesearchFn: async () => {
-      desearchCalled = true;
-      return { results: [], suggestions: [] };
-    },
-    searchSerperFn: emptyProvider,
-  });
-
-  assert.equal(res.engine, 'searxng');
-  assert.equal(res.results.length, 1);
-  assert.equal(res.results[0].thumbnail, 'thumb.png');
-  assert.deepEqual(res.suggestions, ['suggestion']);
-  assert.equal(desearchCalled, false);
-});
-
-test('uses desearch when its results are relevant to the query', async () => {
+test('uses desearch (preferred) when its results are relevant', async () => {
   let serperCalled = false;
+  let searxngCalled = false;
   const res = await runWebSearch('ukraine negotiations', [], {
-    searchSearxngFn: async () => ({ results: [], suggestions: ['searx-hint'] }),
     searchDesearchFn: async () => ({
       results: [
         { title: 'Ukraine peace negotiations', url: 'https://a.example', content: 'x' },
@@ -49,58 +20,22 @@ test('uses desearch when its results are relevant to the query', async () => {
       serperCalled = true;
       return emptyProvider();
     },
+    searchSearxngFn: async () => {
+      searxngCalled = true;
+      return emptyProvider();
+    },
   });
 
   assert.equal(res.engine, 'desearch');
   assert.equal(res.results.length, 3);
   assert.equal(serperCalled, false);
-  assert.deepEqual(res.suggestions.sort(), ['desearch-hint', 'searx-hint']);
-});
-
-test('falls back through desearch to serper when searxng throws', async () => {
-  let desearchCalls = 0;
-  const res = await runWebSearch('ukraine negotiations', [], {
-    searchSearxngFn: async () => {
-      throw new Error('boom');
-    },
-    searchDesearchFn: async () => {
-      desearchCalls += 1;
-      return { results: [], suggestions: [] };
-    },
-    searchSerperFn: emptyProvider,
-  });
-
-  assert.equal(res.engine, 'desearch');
-  assert.equal(desearchCalls, 1);
-});
-
-test('surfaces errors when all providers fail', async () => {
-  const res = await runWebSearch('ukraine negotiations', [], {
-    searchSearxngFn: async () => {
-      const err = new Error('rate limit');
-      err.response = { status: 429 };
-      throw err;
-    },
-    searchDesearchFn: async () => ({
-      results: [],
-      suggestions: [],
-      error: 'Desearch credits exhausted',
-    }),
-    searchSerperFn: emptyProvider,
-  });
-
-  assert.equal(res.engine, 'desearch');
-  assert.equal(res.results.length, 0);
-  assert.equal(res.error, 'Desearch credits exhausted');
+  assert.equal(searxngCalled, false);
 });
 
 test('falls back to serper when desearch returns off-topic junk', async () => {
   let serperCalled = false;
   const res = await runWebSearch('ukraine negotiations', [], {
-    searchSearxngFn: async () => ({ results: [], suggestions: [] }),
     searchDesearchFn: async () => ({
-      // A full page of unrelated videos — the production failure mode. None
-      // mention "ukraine"/"negotiations", so relevantCount is 0.
       results: Array.from({ length: 18 }, (_, i) => ({
         title: `What is thing ${i}`,
         url: `https://www.youtube.com/watch?v=vid${i}`,
@@ -118,6 +53,7 @@ test('falls back to serper when desearch returns off-topic junk', async () => {
         suggestions: [],
       };
     },
+    searchSearxngFn: emptyProvider,
   });
 
   assert.equal(serperCalled, true);
@@ -125,9 +61,66 @@ test('falls back to serper when desearch returns off-topic junk', async () => {
   assert.equal(res.results.length, 2);
 });
 
+test('falls back to serper when desearch is empty', async () => {
+  const res = await runWebSearch('ukraine negotiations', [], {
+    searchDesearchFn: emptyProvider,
+    searchSerperFn: async () => ({
+      results: [
+        { title: 'CFR', url: 'https://www.cfr.org/x', content: 'ukraine negotiations' },
+      ],
+      suggestions: [],
+    }),
+    searchSearxngFn: emptyProvider,
+  });
+
+  assert.equal(res.engine, 'serper');
+  assert.equal(res.results.length, 1);
+});
+
+test('uses searxng only as a last resort', async () => {
+  const res = await runWebSearch('ukraine war', [], {
+    searchDesearchFn: emptyProvider,
+    searchSerperFn: emptyProvider,
+    searchSearxngFn: async () => ({
+      results: [
+        {
+          title: 'Ukraine war news',
+          url: 'https://example.com',
+          content: 'ukraine',
+          thumbnail_src: 'thumb.png',
+        },
+      ],
+      suggestions: ['searx-hint'],
+    }),
+  });
+
+  assert.equal(res.engine, 'searxng');
+  assert.equal(res.results.length, 1);
+  assert.equal(res.results[0].thumbnail, 'thumb.png');
+});
+
+test('surfaces errors when all providers fail', async () => {
+  const res = await runWebSearch('ukraine negotiations', [], {
+    searchDesearchFn: async () => ({
+      results: [],
+      suggestions: [],
+      error: 'Desearch credits exhausted',
+    }),
+    searchSerperFn: emptyProvider,
+    searchSearxngFn: async () => {
+      const err = new Error('rate limit');
+      err.response = { status: 429 };
+      throw err;
+    },
+  });
+
+  assert.equal(res.engine, 'desearch');
+  assert.equal(res.results.length, 0);
+  assert.equal(res.error, 'Desearch credits exhausted');
+});
+
 test('keeps relevant YouTube results (does not hard-drop videos)', async () => {
   const res = await runWebSearch('docker tutorial', [], {
-    searchSearxngFn: async () => ({ results: [], suggestions: [] }),
     searchDesearchFn: async () => ({
       results: [
         { title: 'Docker explained', url: 'https://www.youtube.com/watch?v=dckr', content: 'docker' },
@@ -137,6 +130,7 @@ test('keeps relevant YouTube results (does not hard-drop videos)', async () => {
       suggestions: [],
     }),
     searchSerperFn: emptyProvider,
+    searchSearxngFn: emptyProvider,
   });
 
   assert.equal(res.engine, 'desearch');

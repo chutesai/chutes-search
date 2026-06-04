@@ -41,7 +41,7 @@ describe('search mode model preferences', () => {
   it('caps response tokens by optimization mode while preserving deep research room', () => {
     assert.equal(
       searchModeModels.resolveOptimizationModeMaxTokens('speed'),
-      800,
+      500,
     );
     assert.equal(
       searchModeModels.resolveOptimizationModeMaxTokens('balanced'),

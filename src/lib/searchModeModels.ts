@@ -156,7 +156,10 @@ export function resolveOptimizationModeMaxTokens(
     return options.deepResearchMode === 'max' ? 3200 : 2200;
   }
 
-  if (optimizationMode === 'speed') return 800;
+  // Chutes TEE throughput is ~6 tokens/s, so answer length dominates wall-clock.
+  // Speed mode keeps answers concise to stay responsive; balanced/quality trade
+  // latency for depth.
+  if (optimizationMode === 'speed') return 500;
   if (optimizationMode === 'balanced') return 1200;
   return 1600;
 }
