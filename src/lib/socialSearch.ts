@@ -57,10 +57,12 @@ const MACROCOSMOS_SN13_PATH = '/sn13.v1.Sn13Service/OnDemandData';
 const MAX_TWEETS = 4;
 const MAX_REDDIT = 4;
 
-// Per-provider timeouts (ms). Social runs concurrently with the web search, so
-// the worst-case added latency is the largest of these — kept short on purpose.
+// Per-provider timeouts (ms). Social runs concurrently with the web search and is
+// awaited before the answer is generated, so these are HARD caps on how much
+// social search can add to the user's wait — kept short on purpose. SN13 often
+// takes 10s+ to respond; we'd rather skip Reddit than make every answer that slow.
 const X_TIMEOUT_MS = 6000;
-const REDDIT_MACROCOSMOS_TIMEOUT_MS = 9000;
+const REDDIT_MACROCOSMOS_TIMEOUT_MS = 7000; // total budget across attempts
 const REDDIT_DESEARCH_TIMEOUT_MS = 6000;
 
 const STOP_WORDS = new Set([
@@ -161,11 +163,20 @@ const http2JsonPost = (
   new Promise((resolve, reject) => {
     const client = http2.connect(origin);
     let settled = false;
+    // Hard deadline: http2session.setTimeout is only an INACTIVITY timeout, so a
+    // slow-but-streaming response (the SN13 miner net regularly takes 10s+) never
+    // trips it. Use an explicit timer that destroys the connection so social
+    // search can't blow past its latency budget.
+    const deadline = setTimeout(
+      () => done(new Error(`timeout ${timeoutMs}ms`)),
+      timeoutMs,
+    );
     const done = (err: Error | null, val?: any) => {
       if (settled) return;
       settled = true;
+      clearTimeout(deadline);
       try {
-        client.close();
+        client.destroy();
       } catch {
         /* ignore */
       }
@@ -173,7 +184,6 @@ const http2JsonPost = (
     };
 
     client.on('error', (e) => done(e));
-    client.setTimeout(timeoutMs, () => done(new Error(`timeout ${timeoutMs}ms`)));
 
     const req = client.request({
       ':method': 'POST',
@@ -225,23 +235,30 @@ const searchRedditMacrocosmos = async (
     keyword_mode: 'any',
   });
 
-  // SN13 is a live decentralized network — occasional 504/transient errors are
-  // normal — so try twice before giving up.
+  // SN13 is a live decentralized network — occasional 503/504/transient errors
+  // are normal — so retry, but only within a shared total budget so a slow first
+  // attempt can't stack into a multi-second stall (each attempt's timeout is the
+  // remaining budget, and http2JsonPost enforces it as a hard deadline).
+  const deadline = Date.now() + REDDIT_MACROCOSMOS_TIMEOUT_MS;
   let res: { data?: any[] } | null = null;
+  let lastErr: unknown;
   for (let attempt = 0; attempt < 2; attempt += 1) {
+    const remaining = deadline - Date.now();
+    if (remaining < 800) break; // not enough budget left to bother
     try {
       res = await http2JsonPost(
         MACROCOSMOS_SN13_ORIGIN,
         MACROCOSMOS_SN13_PATH,
         { authorization: `Bearer ${apiKey}` },
         body,
-        REDDIT_MACROCOSMOS_TIMEOUT_MS,
+        remaining,
       );
       break;
     } catch (err) {
-      if (attempt === 1) throw err;
+      lastErr = err;
     }
   }
+  if (!res) throw lastErr ?? new Error('macrocosmos: no result');
 
   const rows = Array.isArray(res?.data) ? res!.data! : [];
   return rows
@@ -355,10 +372,28 @@ export const searchSocial = async (
     }
   };
 
-  const [xPosts, redditMc, redditDs] = await Promise.all([
+  // Desearch's reddit (ai/search) is reliably too slow (30s+) to return within
+  // budget, so it must NOT gate latency — it runs opportunistically and only
+  // contributes if it happens to finish before the primary X + SN13 calls do.
+  // SN13 (Macrocosmos) is the Reddit workhorse.
+  let redditDs: SocialPost[] = [];
+  const redditDsPromise = safe('reddit/desearch', () => redditDsFn(query)).then(
+    (r) => {
+      redditDs = r;
+      return r;
+    },
+  );
+
+  // Latency is driven only by the two primary providers (each hard-capped).
+  const [xPosts, redditMc] = await Promise.all([
     safe('x/desearch', () => xFn(query)),
     safe('reddit/macrocosmos', () => redditMcFn(query)),
-    safe('reddit/desearch', () => redditDsFn(query)),
+  ]);
+  // Tiny grace so an already-fast desearch reddit (or a mocked one) is folded in,
+  // without waiting on the common slow case.
+  await Promise.race([
+    redditDsPromise,
+    new Promise((r) => setTimeout(r, 150)),
   ]);
 
   const tweets = filterRelevant(dedupeByUrl(xPosts), terms).slice(0, MAX_TWEETS);
