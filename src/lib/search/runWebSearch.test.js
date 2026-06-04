@@ -143,13 +143,14 @@ test('video focus mode uses Serper videos', async () => {
   assert.equal(desearchCalled, false);
 });
 
-test('keeps relevant YouTube results (does not hard-drop videos)', async () => {
+test('keeps a relevant YouTube result but keeps text sources dominant', async () => {
   const res = await runWebSearch('docker tutorial', [], {
     searchDesearchFn: async () => ({
       results: [
         { title: 'Docker explained', url: 'https://www.youtube.com/watch?v=dckr', content: 'docker' },
         { title: 'Docker docs', url: 'https://docs.docker.com', content: 'docker tutorial' },
         { title: 'Docker guide', url: 'https://example.com/docker', content: 'docker' },
+        { title: 'Docker on Reddit', url: 'https://reddit.com/r/docker', content: 'docker' },
       ],
       suggestions: [],
     }),
@@ -158,6 +159,39 @@ test('keeps relevant YouTube results (does not hard-drop videos)', async () => {
   });
 
   assert.equal(res.engine, 'desearch');
-  assert.equal(res.results.length, 3);
+  assert.equal(res.results.length, 4); // 3 text + 1 video (video kept, capped)
   assert.ok(res.results.some((r) => r.url.includes('youtube.com')));
+  assert.ok(res.results.filter((r) => !r.url.includes('youtube.com')).length >= 3);
+});
+
+test('caps videos so a page of on-topic videos cannot starve a text answer', async () => {
+  let serperCalled = false;
+  const res = await runWebSearch('nuclear energy', [], {
+    searchDesearchFn: async () => ({
+      // 15 on-topic videos, no text pages — passed the old gate and produced a
+      // thin answer. Now the non-video gate fails -> Serper.
+      results: Array.from({ length: 15 }, (_, i) => ({
+        title: `Nuclear energy explained ${i}`,
+        url: `https://www.youtube.com/watch?v=ne${i}`,
+        content: 'nuclear energy reactor',
+      })),
+      suggestions: [],
+    }),
+    searchSerperFn: async () => {
+      serperCalled = true;
+      return {
+        results: [
+          { title: 'Nuclear pros/cons', url: 'https://www.eia.gov/x', content: 'nuclear energy' },
+          { title: 'Reactor safety', url: 'https://world-nuclear.org/y', content: 'nuclear reactor' },
+          { title: 'Energy mix', url: 'https://iea.org/z', content: 'nuclear energy' },
+        ],
+        suggestions: [],
+      };
+    },
+    searchSearxngFn: emptyProvider,
+  });
+
+  assert.equal(serperCalled, true);
+  assert.equal(res.engine, 'serper');
+  assert.ok(res.results.every((r) => !r.url.includes('youtube.com')));
 });

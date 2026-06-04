@@ -63,6 +63,19 @@ const countRelevant = (results: UnifiedResult[], terms: string[]): number => {
   }).length;
 };
 
+const VIDEO_URL = /(?:youtube\.com|youtu\.be|vimeo\.com|dailymotion\.com)/i;
+const isVideo = (r: UnifiedResult): boolean => VIDEO_URL.test(r.url || '');
+
+// For a text web-search answer, video results contribute almost no synthesizable
+// content (just a title/short snippet), so a page dominated by videos produces a
+// thin answer even when the videos are on-topic. We therefore (a) gate providers
+// on the count of relevant NON-video results and (b) cap how many videos ride
+// along in the final list, keeping text sources dominant. youtubeSearch focus is
+// exempt (handled earlier via Serper videos).
+const MAX_WEB_VIDEOS = 3;
+const countRelevantText = (results: UnifiedResult[], terms: string[]): number =>
+  countRelevant(results.filter((r) => !isVideo(r)), terms);
+
 const normalizeSearxngResults = (results: any[]): UnifiedResult[] =>
   results.map((r) => ({
     title: r.title,
@@ -112,6 +125,15 @@ export const runWebSearch = async (
   const terms = significantTerms(query);
   let suggestions: string[] = [];
 
+  // Keep text sources dominant in non-video web search: all non-video results,
+  // then at most MAX_WEB_VIDEOS videos appended.
+  const capVideos = (results: UnifiedResult[]): UnifiedResult[] => {
+    if (wantsVideo) return results;
+    const text = results.filter((r) => !isVideo(r));
+    const vids = results.filter(isVideo).slice(0, MAX_WEB_VIDEOS);
+    return [...text, ...vids];
+  };
+
   // 1) Desearch (Bittensor SN22) — the PREFERRED web provider. Tried first so the
   // common path is a single fast call (the previously-primary SearxNG instance is
   // down and its connect-timeout added ~8s of dead latency to every query). Trust
@@ -121,15 +143,18 @@ export const runWebSearch = async (
   const desearchResults = Array.isArray(desearchRes?.results)
     ? desearchRes.results
     : [];
-  const desearchRelevant = countRelevant(desearchResults, terms);
+  // Gate on relevant NON-video results so a page of (even on-topic) videos with
+  // no synthesizable text doesn't pass and starve the answer.
+  const desearchRelevant = countRelevantText(desearchResults, terms);
   log(
-    `Desearch returned ${desearchResults.length} results (${desearchRelevant} relevant to query)`,
+    `Desearch returned ${desearchResults.length} results (${desearchRelevant} relevant non-video)`,
   );
   suggestions = [...new Set([...(desearchRes?.suggestions ?? [])])];
 
   if (desearchRelevant >= MIN_RELEVANT_RESULTS) {
-    log(`Using Desearch results (${desearchResults.length})`);
-    return { engine: 'desearch', results: desearchResults, suggestions };
+    const capped = capVideos(desearchResults);
+    log(`Using Desearch results (${capped.length} after video cap)`);
+    return { engine: 'desearch', results: capped, suggestions };
   }
 
   // 2) Serper (reliable Google) — quality backstop when Desearch returned mostly
@@ -144,7 +169,7 @@ export const runWebSearch = async (
   if (serperResults.length > 0) {
     return {
       engine: 'serper',
-      results: serperResults,
+      results: capVideos(serperResults),
       suggestions: [
         ...new Set([...suggestions, ...(serperRes?.suggestions ?? [])]),
       ],
@@ -164,7 +189,7 @@ export const runWebSearch = async (
     if (searxResults.length > 0) {
       return {
         engine: 'searxng',
-        results: searxResults,
+        results: capVideos(searxResults),
         suggestions: [
           ...new Set([...suggestions, ...(searxngRes?.suggestions ?? [])]),
         ],
@@ -181,10 +206,11 @@ export const runWebSearch = async (
   // Nothing better available — return whatever Desearch gave (the downstream
   // reranker still filters off-topic results) and surface the most relevant error.
   const error = desearchRes?.error || serperRes?.error || searxError;
-  log(`Web search complete, returning ${desearchResults.length} results`);
+  const capped = capVideos(desearchResults);
+  log(`Web search complete, returning ${capped.length} results`);
   return {
     engine: 'desearch',
-    results: desearchResults,
+    results: capped,
     suggestions,
     ...(error ? { error } : {}),
   };
