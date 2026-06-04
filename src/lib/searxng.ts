@@ -46,7 +46,10 @@ export const searchSearxng = async (
     });
   }
 
-  const res = await axios.get(url.toString());
+  // Short timeout: the configured instance may be down/unreachable, and without
+  // a timeout axios can hang for the platform default, adding seconds of latency
+  // before we fall through to the next provider.
+  const res = await axios.get(url.toString(), { timeout: 8000 });
 
   const results: SearxngSearchResult[] = res.data.results;
   const suggestions: string[] = res.data.suggestions;
