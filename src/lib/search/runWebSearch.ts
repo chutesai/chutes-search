@@ -1,6 +1,6 @@
 import { searchSearxng } from '../searxng';
 import { searchDesearch } from '../desearch';
-import { searchSerper } from '../serper';
+import { searchSerper, searchSerperVideos } from '../serper';
 
 type UnifiedResult = {
   title: string;
@@ -22,6 +22,7 @@ type SearchOverrides = {
   searchDesearchFn?: typeof searchDesearch;
   searchSearxngFn?: typeof searchSearxng;
   searchSerperFn?: typeof searchSerper;
+  searchSerperVideosFn?: typeof searchSerperVideos;
 };
 
 // A provider must return at least this many results that look relevant to the
@@ -86,6 +87,27 @@ export const runWebSearch = async (
   const searxngSearch = overrides?.searchSearxngFn ?? searchSearxng;
   const desearchSearch = overrides?.searchDesearchFn ?? searchDesearch;
   const serperSearch = overrides?.searchSerperFn ?? searchSerper;
+  const serperVideosSearch =
+    overrides?.searchSerperVideosFn ?? searchSerperVideos;
+
+  // Video-oriented focus modes (youtubeSearch): use Serper's video search, which
+  // returns dependable on-topic YouTube results. Desearch has no video-specific
+  // mode and the SearxNG youtube engine instance is down.
+  const wantsVideo = activeEngines.some((e) =>
+    ['youtube', 'video', 'vimeo', 'dailymotion'].includes(e.toLowerCase()),
+  );
+  if (wantsVideo) {
+    log('Video focus — trying Serper videos...');
+    const videoRes = await serperVideosSearch(query);
+    const videoResults = Array.isArray(videoRes?.results)
+      ? videoRes.results
+      : [];
+    log(`Serper videos returned ${videoResults.length} results`);
+    if (videoResults.length > 0) {
+      return { engine: 'serper', results: videoResults, suggestions: [] };
+    }
+    // else fall through to the normal web flow below.
+  }
 
   const terms = significantTerms(query);
   let suggestions: string[] = [];

@@ -119,6 +119,30 @@ test('surfaces errors when all providers fail', async () => {
   assert.equal(res.error, 'Desearch credits exhausted');
 });
 
+test('video focus mode uses Serper videos', async () => {
+  let desearchCalled = false;
+  const res = await runWebSearch('docker tutorial', ['youtube'], {
+    searchSerperVideosFn: async () => ({
+      results: [
+        { title: 'Learn Docker in 8 Minutes', url: 'https://www.youtube.com/watch?v=abc' },
+        { title: 'Docker basics', url: 'https://www.youtube.com/watch?v=def' },
+      ],
+      suggestions: [],
+    }),
+    searchDesearchFn: async () => {
+      desearchCalled = true;
+      return emptyProvider();
+    },
+    searchSerperFn: emptyProvider,
+    searchSearxngFn: emptyProvider,
+  });
+
+  assert.equal(res.engine, 'serper');
+  assert.equal(res.results.length, 2);
+  assert.ok(res.results.every((r) => r.url.includes('youtube.com')));
+  assert.equal(desearchCalled, false);
+});
+
 test('keeps relevant YouTube results (does not hard-drop videos)', async () => {
   const res = await runWebSearch('docker tutorial', [], {
     searchDesearchFn: async () => ({

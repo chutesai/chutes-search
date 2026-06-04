@@ -44,16 +44,19 @@ export const LIVE_CHUTES_MODEL_IDS = [
 // deregistered from Chutes). gemma-4-31B-turbo gives a clean rephrase + answer in
 // ~1.8s and is also the model-router's classifier (fast) model.
 export const SPEED_MODELS = [
+  // gemma-4-31B-turbo benchmarked fastest end-to-end (higher tok/s, never emits
+  // reasoning, concise answers) so it leads; Qwen3-32B is a close second. DeepSeek
+  // is intentionally last — it's frequently at max utilization and is older.
   'google/gemma-4-31B-turbo-TEE',
-  'deepseek-ai/DeepSeek-V3.2-TEE',
   'Qwen/Qwen3-32B-TEE',
   'unsloth/Mistral-Nemo-Instruct-2407-TEE',
+  'deepseek-ai/DeepSeek-V3.2-TEE',
 ] as const;
 
 // Quality mode: latency is acceptable, so the strongest models (incl. reasoners)
 // lead, with several fallbacks for resilience to deregistration.
 export const QUALITY_MODELS = [
-  'deepseek-ai/DeepSeek-V3.2-TEE',
+  // DeepSeek demoted to last (often at max utilization + older); Kimi-K2.6 leads.
   'moonshotai/Kimi-K2.6-TEE',
   'zai-org/GLM-5.1-TEE',
   'Qwen/Qwen3.5-397B-A17B-TEE',
@@ -61,6 +64,7 @@ export const QUALITY_MODELS = [
   'Qwen/Qwen3-235B-A22B-Thinking-2507-TEE',
   'moonshotai/Kimi-K2.5-TEE',
   'zai-org/GLM-5-TEE',
+  'deepseek-ai/DeepSeek-V3.2-TEE',
 ] as const;
 
 export const DEFAULT_SPEED_MODEL = SPEED_MODELS[0];
@@ -70,17 +74,17 @@ export const DEFAULT_CHUTES_MODEL = DEFAULT_QUALITY_MODEL;
 export const SEARCH_FALLBACK_MODELS = [
   'google/gemma-4-31B-turbo-TEE',
   'zai-org/GLM-5.1-TEE',
-  'deepseek-ai/DeepSeek-V3.2-TEE',
   'MiniMaxAI/MiniMax-M2.5-TEE',
   'Qwen/Qwen3.5-397B-A17B-TEE',
   'moonshotai/Kimi-K2.5-TEE',
+  'deepseek-ai/DeepSeek-V3.2-TEE',
 ] as const;
 
 export const DEEP_RESEARCH_SUMMARY_MODELS = [
-  'deepseek-ai/DeepSeek-V3.2-TEE',
-  'zai-org/GLM-5.1-TEE',
   'moonshotai/Kimi-K2.6-TEE',
+  'zai-org/GLM-5.1-TEE',
   'Qwen/Qwen3-235B-A22B-Thinking-2507-TEE',
+  'deepseek-ai/DeepSeek-V3.2-TEE',
 ] as const;
 
 export const AUXILIARY_LLM_MODELS = [
