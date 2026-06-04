@@ -16,46 +16,51 @@ type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
 // Synced with https://llm.chutes.ai/v1/models on 2026-05-19.
 // Keep these lists intentionally small: they drive user-visible mode defaults
 // and server fallback chains, so deleted model IDs cause production 404s.
+// Live Chutes catalog (GET https://llm.chutes.ai/v1/models) — snapshot verified
+// 2026-06-04. Every model configured below MUST be in this set (pinned by test).
+// Removed (no longer live): zai-org/GLM-5-Turbo, Qwen/Qwen2.5-Coder-32B-Instruct-TEE,
+// Qwen/Qwen3-235B-A22B-Thinking-2507 (the live id is the -TEE variant).
 export const LIVE_CHUTES_MODEL_IDS = [
-  'Qwen/Qwen3-32B-TEE',
-  'google/gemma-4-31B-turbo-TEE',
-  'zai-org/GLM-5.1-TEE',
-  'moonshotai/Kimi-K2.5-TEE',
-  'Qwen/Qwen3.5-397B-A17B-TEE',
-  'zai-org/GLM-5-Turbo',
-  'deepseek-ai/DeepSeek-V3.2-TEE',
-  'moonshotai/Kimi-K2.6-TEE',
   'MiniMaxAI/MiniMax-M2.5-TEE',
-  'zai-org/GLM-5-TEE',
-  'Qwen/Qwen3.6-27B-TEE',
-  'Qwen/Qwen2.5-Coder-32B-Instruct-TEE',
-  'unsloth/Mistral-Nemo-Instruct-2407-TEE',
-  'Qwen/Qwen3-235B-A22B-Thinking-2507',
-] as const;
-
-export const SPEED_MODELS = [
-  // Kimi K2.6 is the default speed model: the small models (Mistral-Nemo etc.)
-  // produced weak query rephrasings, which made the web-search engine return
-  // unrelated results (e.g. random YouTube videos matching a single stop-word).
-  // Speed mode skips embedding reranking, so source quality depends entirely on
-  // the rephrased query — hence a stronger model here.
-  'moonshotai/Kimi-K2.6-TEE',
-  'google/gemma-4-31B-turbo-TEE',
+  'Qwen/Qwen3-235B-A22B-Thinking-2507-TEE',
   'Qwen/Qwen3-32B-TEE',
+  'Qwen/Qwen3.5-397B-A17B-TEE',
   'Qwen/Qwen3.6-27B-TEE',
+  'deepseek-ai/DeepSeek-V3.2-TEE',
+  'google/gemma-4-31B-turbo-TEE',
+  'moonshotai/Kimi-K2.5-TEE',
+  'moonshotai/Kimi-K2.6-TEE',
+  'unsloth/Mistral-Nemo-Instruct-2407-TEE',
+  'zai-org/GLM-5-TEE',
+  'zai-org/GLM-5.1-TEE',
+] as const;
+
+// Speed mode MUST use non-reasoning models: a single search does a query-rephrase
+// call + an answer call, and reasoning models (Kimi, GLM, Qwen-Thinking) burn
+// hundreds of tokens "thinking" before emitting any content — measured TTFC was
+// 1.4–1.8s for gemma/deepseek vs. zero content within 80 tokens for the reasoners,
+// which made Kimi-K2.6 speed mode take minutes. Order = fastest-good first, then
+// progressively heavier non-reasoning fallbacks (multiple, in case one is
+// deregistered from Chutes). gemma-4-31B-turbo gives a clean rephrase + answer in
+// ~1.8s and is also the model-router's classifier (fast) model.
+export const SPEED_MODELS = [
+  'google/gemma-4-31B-turbo-TEE',
+  'deepseek-ai/DeepSeek-V3.2-TEE',
+  'Qwen/Qwen3-32B-TEE',
   'unsloth/Mistral-Nemo-Instruct-2407-TEE',
 ] as const;
 
+// Quality mode: latency is acceptable, so the strongest models (incl. reasoners)
+// lead, with several fallbacks for resilience to deregistration.
 export const QUALITY_MODELS = [
   'deepseek-ai/DeepSeek-V3.2-TEE',
-  'Qwen/Qwen3.5-397B-A17B-TEE',
-  'zai-org/GLM-5.1-TEE',
   'moonshotai/Kimi-K2.6-TEE',
+  'zai-org/GLM-5.1-TEE',
+  'Qwen/Qwen3.5-397B-A17B-TEE',
   'MiniMaxAI/MiniMax-M2.5-TEE',
-  'Qwen/Qwen3-235B-A22B-Thinking-2507',
+  'Qwen/Qwen3-235B-A22B-Thinking-2507-TEE',
   'moonshotai/Kimi-K2.5-TEE',
   'zai-org/GLM-5-TEE',
-  'zai-org/GLM-5-Turbo',
 ] as const;
 
 export const DEFAULT_SPEED_MODEL = SPEED_MODELS[0];
@@ -75,7 +80,7 @@ export const DEEP_RESEARCH_SUMMARY_MODELS = [
   'deepseek-ai/DeepSeek-V3.2-TEE',
   'zai-org/GLM-5.1-TEE',
   'moonshotai/Kimi-K2.6-TEE',
-  'Qwen/Qwen3-235B-A22B-Thinking-2507',
+  'Qwen/Qwen3-235B-A22B-Thinking-2507-TEE',
 ] as const;
 
 export const AUXILIARY_LLM_MODELS = [

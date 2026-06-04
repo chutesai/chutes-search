@@ -437,7 +437,13 @@ class MetaSearchAgent implements MetaSearchAgentType {
       (doc) => doc.pageContent && doc.pageContent.length > 0,
     );
 
-    if (optimizationMode === 'speed' || this.config.rerank === false) {
+    // Only focus modes that explicitly opt out (e.g. wolframAlpha) skip the
+    // reranker. Everything else — speed, balanced AND quality — reranks by
+    // embedding similarity so off-topic results (including irrelevant YouTube
+    // videos) are filtered out before they're shown as Sources. The embedding
+    // model is the local Transformers (BGE/GTE) provider, so this stays fast and
+    // has no external dependency even in speed mode.
+    if (this.config.rerank === false) {
       if (filesData.length > 0) {
         const [queryEmbedding] = await Promise.all([
           embeddings.embedQuery(query),
@@ -480,47 +486,44 @@ class MetaSearchAgent implements MetaSearchAgentType {
       } else {
         return docsWithContent.slice(0, 15);
       }
-    } else if (optimizationMode === 'balanced') {
-      const [docEmbeddings, queryEmbedding] = await Promise.all([
-        embeddings.embedDocuments(
-          docsWithContent.map((doc) => doc.pageContent),
-        ),
-        embeddings.embedQuery(query),
-      ]);
-
-      docsWithContent.push(
-        ...filesData.map((fileData) => {
-          return new Document({
-            pageContent: fileData.content,
-            metadata: {
-              title: fileData.fileName,
-              url: `File`,
-            },
-          });
-        }),
-      );
-
-      docEmbeddings.push(...filesData.map((fileData) => fileData.embeddings));
-
-      const similarity = docEmbeddings.map((docEmbedding, i) => {
-        const sim = computeSimilarity(queryEmbedding, docEmbedding);
-
-        return {
-          index: i,
-          similarity: sim,
-        };
-      });
-
-      const sortedDocs = similarity
-        .filter((sim) => sim.similarity > (this.config.rerankThreshold ?? 0.3))
-        .sort((a, b) => b.similarity - a.similarity)
-        .slice(0, 15)
-        .map((sim) => docsWithContent[sim.index]);
-
-      return sortedDocs;
     }
 
-    return [];
+    // Embedding rerank — used for speed, balanced and quality.
+    const [docEmbeddings, queryEmbedding] = await Promise.all([
+      embeddings.embedDocuments(docsWithContent.map((doc) => doc.pageContent)),
+      embeddings.embedQuery(query),
+    ]);
+
+    docsWithContent.push(
+      ...filesData.map((fileData) => {
+        return new Document({
+          pageContent: fileData.content,
+          metadata: {
+            title: fileData.fileName,
+            url: `File`,
+          },
+        });
+      }),
+    );
+
+    docEmbeddings.push(...filesData.map((fileData) => fileData.embeddings));
+
+    const similarity = docEmbeddings.map((docEmbedding, i) => {
+      const sim = computeSimilarity(queryEmbedding, docEmbedding);
+
+      return {
+        index: i,
+        similarity: sim,
+      };
+    });
+
+    const sortedDocs = similarity
+      .filter((sim) => sim.similarity > (this.config.rerankThreshold ?? 0.3))
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, 15)
+      .map((sim) => docsWithContent[sim.index]);
+
+    return sortedDocs;
   }
 
   private processDocs(docs: Document[]) {

@@ -90,6 +90,9 @@ describe('search mode model preferences', () => {
       'Qwen/Qwen2.5-72B-Instruct',
       'NousResearch/Hermes-4-70B',
       'Qwen/Qwen3-VL-235B-A22B-Instruct',
+      'zai-org/GLM-5-Turbo',
+      'Qwen/Qwen2.5-Coder-32B-Instruct-TEE',
+      'Qwen/Qwen3-235B-A22B-Thinking-2507',
     ]);
     const configuredModels = [
       ...searchModeModels.SPEED_MODELS,
