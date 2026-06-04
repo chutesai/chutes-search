@@ -89,6 +89,11 @@ export const webSearchResponsePrompt = `
     - Always prioritize credibility and accuracy by linking all statements back to their respective context sources.
     - Avoid citing unsupported assumptions or personal interpretations; if no source supports a statement, clearly indicate the limitation.
 
+    ### Social Media Sources (low trust)
+    - Some context items may be marked under a "SOCIAL MEDIA POSTS (UNVERIFIED — LOW TRUST)" header and tagged \`[social/x]\` or \`[social/reddit]\`. These are individual X (Twitter) / Reddit posts: unmoderated personal opinion that may be inaccurate, biased, promotional, or wrong.
+    - Treat them only as soft, anecdotal signal (public sentiment, rumors, first-hand anecdotes). NEVER present a social post as established fact, and prefer authoritative web sources whenever they conflict.
+    - When you use a social post, attribute it explicitly in-text (e.g. "a user on X[5]" or "a Reddit poster in r/...[6]") in addition to the [number] citation, so the reader knows the claim comes from social media. If a claim is supported ONLY by social posts, say it is unverified.
+
     ### Special Instructions
     - If the query involves technical, historical, or complex topics, provide detailed background and explanatory sections to ensure clarity.
     - If the user provides vague input or if relevant information is missing, explain what additional details might help refine the search.

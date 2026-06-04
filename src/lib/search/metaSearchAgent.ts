@@ -24,6 +24,11 @@ import formatChatHistoryAsString from '../utils/formatHistory';
 import eventEmitter from 'events';
 import { StreamEvent } from '@langchain/core/tracers/log_stream';
 import { runWebSearch } from './runWebSearch';
+import {
+  searchSocial,
+  socialPostsToContext,
+  type SocialPost,
+} from '../socialSearch';
 import { isFallbackableUpstreamError, LlmCandidate } from '@/lib/llm/fallbacks';
 
 // Timing utility for performance debugging
@@ -108,7 +113,30 @@ interface Config {
   queryGeneratorPrompt: string;
   responsePrompt: string;
   activeEngines: string[];
+  // When true, also pull low-trust supplementary signal from X + Reddit and append
+  // it to the LLM context (clearly framed as unverified). Only the general
+  // webSearch handler opts in; focused modes (academic, wolfram, …) leave it off.
+  includeSocial?: boolean;
 }
+
+// Convert social posts into source Documents so [n] citations resolve and they
+// appear (clearly labelled) in the Sources list alongside web results.
+const socialPostsToDocuments = (posts: SocialPost[]): Document[] =>
+  posts.map((p) => {
+    const label =
+      p.platform === 'x'
+        ? `X · ${p.author}`
+        : `Reddit · ${p.community ? `${p.community} · ` : ''}${p.author}`;
+    return new Document({
+      pageContent: p.text,
+      metadata: {
+        title: `${label}${p.title ? ` — ${p.title}` : ''}`,
+        url: p.url,
+        social: true,
+        platform: p.platform,
+      },
+    });
+  });
 
 type BasicChainInput = {
   chat_history: BaseMessage[];
@@ -280,6 +308,11 @@ class MetaSearchAgent implements MetaSearchAgentType {
           question = question.replace(/<think>.*?<\/think>/g, '');
 
           timer(`Starting web search (len=${question.length})`);
+          // Fire social search concurrently with the web search so it adds no
+          // serial latency; it has its own short per-provider timeouts.
+          const socialPromise = this.config.includeSocial
+            ? searchSocial(question)
+            : Promise.resolve({ tweets: [], reddit: [], errors: [] });
           const res = await runWebSearch(question, this.config.activeEngines);
           timer(
             `Web search complete: ${res.results?.length || 0} results, engine: ${res.engine}`,
@@ -316,7 +349,17 @@ class MetaSearchAgent implements MetaSearchAgentType {
                 );
 
           timer(`Created ${documents.length} document objects`);
-          return { query: question, docs: documents };
+
+          // Reddit first, then X — keep the (slightly more substantive) Reddit
+          // posts ahead of tweets in the low-trust block.
+          const social = await socialPromise;
+          const socialPosts = [...social.reddit, ...social.tweets];
+          if (this.config.includeSocial) {
+            timer(
+              `Social: ${social.tweets.length} tweets, ${social.reddit.length} reddit`,
+            );
+          }
+          return { query: question, docs: documents, socialPosts };
         }
       }),
     ]);
@@ -338,6 +381,7 @@ class MetaSearchAgent implements MetaSearchAgentType {
 
         let docs: Document[] | null = null;
         let query = input.query;
+        let socialPosts: SocialPost[] = [];
 
         if (this.config.searchWeb) {
           timer('Creating search retriever chain');
@@ -357,6 +401,8 @@ class MetaSearchAgent implements MetaSearchAgentType {
 
           query = searchRetrieverResult.query;
           docs = searchRetrieverResult.docs;
+          socialPosts = (searchRetrieverResult as { socialPosts?: SocialPost[] })
+            .socialPosts ?? [];
         }
 
         timer(
@@ -371,13 +417,24 @@ class MetaSearchAgent implements MetaSearchAgentType {
         );
         timer(`Rerank complete: ${sortedDocs.length} docs after filtering`);
 
+        // Append social posts AFTER the reranked web sources: they are not
+        // reranked (already capped + relevance-filtered upstream) and are framed
+        // as low-trust. Numbering continues from the web sources so [n] citations
+        // and the Sources list stay aligned.
+        const socialDocs = socialPostsToDocuments(socialPosts);
+        const webContext = this.processDocs(sortedDocs);
+        const context =
+          socialDocs.length > 0
+            ? `${webContext}\n\n${socialPostsToContext(socialPosts, sortedDocs.length)}`
+            : webContext;
+
         return {
           systemInstructions,
           query,
           chat_history: input.chat_history,
           date: new Date().toISOString(),
-          context: this.processDocs(sortedDocs),
-          sources: sortedDocs,
+          context,
+          sources: [...sortedDocs, ...socialDocs],
         };
       }).withConfig({
         runName: 'FinalSourceRetriever',
