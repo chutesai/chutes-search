@@ -34,10 +34,16 @@ export const LIVE_CHUTES_MODEL_IDS = [
 ] as const;
 
 export const SPEED_MODELS = [
-  'unsloth/Mistral-Nemo-Instruct-2407-TEE',
+  // Kimi K2.6 is the default speed model: the small models (Mistral-Nemo etc.)
+  // produced weak query rephrasings, which made the web-search engine return
+  // unrelated results (e.g. random YouTube videos matching a single stop-word).
+  // Speed mode skips embedding reranking, so source quality depends entirely on
+  // the rephrased query — hence a stronger model here.
+  'moonshotai/Kimi-K2.6-TEE',
   'google/gemma-4-31B-turbo-TEE',
   'Qwen/Qwen3-32B-TEE',
   'Qwen/Qwen3.6-27B-TEE',
+  'unsloth/Mistral-Nemo-Instruct-2407-TEE',
 ] as const;
 
 export const QUALITY_MODELS = [
