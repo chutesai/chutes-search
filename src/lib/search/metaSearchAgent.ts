@@ -308,11 +308,6 @@ class MetaSearchAgent implements MetaSearchAgentType {
           question = question.replace(/<think>.*?<\/think>/g, '');
 
           timer(`Starting web search (len=${question.length})`);
-          // Fire social search concurrently with the web search so it adds no
-          // serial latency; it has its own short per-provider timeouts.
-          const socialPromise = this.config.includeSocial
-            ? searchSocial(question)
-            : Promise.resolve({ tweets: [], reddit: [], errors: [] });
           const res = await runWebSearch(question, this.config.activeEngines);
           timer(
             `Web search complete: ${res.results?.length || 0} results, engine: ${res.engine}`,
@@ -349,17 +344,7 @@ class MetaSearchAgent implements MetaSearchAgentType {
                 );
 
           timer(`Created ${documents.length} document objects`);
-
-          // Reddit first, then X — keep the (slightly more substantive) Reddit
-          // posts ahead of tweets in the low-trust block.
-          const social = await socialPromise;
-          const socialPosts = [...social.reddit, ...social.tweets];
-          if (this.config.includeSocial) {
-            timer(
-              `Social: ${social.tweets.length} tweets, ${social.reddit.length} reddit`,
-            );
-          }
-          return { query: question, docs: documents, socialPosts };
+          return { query: question, docs: documents };
         }
       }),
     ]);
@@ -383,6 +368,20 @@ class MetaSearchAgent implements MetaSearchAgentType {
         let query = input.query;
         let socialPosts: SocialPost[] = [];
 
+        // Fire social search on the RAW user query (not the LLM-rewritten one):
+        // social keyword APIs — especially SN13 reddit — match the user's own
+        // nouns better than a web-tuned rewrite, and running it here lets it
+        // overlap the entire retriever (LLM rewrite + web search), so it adds no
+        // serial latency and gets the most time to return.
+        const socialPromise =
+          this.config.includeSocial && this.config.searchWeb
+            ? searchSocial(input.query).catch(() => ({
+                tweets: [],
+                reddit: [],
+                errors: ['social search failed'],
+              }))
+            : Promise.resolve({ tweets: [], reddit: [], errors: [] });
+
         if (this.config.searchWeb) {
           timer('Creating search retriever chain');
           const searchRetrieverChain =
@@ -401,8 +400,15 @@ class MetaSearchAgent implements MetaSearchAgentType {
 
           query = searchRetrieverResult.query;
           docs = searchRetrieverResult.docs;
-          socialPosts = (searchRetrieverResult as { socialPosts?: SocialPost[] })
-            .socialPosts ?? [];
+        }
+
+        // Reddit first, then X — slightly more substantive posts lead the block.
+        const social = await socialPromise;
+        socialPosts = [...social.reddit, ...social.tweets];
+        if (this.config.includeSocial) {
+          timer(
+            `Social: ${social.tweets.length} tweets, ${social.reddit.length} reddit`,
+          );
         }
 
         timer(
