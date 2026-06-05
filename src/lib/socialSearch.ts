@@ -62,7 +62,11 @@ const MAX_REDDIT = 4;
 // social search can add to the user's wait — kept short on purpose. SN13 often
 // takes 10s+ to respond; we'd rather skip Reddit than make every answer that slow.
 const X_TIMEOUT_MS = 6000;
-const REDDIT_MACROCOSMOS_TIMEOUT_MS = 7000; // total budget across attempts
+// SN13's miner network latency swings widely by time of day (~3s off-peak, 8-14s
+// at busy times). This is a total budget across candidate-subreddit attempts and
+// overlaps the whole retriever (LLM rewrite + web search), so most of it is
+// hidden; when SN13 is slower than this, Reddit is simply skipped (best-effort).
+const REDDIT_MACROCOSMOS_TIMEOUT_MS = 8000;
 const REDDIT_DESEARCH_TIMEOUT_MS = 6000;
 
 const STOP_WORDS = new Set([
@@ -221,44 +225,53 @@ const searchRedditMacrocosmos = async (
   const apiKey = process.env.MACROCOSMOS_API_KEY;
   if (!apiKey) return [];
 
-  // SN13's miner network reliably handles only a couple of text terms — 3+ text
-  // keywords frequently returns a 464 from the network — so cap to the 2 most
-  // significant terms. The first keyword is the subreddit; "all" => cross-subreddit
-  // search; remaining keywords are text matches (keyword_mode "any" keeps recall
-  // up; we relevance-filter the union afterwards).
-  const terms = significantTerms(query).slice(0, 2);
-  const keywords = ['all', ...terms];
-  const body = JSON.stringify({
-    source: 'Reddit',
-    keywords,
-    limit: 25,
-    keyword_mode: 'any',
-  });
+  // SN13's OnDemand API is effectively a SUBREDDIT feed fetcher, not a text
+  // search: keywords[0] is the subreddit and only a real subreddit returns
+  // anything. `r/all` cross-subreddit "search" ignores the text keywords (returns
+  // unrelated recent posts), and multi-keyword text matching returns empty. So we
+  // treat the query's most significant terms as candidate subreddit names
+  // (nvidia -> r/nvidia, bitcoin -> r/Bitcoin, ...) and fetch the first one that
+  // resolves. Topical posts come back inherently on-topic; the relevance filter
+  // downstream trims any stragglers. Topics with no matching subreddit simply
+  // yield no Reddit posts — fine for a low-trust, best-effort source.
+  const candidates = significantTerms(query).slice(0, 3);
+  if (candidates.length === 0) return [];
 
-  // SN13 is a live decentralized network — occasional 503/504/transient errors
-  // are normal — so retry, but only within a shared total budget so a slow first
-  // attempt can't stack into a multi-second stall (each attempt's timeout is the
+  // Shared total budget across all candidate attempts so a slow/empty subreddit
+  // can't stack into a multi-second stall (each attempt's timeout is the
   // remaining budget, and http2JsonPost enforces it as a hard deadline).
   const deadline = Date.now() + REDDIT_MACROCOSMOS_TIMEOUT_MS;
   let res: { data?: any[] } | null = null;
   let lastErr: unknown;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  for (const subreddit of candidates) {
     const remaining = deadline - Date.now();
     if (remaining < 800) break; // not enough budget left to bother
+    const body = JSON.stringify({
+      source: 'Reddit',
+      keywords: [subreddit],
+      limit: 25,
+      keyword_mode: 'all',
+    });
     try {
-      res = await http2JsonPost(
+      const attempt = await http2JsonPost(
         MACROCOSMOS_SN13_ORIGIN,
         MACROCOSMOS_SN13_PATH,
         { authorization: `Bearer ${apiKey}` },
         body,
         remaining,
       );
-      break;
+      if (Array.isArray(attempt?.data) && attempt.data.length > 0) {
+        res = attempt;
+        break;
+      }
     } catch (err) {
       lastErr = err;
     }
   }
-  if (!res) throw lastErr ?? new Error('macrocosmos: no result');
+  if (!res) {
+    if (lastErr) throw lastErr;
+    return []; // no candidate subreddit resolved — not an error
+  }
 
   const rows = Array.isArray(res?.data) ? res!.data! : [];
   return rows
