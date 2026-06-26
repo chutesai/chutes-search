@@ -10,9 +10,9 @@ import {
 } from '@/lib/config';
 import { searchHandlers } from '@/lib/search';
 import {
+  getModeFallbackModels,
   resolveOptimizationModeMaxTokens,
   resolveOptimizationModeModelName,
-  SEARCH_FALLBACK_MODELS,
   type SearchModeModelPreferences,
 } from '@/lib/searchModeModels';
 
@@ -61,7 +61,7 @@ export const POST = async (req: Request) => {
         body.optimizationModels,
       ) || getCustomOpenaiModelName();
     const chutesCandidates = buildChutesCandidates({
-      modelNames: [primaryModel, ...SEARCH_FALLBACK_MODELS],
+      modelNames: [primaryModel, ...getModeFallbackModels(optimizationMode)],
       apiKey,
       baseURL,
       modelRouterBaseURL: getModelRouterApiUrl(),

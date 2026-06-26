@@ -33,6 +33,7 @@ export const LIVE_CHUTES_MODEL_IDS = [
   'unsloth/Mistral-Nemo-Instruct-2407-TEE',
   'zai-org/GLM-5-TEE',
   'zai-org/GLM-5.1-TEE',
+  'zai-org/GLM-5.2-TEE',
 ] as const;
 
 // Speed mode MUST use non-reasoning models: a single search does a query-rephrase
@@ -56,7 +57,9 @@ export const SPEED_MODELS = [
 // Quality mode: latency is acceptable, so the strongest models (incl. reasoners)
 // lead, with several fallbacks for resilience to deregistration.
 export const QUALITY_MODELS = [
-  // DeepSeek demoted to last (often at max utilization + older); Kimi-K2.6 leads.
+  // GLM-5.2 is the newest, strongest model and leads; Kimi-K2.6 is the runner-up.
+  // DeepSeek demoted to last (often at max utilization + older).
+  'zai-org/GLM-5.2-TEE',
   'moonshotai/Kimi-K2.6-TEE',
   'zai-org/GLM-5.1-TEE',
   'Qwen/Qwen3.5-397B-A17B-TEE',
@@ -79,6 +82,22 @@ export const SEARCH_FALLBACK_MODELS = [
   'moonshotai/Kimi-K2.5-TEE',
   'deepseek-ai/DeepSeek-V3.2-TEE',
 ] as const;
+
+// Mode-aware runtime fallback chain for the answer call. Previously both modes
+// shared SEARCH_FALLBACK_MODELS, which meant Quality (balanced) fell back to the
+// fast gemma rather than to its own stronger models (Kimi/GLM). Returning the
+// mode's own list — primary first, deduped — keeps fallbacks within the mode's
+// quality/latency tier. `optimizationMode` is 'speed' | 'balanced' ('balanced'
+// is the UI "Quality" option) | 'quality'.
+export function getModeFallbackModels(
+  optimizationMode: SearchOptimizationMode,
+): string[] {
+  const modeModels =
+    optimizationMode === 'speed'
+      ? SPEED_MODELS
+      : QUALITY_MODELS;
+  return Array.from(new Set<string>(modeModels));
+}
 
 export const DEEP_RESEARCH_SUMMARY_MODELS = [
   'moonshotai/Kimi-K2.6-TEE',

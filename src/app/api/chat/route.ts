@@ -26,9 +26,9 @@ import { consumeFreeSearchQuota } from '@/lib/rateLimit';
 import { encryptField } from '@/lib/crypto/fieldEncryption';
 import {
   DEEP_RESEARCH_SUMMARY_MODELS,
+  getModeFallbackModels,
   resolveOptimizationModeMaxTokens,
   resolveOptimizationModeModelName,
-  SEARCH_FALLBACK_MODELS,
   type SearchModeModelPreferences,
 } from '@/lib/searchModeModels';
 
@@ -419,7 +419,10 @@ export const POST = async (req: Request) => {
         },
       );
       const chutesCandidates = buildChutesCandidates({
-        modelNames: [primaryModelName, ...SEARCH_FALLBACK_MODELS],
+        modelNames: [
+          primaryModelName,
+          ...getModeFallbackModels(body.optimizationMode),
+        ],
         apiKey,
         baseURL,
         modelRouterBaseURL: getModelRouterApiUrl(),

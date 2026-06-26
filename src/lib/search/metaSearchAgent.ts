@@ -492,8 +492,17 @@ class MetaSearchAgent implements MetaSearchAgentType {
       })
       .flat();
 
+    // How many sources to keep after reranking. Quality (the UI "balanced" key)
+    // surfaces more sources for deeper answers; speed trims to stay responsive.
+    const maxSources =
+      optimizationMode === 'speed'
+        ? 8
+        : optimizationMode === 'balanced'
+          ? 20
+          : 15;
+
     if (query.toLocaleLowerCase() === 'summarize') {
-      return docs.slice(0, 15);
+      return docs.slice(0, maxSources);
     }
 
     const docsWithContent = docs.filter(
@@ -536,7 +545,7 @@ class MetaSearchAgent implements MetaSearchAgentType {
             (sim) => sim.similarity > (this.config.rerankThreshold ?? 0.3),
           )
           .sort((a, b) => b.similarity - a.similarity)
-          .slice(0, 15)
+          .slice(0, maxSources)
           .map((sim) => fileDocs[sim.index]);
 
         sortedDocs =
@@ -544,10 +553,10 @@ class MetaSearchAgent implements MetaSearchAgentType {
 
         return [
           ...sortedDocs,
-          ...docsWithContent.slice(0, 15 - sortedDocs.length),
+          ...docsWithContent.slice(0, maxSources - sortedDocs.length),
         ];
       } else {
-        return docsWithContent.slice(0, 15);
+        return docsWithContent.slice(0, maxSources);
       }
     }
 
@@ -583,7 +592,7 @@ class MetaSearchAgent implements MetaSearchAgentType {
     const sortedDocs = similarity
       .filter((sim) => sim.similarity > (this.config.rerankThreshold ?? 0.3))
       .sort((a, b) => b.similarity - a.similarity)
-      .slice(0, 15)
+      .slice(0, maxSources)
       .map((sim) => docsWithContent[sim.index]);
 
     return sortedDocs;
