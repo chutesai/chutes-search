@@ -89,7 +89,7 @@ export default function UserAvatarMenu({ className }: { className?: string }) {
         leaveFrom="opacity-100 translate-y-0"
         leaveTo="opacity-0 translate-y-1"
       >
-        <MenuItems className="absolute right-0 mt-2 w-56 origin-top-right rounded-xl shadow-xl bg-light-primary dark:bg-dark-primary border border-light-200 dark:border-dark-200 z-50 p-1 focus:outline-none">
+        <MenuItems className="absolute bottom-0 left-full ml-2 w-56 origin-bottom-left rounded-xl shadow-xl bg-light-primary dark:bg-dark-primary border border-light-200 dark:border-dark-200 z-50 p-1 focus:outline-none">
           <div className="px-3 py-2">
             <p className="text-xs text-black/60 dark:text-white/60">Signed in as</p>
             <p className="text-sm font-medium text-black dark:text-white truncate">
