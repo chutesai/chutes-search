@@ -70,7 +70,7 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
           </VerticalIconContainer>
 
           <div className="flex flex-col items-center gap-y-3 w-full">
-            <UserAvatarMenu />
+            <UserAvatarMenu placement="side" />
             <Link
               href="/settings"
               className={cn(
