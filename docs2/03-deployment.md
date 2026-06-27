@@ -123,7 +123,7 @@ exec node server.js # Start Next.js standalone server
 | ------------------ | ----------- | ---------------- | ----------------------------------------------------- |
 | `SEARXNG_API_URL`  | No          | From config.toml | Single SearxNG instance URL                           |
 | `SEARXNG_API_URLS` | No          | -                | Comma-separated list of SearxNG URLs (load balancing) |
-| `SERPER_API_KEY`   | Recommended | -                | Serper.dev API key for Google search fallback         |
+| `DESEARCH_API_KEY` | Recommended | -                | Desearch API key for web search fallback and discover |
 
 When multiple SearxNG URLs are configured, a random instance is selected per request.
 
@@ -275,8 +275,8 @@ export CHUTES_API_KEY="your-chutes-api-key"
 # 4. (Optional) Enable deep research
 export SANDY_BASE_URL="https://your-sandy-endpoint"
 
-# 5. (Optional) Enable Serper fallback
-export SERPER_API_KEY="your-serper-key"
+# 5. (Optional) Enable Desearch fallback and discover
+export DESEARCH_API_KEY="your-desearch-key"
 
 # 6. Start services
 docker compose up -d

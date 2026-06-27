@@ -136,6 +136,7 @@ export const getAvailableChatModelProviders = async () => {
                 modelName,
                 temperature: 0.7,
                 maxRetries: 1,
+                streamUsage: false,
                 configuration: {
                   baseURL: customOpenAiApiUrl,
                   defaultHeaders: {

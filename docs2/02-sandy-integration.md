@@ -12,7 +12,7 @@ sequenceDiagram
     participant API as /api/chat
     participant DRA as DeepResearchAgent
     participant DRC as DeepResearchCollector
-    participant Search as SearxNG / Serper
+    participant Search as SearxNG / Desearch
     participant Sandy as Sandy API
     participant SB as Sandbox (Chromium)
     participant Agent as Claude Code (optional)
@@ -351,7 +351,7 @@ The Deep Research progress is displayed in the frontend via the `DeepResearchPro
 
 | Step ID    | Label               | Description                                 |
 | ---------- | ------------------- | ------------------------------------------- |
-| `search`   | Finding sources     | Initial SearxNG/Serper web search           |
+| `search`   | Finding sources     | Initial SearxNG/Desearch web search         |
 | `sandbox`  | Preparing sandbox   | Sandy sandbox creation and warmup           |
 | `setup`    | Installing Browser  | Playwright and Chromium installation        |
 | `browser`  | Launching browser   | Chromium headless launch                    |

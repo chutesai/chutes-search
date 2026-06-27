@@ -24,6 +24,7 @@ const buildCandidate = ({
   baseURL,
   temperature,
   maxRetries,
+  maxTokens,
 }: {
   name?: string;
   modelName: string;
@@ -31,6 +32,7 @@ const buildCandidate = ({
   baseURL: string;
   temperature: number;
   maxRetries: number;
+  maxTokens?: number;
 }): LlmCandidate => ({
   name: name || modelName,
   model: new ChatOpenAI({
@@ -38,6 +40,8 @@ const buildCandidate = ({
     modelName,
     temperature,
     maxRetries,
+    maxTokens,
+    streamUsage: false,
     configuration: {
       baseURL,
       defaultHeaders: {
@@ -55,6 +59,7 @@ export const buildChutesCandidates = ({
   modelRouterModelName = 'model-router',
   temperature = 0.7,
   maxRetries = 1,
+  maxTokens,
 }: {
   modelNames: string[];
   apiKey: string;
@@ -63,6 +68,7 @@ export const buildChutesCandidates = ({
   modelRouterModelName?: string;
   temperature?: number;
   maxRetries?: number;
+  maxTokens?: number;
 }): LlmCandidate[] => {
   const candidates = uniqueNames(modelNames).map((modelName) =>
     buildCandidate({
@@ -71,6 +77,7 @@ export const buildChutesCandidates = ({
       baseURL,
       temperature,
       maxRetries,
+      maxTokens,
     }),
   );
 
@@ -83,6 +90,7 @@ export const buildChutesCandidates = ({
         baseURL: modelRouterBaseURL.trim(),
         temperature,
         maxRetries,
+        maxTokens,
       }),
     );
   }

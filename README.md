@@ -16,6 +16,7 @@ Chutes Search serves as both a production search tool and a reference implementa
 - **Sign in with Chutes** — OAuth 2.0 PKCE authentication via Chutes IDP, so users can search using their own Chutes account for unlimited queries
 - **Free tier with rate limiting** — Anonymous users get 3 free searches/day (IP-hashed, privacy-preserving) with global throttles
 - **Deep Research via Sandy** — Extended research mode that spins up sandboxed environments using [Sandy](https://github.com/chutesai/sandy) for agent-driven multi-step research
+- **Social signal (low-trust)** — Web answers are supplemented with X/Twitter (Bittensor SN22 / Desearch) and Reddit (SN22 + Bittensor SN13 / Macrocosmos) posts, fed to the LLM explicitly framed as unverified social media so they add public-sentiment colour without being treated as fact (`src/lib/socialSearch.ts`)
 - **Neon Postgres** — Persistent storage via Neon serverless Postgres (replacing SQLite for serverless deployment)
 - **Vercel deployment** — Runs on Vercel with `output: 'standalone'`, designed for serverless
 - **Encrypted user data** — Chat messages, titles, and auth tokens encrypted at rest (AES-256-GCM per-user)
@@ -29,7 +30,7 @@ Chutes Search serves as both a production search tool and a reference implementa
 
 - **Frontend**: Next.js 15 (App Router)
 - **LLM**: Chutes API (OpenAI-compatible), with fallback chains
-- **Search**: Serper API for web search, SearxNG-compatible
+- **Search**: Desearch API for web search, SearxNG-compatible fallback support
 - **Database**: Neon Postgres via `@neondatabase/serverless` + Drizzle ORM
 - **Auth**: Chutes IDP (OAuth 2.0 PKCE)
 - **Deep Research**: Sandy sandboxes with Claude Code agents
@@ -51,7 +52,9 @@ Chutes Search serves as both a production search tool and a reference implementa
 ```bash
 # Required
 DATABASE_URL=            # Neon Postgres connection string
-SERPER_API_KEY=          # Serper.dev API key for web search
+DESEARCH_API_KEY=        # Desearch API key (Bittensor SN22) — web search + X/Twitter social search
+SERPER_API_KEY=          # Optional: Serper.dev API key for image search
+MACROCOSMOS_API_KEY=     # Optional: Macrocosmos API key (Bittensor SN13) — Reddit social search
 
 # Chutes AI (LLM inference)
 CHUTES_API_KEY=          # Chutes API key (used for anonymous/free searches)

@@ -38,6 +38,70 @@ describe('search mode model preferences', () => {
     );
   });
 
+  it('defaults the quality preset to GLM-5.2', () => {
+    assert.equal(
+      searchModeModels.DEFAULT_QUALITY_MODEL,
+      'zai-org/GLM-5.2-TEE',
+    );
+    assert.equal(
+      searchModeModels.QUALITY_MODELS[0],
+      'zai-org/GLM-5.2-TEE',
+    );
+    assert.equal(
+      searchModeModels.QUALITY_MODELS[1],
+      'moonshotai/Kimi-K2.6-TEE',
+    );
+  });
+
+  it('leads the speed preset with a fast non-reasoning model', () => {
+    assert.equal(
+      searchModeModels.DEFAULT_SPEED_MODEL,
+      'google/gemma-4-31B-turbo-TEE',
+    );
+  });
+
+  it('builds a mode-aware fallback chain from the mode own model list', () => {
+    assert.deepEqual(
+      searchModeModels.getModeFallbackModels('speed'),
+      [...new Set(searchModeModels.SPEED_MODELS)],
+    );
+    // 'balanced' is the UI "Quality" option; it must fall back within quality.
+    assert.deepEqual(
+      searchModeModels.getModeFallbackModels('balanced'),
+      [...new Set(searchModeModels.QUALITY_MODELS)],
+    );
+    assert.deepEqual(
+      searchModeModels.getModeFallbackModels('quality'),
+      [...new Set(searchModeModels.QUALITY_MODELS)],
+    );
+    assert.equal(
+      searchModeModels.getModeFallbackModels('balanced')[0],
+      'zai-org/GLM-5.2-TEE',
+    );
+  });
+
+  it('caps response tokens by optimization mode while preserving deep research room', () => {
+    assert.equal(
+      searchModeModels.resolveOptimizationModeMaxTokens('speed'),
+      500,
+    );
+    assert.equal(
+      searchModeModels.resolveOptimizationModeMaxTokens('balanced'),
+      1200,
+    );
+    assert.equal(
+      searchModeModels.resolveOptimizationModeMaxTokens('quality'),
+      1600,
+    );
+    assert.equal(
+      searchModeModels.resolveOptimizationModeMaxTokens('speed', {
+        focusMode: 'deepResearch',
+        deepResearchMode: 'max',
+      }),
+      3200,
+    );
+  });
+
   it('only exposes model choices that are present in the live Chutes catalog snapshot', () => {
     const liveModels = new Set(searchModeModels.LIVE_CHUTES_MODEL_IDS);
     const configuredModels = [
@@ -68,6 +132,9 @@ describe('search mode model preferences', () => {
       'Qwen/Qwen2.5-72B-Instruct',
       'NousResearch/Hermes-4-70B',
       'Qwen/Qwen3-VL-235B-A22B-Instruct',
+      'zai-org/GLM-5-Turbo',
+      'Qwen/Qwen2.5-Coder-32B-Instruct-TEE',
+      'Qwen/Qwen3-235B-A22B-Thinking-2507',
     ]);
     const configuredModels = [
       ...searchModeModels.SPEED_MODELS,

@@ -1,5 +1,6 @@
 import { searchSearxng } from '../searxng';
-import { searchSerper } from '../serper';
+import { searchDesearch } from '../desearch';
+import { searchSerper, searchSerperVideos } from '../serper';
 
 type UnifiedResult = {
   title: string;
@@ -8,7 +9,7 @@ type UnifiedResult = {
   thumbnail?: string;
 };
 
-export type SearchEngine = 'searxng' | 'serper';
+export type SearchEngine = 'searxng' | 'desearch' | 'serper';
 
 export type SearchRunResult = {
   engine: SearchEngine;
@@ -18,9 +19,62 @@ export type SearchRunResult = {
 };
 
 type SearchOverrides = {
-  searchSerperFn?: typeof searchSerper;
+  searchDesearchFn?: typeof searchDesearch;
   searchSearxngFn?: typeof searchSearxng;
+  searchSerperFn?: typeof searchSerper;
+  searchSerperVideosFn?: typeof searchSerperVideos;
 };
+
+// A provider must return at least this many results that look relevant to the
+// query before we trust it. Desearch (the preferred provider) intermittently
+// returns a whole page of unrelated results (e.g. random YouTube videos matching
+// a single stop-word); when that happens, relevantCount drops to ~0 and we fall
+// through to Serper instead of showing junk. We do NOT hard-drop YouTube here —
+// relevant videos are valuable — the always-on embedding reranker downstream is
+// what scans every result for topical relevance.
+const MIN_RELEVANT_RESULTS = 3;
+
+const STOP_WORDS = new Set([
+  'the', 'a', 'an', 'and', 'or', 'but', 'is', 'are', 'was', 'were', 'be',
+  'been', 'of', 'to', 'in', 'on', 'for', 'with', 'about', 'what', 'whats',
+  'which', 'who', 'whom', 'how', 'why', 'when', 'where', 'does', 'do', 'did',
+  'can', 'could', 'would', 'should', 'will', 'going', 'into', 'from', 'that',
+  'this', 'these', 'those', 'there', 'here', 'between', 'latest', 'current',
+  'status', 'update', 'news', 'best', 'top',
+]);
+
+const significantTerms = (query: string): string[] =>
+  Array.from(
+    new Set(
+      (query.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []).filter(
+        (w) => !STOP_WORDS.has(w),
+      ),
+    ),
+  );
+
+// How many of the results actually mention a meaningful query term. If the query
+// has no significant terms (e.g. a single stop-word), we can't judge, so trust
+// the provider's own count.
+const countRelevant = (results: UnifiedResult[], terms: string[]): number => {
+  if (terms.length === 0) return results.length;
+  return results.filter((r) => {
+    const hay = `${r.title ?? ''} ${r.content ?? ''}`.toLowerCase();
+    return terms.some((t) => hay.includes(t));
+  }).length;
+};
+
+const VIDEO_URL = /(?:youtube\.com|youtu\.be|vimeo\.com|dailymotion\.com)/i;
+const isVideo = (r: UnifiedResult): boolean => VIDEO_URL.test(r.url || '');
+
+// For a text web-search answer, video results contribute almost no synthesizable
+// content (just a title/short snippet), so a page dominated by videos produces a
+// thin answer even when the videos are on-topic. We therefore (a) gate providers
+// on the count of relevant NON-video results and (b) cap how many videos ride
+// along in the final list, keeping text sources dominant. youtubeSearch focus is
+// exempt (handled earlier via Serper videos).
+const MAX_WEB_VIDEOS = 3;
+const countRelevantText = (results: UnifiedResult[], terms: string[]): number =>
+  countRelevant(results.filter((r) => !isVideo(r)), terms);
 
 const normalizeSearxngResults = (results: any[]): UnifiedResult[] =>
   results.map((r) => ({
@@ -36,64 +90,128 @@ export const runWebSearch = async (
   overrides?: SearchOverrides,
 ): Promise<SearchRunResult> => {
   const startTime = Date.now();
-  const log = (msg: string) => console.log(`[webSearch] ${new Date().toISOString()} | +${Date.now() - startTime}ms | ${msg}`);
-  
+  const log = (msg: string) =>
+    console.log(
+      `[webSearch] ${new Date().toISOString()} | +${Date.now() - startTime}ms | ${msg}`,
+    );
+
   log(`Starting web search (queryLen=${query.length})`);
-  
+
   const searxngSearch = overrides?.searchSearxngFn ?? searchSearxng;
+  const desearchSearch = overrides?.searchDesearchFn ?? searchDesearch;
   const serperSearch = overrides?.searchSerperFn ?? searchSerper;
+  const serperVideosSearch =
+    overrides?.searchSerperVideosFn ?? searchSerperVideos;
 
-  let searxSuggestions: string[] = [];
+  // Video-oriented focus modes (youtubeSearch): use Serper's video search, which
+  // returns dependable on-topic YouTube results. Desearch has no video-specific
+  // mode and the SearxNG youtube engine instance is down.
+  const wantsVideo = activeEngines.some((e) =>
+    ['youtube', 'video', 'vimeo', 'dailymotion'].includes(e.toLowerCase()),
+  );
+  if (wantsVideo) {
+    log('Video focus — trying Serper videos...');
+    const videoRes = await serperVideosSearch(query);
+    const videoResults = Array.isArray(videoRes?.results)
+      ? videoRes.results
+      : [];
+    log(`Serper videos returned ${videoResults.length} results`);
+    if (videoResults.length > 0) {
+      return { engine: 'serper', results: videoResults, suggestions: [] };
+    }
+    // else fall through to the normal web flow below.
+  }
+
+  const terms = significantTerms(query);
+  let suggestions: string[] = [];
+
+  // Keep text sources dominant in non-video web search: all non-video results,
+  // then at most MAX_WEB_VIDEOS videos appended.
+  const capVideos = (results: UnifiedResult[]): UnifiedResult[] => {
+    if (wantsVideo) return results;
+    const text = results.filter((r) => !isVideo(r));
+    const vids = results.filter(isVideo).slice(0, MAX_WEB_VIDEOS);
+    return [...text, ...vids];
+  };
+
+  // 1) Desearch (Bittensor SN22) — the PREFERRED web provider. Tried first so the
+  // common path is a single fast call (the previously-primary SearxNG instance is
+  // down and its connect-timeout added ~8s of dead latency to every query). Trust
+  // Desearch only when enough of its results look relevant to the query.
+  log('Trying Desearch...');
+  const desearchRes = await desearchSearch(query);
+  const desearchResults = Array.isArray(desearchRes?.results)
+    ? desearchRes.results
+    : [];
+  // Gate on relevant NON-video results so a page of (even on-topic) videos with
+  // no synthesizable text doesn't pass and starve the answer.
+  const desearchRelevant = countRelevantText(desearchResults, terms);
+  log(
+    `Desearch returned ${desearchResults.length} results (${desearchRelevant} relevant non-video)`,
+  );
+  suggestions = [...new Set([...(desearchRes?.suggestions ?? [])])];
+
+  if (desearchRelevant >= MIN_RELEVANT_RESULTS) {
+    const capped = capVideos(desearchResults);
+    log(`Using Desearch results (${capped.length} after video cap)`);
+    return { engine: 'desearch', results: capped, suggestions };
+  }
+
+  // 2) Serper (reliable Google) — quality backstop when Desearch returned mostly
+  // off-topic results (its known intermittent failure mode).
+  log('Falling back to Serper...');
+  const serperRes = await serperSearch(query);
+  const serperResults = Array.isArray(serperRes?.results)
+    ? serperRes.results
+    : [];
+  log(`Serper returned ${serperResults.length} results`);
+
+  if (serperResults.length > 0) {
+    return {
+      engine: 'serper',
+      results: capVideos(serperResults),
+      suggestions: [
+        ...new Set([...suggestions, ...(serperRes?.suggestions ?? [])]),
+      ],
+    };
+  }
+
+  // 3) SearxNG — last resort only (its configured instance is currently down, so
+  // this almost never contributes; kept so a future working instance is still used).
   let searxError: string | undefined;
-
   try {
-    log('Trying SearxNG...');
+    log('Falling back to SearxNG (last resort)...');
     const searxngRes = await searxngSearch(query, {
       engines: activeEngines.length > 0 ? activeEngines : undefined,
     });
-    log(`SearxNG returned ${searxngRes?.results?.length || 0} results`);
-
-    searxSuggestions = searxngRes?.suggestions ?? [];
-
-    if (Array.isArray(searxngRes?.results) && searxngRes.results.length > 0) {
-      log('Using SearxNG results');
+    const searxResults = normalizeSearxngResults(searxngRes?.results ?? []);
+    log(`SearxNG returned ${searxResults.length} results`);
+    if (searxResults.length > 0) {
       return {
         engine: 'searxng',
-        results: normalizeSearxngResults(searxngRes.results),
-        suggestions: searxSuggestions,
+        results: capVideos(searxResults),
+        suggestions: [
+          ...new Set([...suggestions, ...(searxngRes?.suggestions ?? [])]),
+        ],
       };
     }
   } catch (err: any) {
     log(`SearxNG failed: ${err?.message ?? 'unknown error'}`);
-    if (!overrides?.searchSearxngFn) {
-      console.warn(
-        '[search] searxng lookup failed, falling back to serper',
-        err?.message ?? err,
-      );
-    }
-
     searxError =
       err?.response?.status === 429
         ? 'SearxNG rate limited this request.'
         : err?.message ?? 'SearxNG search failed.';
   }
 
-  log('Falling back to Serper...');
-  const serperRes = await serperSearch(query);
-  log(`Serper returned ${serperRes?.results?.length || 0} results`);
-  
-  const serperSuggestions = serperRes?.suggestions ?? [];
-  const serperResults = Array.isArray(serperRes?.results)
-    ? serperRes.results
-    : [];
-
-  const error = serperRes?.error || searxError;
-
-  log(`Web search complete, returning ${serperResults.length} results`);
+  // Nothing better available — return whatever Desearch gave (the downstream
+  // reranker still filters off-topic results) and surface the most relevant error.
+  const error = desearchRes?.error || serperRes?.error || searxError;
+  const capped = capVideos(desearchResults);
+  log(`Web search complete, returning ${capped.length} results`);
   return {
-    engine: 'serper',
-    results: serperResults,
-    suggestions: [...new Set([...searxSuggestions, ...serperSuggestions])],
+    engine: 'desearch',
+    results: capped,
+    suggestions,
     ...(error ? { error } : {}),
   };
 };

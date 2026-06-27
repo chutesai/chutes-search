@@ -11,6 +11,9 @@ export const searchHandlers: Record<string, MetaSearchAgentType> = {
     rerankThreshold: 0.3,
     searchWeb: true,
     summarizer: true,
+    // Pull supplementary X + Reddit signal (SN22 Desearch + SN13 Macrocosmos),
+    // framed as low-trust social media in the LLM context.
+    includeSocial: true,
   }),
   academicSearch: new MetaSearchAgent({
     activeEngines: ['arxiv', 'google scholar', 'pubmed'],

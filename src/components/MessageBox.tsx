@@ -48,6 +48,11 @@ const MessageBox = ({
 
   const [parsedMessage, setParsedMessage] = useState(message.content);
   const [thinkingEnded, setThinkingEnded] = useState(false);
+  const waitingForAnswer =
+    message.role === 'assistant' &&
+    isLast &&
+    loading &&
+    message.content.trim().length === 0;
 
   useEffect(() => {
     const citationRegex = /\[([^\]]+)\]/g;
@@ -170,15 +175,26 @@ const MessageBox = ({
                 <DeepResearchProgress progress={message.progress} />
               )}
 
-              <Markdown
-                className={cn(
-                  'prose prose-h1:mb-3 prose-h2:mb-2 prose-h2:mt-6 prose-h2:font-[800] prose-h3:mt-4 prose-h3:mb-1.5 prose-h3:font-[600] dark:prose-invert prose-p:leading-relaxed prose-pre:p-0 font-[400]',
-                  'max-w-none break-words text-black dark:text-white',
-                )}
-                options={markdownOverrides}
-              >
-                {parsedMessage}
-              </Markdown>
+              {waitingForAnswer ? (
+                <div
+                  aria-label="Loading answer"
+                  className="flex w-full max-w-3xl flex-col space-y-2 py-1 animate-pulse"
+                >
+                  <div className="h-2 w-full rounded-full bg-light-secondary dark:bg-dark-secondary" />
+                  <div className="h-2 w-10/12 rounded-full bg-light-secondary dark:bg-dark-secondary" />
+                  <div className="h-2 w-7/12 rounded-full bg-light-secondary dark:bg-dark-secondary" />
+                </div>
+              ) : (
+                <Markdown
+                  className={cn(
+                    'prose prose-h1:mb-3 prose-h2:mb-2 prose-h2:mt-6 prose-h2:font-[800] prose-h3:mt-4 prose-h3:mb-1.5 prose-h3:font-[600] dark:prose-invert prose-p:leading-relaxed prose-pre:p-0 font-[400]',
+                    'max-w-none break-words text-black dark:text-white',
+                  )}
+                  options={markdownOverrides}
+                >
+                  {parsedMessage}
+                </Markdown>
+              )}
               {loading && isLast ? null : (
                 <div className="flex flex-row items-center justify-between w-full text-black dark:text-white py-4 -mx-2">
                   <div className="flex flex-row items-center space-x-1">

@@ -24,6 +24,11 @@ import formatChatHistoryAsString from '../utils/formatHistory';
 import eventEmitter from 'events';
 import { StreamEvent } from '@langchain/core/tracers/log_stream';
 import { runWebSearch } from './runWebSearch';
+import {
+  searchSocial,
+  socialPostsToContext,
+  type SocialPost,
+} from '../socialSearch';
 import { isFallbackableUpstreamError, LlmCandidate } from '@/lib/llm/fallbacks';
 
 // Timing utility for performance debugging
@@ -34,6 +39,51 @@ const createTimer = (prefix: string) => {
       `[${prefix}] ${new Date().toISOString()} | +${Date.now() - start}ms | ${step}`,
     );
   };
+};
+
+let suppressLangChainChunkWarningInstalled = false;
+const suppressLangChainChunkWarnings = () => {
+  if (suppressLangChainChunkWarningInstalled) return;
+  suppressLangChainChunkWarningInstalled = true;
+
+  const originalWarn = console.warn.bind(console);
+  console.warn = (...args: unknown[]) => {
+    const first = args[0];
+    if (
+      typeof first === 'string' &&
+      first.includes('already exists in this message chunk') &&
+      first.includes('unsupported type')
+    ) {
+      return;
+    }
+
+    originalWarn(...args);
+  };
+};
+
+export const extractStreamText = (chunk: unknown): string => {
+  if (typeof chunk === 'string') return chunk;
+  if (chunk == null) return '';
+
+  const content = (chunk as any).content ?? chunk;
+  if (typeof content === 'string') return content;
+
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === 'string') return part;
+        if (typeof part?.text === 'string') return part.text;
+        if (typeof part?.content === 'string') return part.content;
+        return '';
+      })
+      .join('');
+  }
+
+  if (typeof (content as any)?.text === 'string') {
+    return (content as any).text;
+  }
+
+  return '';
 };
 
 export type SearchRequestContext = {
@@ -63,7 +113,30 @@ interface Config {
   queryGeneratorPrompt: string;
   responsePrompt: string;
   activeEngines: string[];
+  // When true, also pull low-trust supplementary signal from X + Reddit and append
+  // it to the LLM context (clearly framed as unverified). Only the general
+  // webSearch handler opts in; focused modes (academic, wolfram, …) leave it off.
+  includeSocial?: boolean;
 }
+
+// Convert social posts into source Documents so [n] citations resolve and they
+// appear (clearly labelled) in the Sources list alongside web results.
+const socialPostsToDocuments = (posts: SocialPost[]): Document[] =>
+  posts.map((p) => {
+    const label =
+      p.platform === 'x'
+        ? `X · ${p.author}`
+        : `Reddit · ${p.community ? `${p.community} · ` : ''}${p.author}`;
+    return new Document({
+      pageContent: p.text,
+      metadata: {
+        title: `${label}${p.title ? ` — ${p.title}` : ''}`,
+        url: p.url,
+        social: true,
+        platform: p.platform,
+      },
+    });
+  });
 
 type BasicChainInput = {
   chat_history: BaseMessage[];
@@ -293,6 +366,21 @@ class MetaSearchAgent implements MetaSearchAgentType {
 
         let docs: Document[] | null = null;
         let query = input.query;
+        let socialPosts: SocialPost[] = [];
+
+        // Fire social search on the RAW user query (not the LLM-rewritten one):
+        // social keyword APIs — especially SN13 reddit — match the user's own
+        // nouns better than a web-tuned rewrite, and running it here lets it
+        // overlap the entire retriever (LLM rewrite + web search), so it adds no
+        // serial latency and gets the most time to return.
+        const socialPromise =
+          this.config.includeSocial && this.config.searchWeb
+            ? searchSocial(input.query).catch(() => ({
+                tweets: [],
+                reddit: [],
+                errors: ['social search failed'],
+              }))
+            : Promise.resolve({ tweets: [], reddit: [], errors: [] });
 
         if (this.config.searchWeb) {
           timer('Creating search retriever chain');
@@ -314,6 +402,15 @@ class MetaSearchAgent implements MetaSearchAgentType {
           docs = searchRetrieverResult.docs;
         }
 
+        // Reddit first, then X — slightly more substantive posts lead the block.
+        const social = await socialPromise;
+        socialPosts = [...social.reddit, ...social.tweets];
+        if (this.config.includeSocial) {
+          timer(
+            `Social: ${social.tweets.length} tweets, ${social.reddit.length} reddit`,
+          );
+        }
+
         timer(
           `Starting rerank with ${docs?.length || 0} docs, mode: ${optimizationMode}`,
         );
@@ -326,13 +423,24 @@ class MetaSearchAgent implements MetaSearchAgentType {
         );
         timer(`Rerank complete: ${sortedDocs.length} docs after filtering`);
 
+        // Append social posts AFTER the reranked web sources: they are not
+        // reranked (already capped + relevance-filtered upstream) and are framed
+        // as low-trust. Numbering continues from the web sources so [n] citations
+        // and the Sources list stay aligned.
+        const socialDocs = socialPostsToDocuments(socialPosts);
+        const webContext = this.processDocs(sortedDocs);
+        const context =
+          socialDocs.length > 0
+            ? `${webContext}\n\n${socialPostsToContext(socialPosts, sortedDocs.length)}`
+            : webContext;
+
         return {
           systemInstructions,
           query,
           chat_history: input.chat_history,
           date: new Date().toISOString(),
-          context: this.processDocs(sortedDocs),
-          sources: sortedDocs,
+          context,
+          sources: [...sortedDocs, ...socialDocs],
         };
       }).withConfig({
         runName: 'FinalSourceRetriever',
@@ -384,15 +492,30 @@ class MetaSearchAgent implements MetaSearchAgentType {
       })
       .flat();
 
+    // How many sources to keep after reranking. Quality (the UI "balanced" key)
+    // surfaces more sources for deeper answers; speed trims to stay responsive.
+    const maxSources =
+      optimizationMode === 'speed'
+        ? 8
+        : optimizationMode === 'balanced'
+          ? 20
+          : 15;
+
     if (query.toLocaleLowerCase() === 'summarize') {
-      return docs.slice(0, 15);
+      return docs.slice(0, maxSources);
     }
 
     const docsWithContent = docs.filter(
       (doc) => doc.pageContent && doc.pageContent.length > 0,
     );
 
-    if (optimizationMode === 'speed' || this.config.rerank === false) {
+    // Only focus modes that explicitly opt out (e.g. wolframAlpha) skip the
+    // reranker. Everything else — speed, balanced AND quality — reranks by
+    // embedding similarity so off-topic results (including irrelevant YouTube
+    // videos) are filtered out before they're shown as Sources. The embedding
+    // model is the local Transformers (BGE/GTE) provider, so this stays fast and
+    // has no external dependency even in speed mode.
+    if (this.config.rerank === false) {
       if (filesData.length > 0) {
         const [queryEmbedding] = await Promise.all([
           embeddings.embedQuery(query),
@@ -422,7 +545,7 @@ class MetaSearchAgent implements MetaSearchAgentType {
             (sim) => sim.similarity > (this.config.rerankThreshold ?? 0.3),
           )
           .sort((a, b) => b.similarity - a.similarity)
-          .slice(0, 15)
+          .slice(0, maxSources)
           .map((sim) => fileDocs[sim.index]);
 
         sortedDocs =
@@ -430,52 +553,49 @@ class MetaSearchAgent implements MetaSearchAgentType {
 
         return [
           ...sortedDocs,
-          ...docsWithContent.slice(0, 15 - sortedDocs.length),
+          ...docsWithContent.slice(0, maxSources - sortedDocs.length),
         ];
       } else {
-        return docsWithContent.slice(0, 15);
+        return docsWithContent.slice(0, maxSources);
       }
-    } else if (optimizationMode === 'balanced') {
-      const [docEmbeddings, queryEmbedding] = await Promise.all([
-        embeddings.embedDocuments(
-          docsWithContent.map((doc) => doc.pageContent),
-        ),
-        embeddings.embedQuery(query),
-      ]);
-
-      docsWithContent.push(
-        ...filesData.map((fileData) => {
-          return new Document({
-            pageContent: fileData.content,
-            metadata: {
-              title: fileData.fileName,
-              url: `File`,
-            },
-          });
-        }),
-      );
-
-      docEmbeddings.push(...filesData.map((fileData) => fileData.embeddings));
-
-      const similarity = docEmbeddings.map((docEmbedding, i) => {
-        const sim = computeSimilarity(queryEmbedding, docEmbedding);
-
-        return {
-          index: i,
-          similarity: sim,
-        };
-      });
-
-      const sortedDocs = similarity
-        .filter((sim) => sim.similarity > (this.config.rerankThreshold ?? 0.3))
-        .sort((a, b) => b.similarity - a.similarity)
-        .slice(0, 15)
-        .map((sim) => docsWithContent[sim.index]);
-
-      return sortedDocs;
     }
 
-    return [];
+    // Embedding rerank — used for speed, balanced and quality.
+    const [docEmbeddings, queryEmbedding] = await Promise.all([
+      embeddings.embedDocuments(docsWithContent.map((doc) => doc.pageContent)),
+      embeddings.embedQuery(query),
+    ]);
+
+    docsWithContent.push(
+      ...filesData.map((fileData) => {
+        return new Document({
+          pageContent: fileData.content,
+          metadata: {
+            title: fileData.fileName,
+            url: `File`,
+          },
+        });
+      }),
+    );
+
+    docEmbeddings.push(...filesData.map((fileData) => fileData.embeddings));
+
+    const similarity = docEmbeddings.map((docEmbedding, i) => {
+      const sim = computeSimilarity(queryEmbedding, docEmbedding);
+
+      return {
+        index: i,
+        similarity: sim,
+      };
+    });
+
+    const sortedDocs = similarity
+      .filter((sim) => sim.similarity > (this.config.rerankThreshold ?? 0.3))
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, maxSources)
+      .map((sim) => docsWithContent[sim.index]);
+
+    return sortedDocs;
   }
 
   private processDocs(docs: Document[]) {
@@ -517,9 +637,12 @@ class MetaSearchAgent implements MetaSearchAgentType {
         event.event === 'on_chain_stream' &&
         event.name === 'FinalResponseGenerator'
       ) {
+        const text = extractStreamText(event.data.chunk);
+        if (!text) continue;
+
         emitter.emit(
           'data',
-          JSON.stringify({ type: 'response', data: event.data.chunk }),
+          JSON.stringify({ type: 'response', data: text }),
         );
         state.hasResponse = true;
       }
@@ -545,6 +668,8 @@ class MetaSearchAgent implements MetaSearchAgentType {
     llmCandidates?: LlmCandidate[],
     _requestContext?: SearchRequestContext,
   ) {
+    suppressLangChainChunkWarnings();
+
     const emitter = new eventEmitter();
     const timer = createTimer('searchAndAnswer');
     const candidates =
@@ -586,6 +711,17 @@ class MetaSearchAgent implements MetaSearchAgentType {
           timer(`Stream events started (${candidate.name})`);
 
           await this.streamChainEvents(stream, emitter, state);
+          if (!state.hasResponse) {
+            if (i < candidates.length - 1) {
+              timer(
+                `Empty response from ${candidate.name}, retrying with ${candidates[i + 1].name}`,
+              );
+              continue;
+            }
+
+            throw new Error('The selected model returned an empty response.');
+          }
+
           emitter.emit('end');
           return;
         } catch (err: any) {

@@ -86,14 +86,20 @@ const Optimization = ({
       >
         <PopoverPanel
           className={cn(
-            'absolute z-10 w-64 md:w-[250px]',
-            align === 'left' ? 'left-0' : 'right-0',
+            'absolute z-10 w-[min(16rem,calc(100vw-2rem))] md:w-[250px]',
+            // On mobile, center the panel so the 256px panel never overflows the
+            // viewport edge (which previously clipped the Speed/Quality cards
+            // off-screen on ~375px screens). On md+ keep the original
+            // left/right-anchored behaviour driven by `align`.
+            'left-1/2 -translate-x-1/2 md:left-auto md:right-auto md:translate-x-0',
+            align === 'left' ? 'md:left-0' : 'md:right-0',
             panelDirection === 'up' ? 'bottom-full mb-2' : 'top-full mt-2',
           )}
         >
           <div className="flex flex-col gap-2 bg-light-primary dark:bg-dark-primary border rounded-lg border-light-200 dark:border-dark-200 w-full p-4 max-h-[200px] md:max-h-none overflow-y-auto">
             {OptimizationModes.map((mode, i) => (
               <PopoverButton
+                type="button"
                 onClick={() => setOptimizationMode(mode.key)}
                 key={i}
                 className={cn(

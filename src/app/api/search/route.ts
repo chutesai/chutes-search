@@ -20,8 +20,9 @@ import { consumeFreeSearchQuota } from '@/lib/rateLimit';
 import { cookies } from 'next/headers';
 import {
   DEEP_RESEARCH_SUMMARY_MODELS,
+  getModeFallbackModels,
+  resolveOptimizationModeMaxTokens,
   resolveOptimizationModeModelName,
-  SEARCH_FALLBACK_MODELS,
   type SearchModeModelPreferences,
 } from '@/lib/searchModeModels';
 
@@ -259,12 +260,23 @@ export const POST = async (req: Request) => {
       const baseURL = getCustomOpenaiApiUrl();
       const primaryModelName =
         body.chatModel?.name || chatModel || getCustomOpenaiModelName();
+      const maxTokens = resolveOptimizationModeMaxTokens(
+        body.optimizationMode,
+        {
+          focusMode: body.focusMode,
+          deepResearchMode: body.deepResearchMode,
+        },
+      );
       const chutesCandidates = buildChutesCandidates({
-        modelNames: [primaryModelName, ...SEARCH_FALLBACK_MODELS],
+        modelNames: [
+          primaryModelName,
+          ...getModeFallbackModels(body.optimizationMode),
+        ],
         apiKey,
         baseURL,
         modelRouterBaseURL: getModelRouterApiUrl(),
         modelRouterModelName: getModelRouterModelName(),
+        maxTokens,
       });
       const useDeepResearchSummary =
         body.focusMode === 'deepResearch' && body.deepResearchMode === 'max';
@@ -276,6 +288,7 @@ export const POST = async (req: Request) => {
             baseURL,
             modelRouterBaseURL: getModelRouterApiUrl(),
             modelRouterModelName: getModelRouterModelName(),
+            maxTokens,
           })
         : chutesCandidates;
       llm = llmCandidates[0]?.model;
